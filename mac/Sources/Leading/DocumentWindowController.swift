@@ -25,7 +25,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         window.titlebarAppearsTransparent = true
         window.toolbarStyle = .unifiedCompact
         window.minSize = NSSize(width: 420, height: 320)
-        window.tabbingMode = .preferred
+        window.tabbingMode = .automatic // follows System Settings › Desktop & Dock › "Prefer tabs when opening documents"
         // No zoom-in animation: the window appears at once, and WebKit does not
         // paint into a window until its opening animation has finished.
         window.animationBehavior = .none
