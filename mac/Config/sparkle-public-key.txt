@@ -1,0 +1,2 @@
+# The update-signing public key (EdDSA). Generated in Stage 5; the private half never enters the repository.
+REPLACE_IN_STAGE_5

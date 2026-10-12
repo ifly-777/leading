@@ -10,3 +10,4 @@ build/
 mac/.build/
 .swiftpm/
 mac/.swiftpm/
+mac/Vendor/

@@ -8,6 +8,9 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/mac/Config/app.env"
+# Allow a one-off version override (the update spike builds two versions).
+VERSION="${VERSION_OVERRIDE:-$VERSION}"
+BUILD="${BUILD_OVERRIDE:-$BUILD}"
 # Use the full Xcode even if xcode-select still points at the Command Line Tools.
 if [ -z "${DEVELOPER_DIR:-}" ] && [ -d /Applications/Xcode.app ]; then export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer; fi
 
@@ -17,6 +20,9 @@ ARCHS="${ARCHS:-arm64 x86_64}"
 
 echo "› Web page"
 ( cd "$ROOT/web" && { [ -d node_modules ] || npm ci; } && npm run build --silent )
+
+echo "› Sparkle"
+"$ROOT/scripts/fetch-sparkle.sh"
 
 echo "› Swift app ($ARCHS)"
 ARCH_FLAGS=""
@@ -28,15 +34,23 @@ echo "› Bundle"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/Licenses"
 cp "$BIN_DIR/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
+# The update public key: from the environment (the update spike), else the repository file.
+SPARKLE_PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-$(grep -v '^#' "$ROOT/mac/Config/sparkle-public-key.txt" | head -1)}"
 sed -e "s/@APP_NAME@/$APP_NAME/g" -e "s/@BUNDLE_ID@/$BUNDLE_ID/g" -e "s/@VERSION@/$VERSION/g" \
-    -e "s/@BUILD@/$BUILD/g" -e "s/@MIN_MACOS@/$MIN_MACOS/g" "$ROOT/mac/Resources/Info.plist.in" > "$APP/Contents/Info.plist"
+    -e "s/@BUILD@/$BUILD/g" -e "s/@MIN_MACOS@/$MIN_MACOS/g" -e "s|@SPARKLE_FEED@|$SPARKLE_FEED|g" \
+    -e "s|@SPARKLE_PUBLIC_KEY@|$SPARKLE_PUBLIC_KEY|g" "$ROOT/mac/Resources/Info.plist.in" > "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 cp -R "$ROOT/web/dist" "$APP/Contents/Resources/web"
+# Sparkle, the update framework (only ever active if the reader turns updates on).
+mkdir -p "$APP/Contents/Frameworks"
+SPARKLE="$ROOT/mac/Vendor/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
 cp "$ROOT/mac/Resources/Credits.html" "$APP/Contents/Resources/"
 [ -f "$ROOT/mac/Resources/AppIcon.icns" ] && cp "$ROOT/mac/Resources/AppIcon.icns" "$APP/Contents/Resources/"
 # Each bundled font's licence travels with it, as the OFL requires.
 cp "$ROOT/LICENSE" "$APP/Contents/Resources/Licenses/Leading-MIT.txt"
+cp "$ROOT/mac/Vendor/LICENSE" "$APP/Contents/Resources/Licenses/Sparkle-LICENSE.txt"
 for d in "$ROOT"/web/fonts/*/; do
   name="$(basename "$d")"
   for f in "$d"OFL.txt "$d"LICENSE.md; do [ -f "$f" ] && cp "$f" "$APP/Contents/Resources/Licenses/$name-$(basename "$f")"; done

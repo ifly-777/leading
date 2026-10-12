@@ -16,6 +16,10 @@
 	<key>NSPrincipalClass</key><string>NSApplication</string>
 	<key>NSHighResolutionCapable</key><true/>
 	<key>NSHumanReadableCopyright</key><string>Free and open source under the MIT licence.</string>
+	<!-- Updates: EdDSA-signed, off until the reader opts in. -->
+	<key>SUFeedURL</key><string>@SPARKLE_FEED@</string>
+	<key>SUPublicEDKey</key><string>@SPARKLE_PUBLIC_KEY@</string>
+	<key>SUEnableAutomaticChecks</key><false/>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

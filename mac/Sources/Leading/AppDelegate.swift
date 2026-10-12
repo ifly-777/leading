@@ -10,10 +10,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Updates.shared.startIfEnabled()
         // Launched without a file (from the Dock or Launchpad): offer to open one.
         // Stage 5 replaces this with the welcome document on first launch.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            if NSDocumentController.shared.documents.isEmpty {
+            let spike = ProcessInfo.processInfo.environment["LEADING_SPIKE_UPDATE"] == "1"
+            if NSDocumentController.shared.documents.isEmpty && !spike {
                 NSDocumentController.shared.openDocument(nil)
             }
         }

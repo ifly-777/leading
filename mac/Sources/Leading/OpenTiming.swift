@@ -32,6 +32,18 @@ final class OpenTiming {
         try? handle.close()
     }
 
+    /// A document finished loading (all blocks in, images settled); recorded for tests.
+    func loaded(file: URL?, details: [String: Any]) {
+        guard let logFile, let handle = FileHandle(forWritingAtPath: logFile) else { return }
+        var entry = details
+        entry["event"] = "loaded"
+        entry["file"] = file?.lastPathComponent ?? ""
+        guard let data = try? JSONSerialization.data(withJSONObject: entry) else { return }
+        handle.seekToEndOfFile()
+        handle.write(data + Data("\n".utf8))
+        try? handle.close()
+    }
+
     /// When this process started, from the kernel.
     private static func processStart() -> Date? {
         var info = kinfo_proc()

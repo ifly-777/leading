@@ -64,7 +64,18 @@ document.addEventListener('click', (e) => {
       post({ type: 'log', text: `open failed: ${(e as Error)?.stack ?? e}` })
       throw e
     }
-    if (r) post({ type: 'loaded', timings: r.timings })
+    if (r) {
+      // Report how many local images loaded, once they have had a moment (used by tests).
+      // Lazy images further down would otherwise wait until scrolled to; never wait more than 3 s.
+      const imgs = Array.from(document.querySelectorAll<HTMLImageElement>('#doc img'))
+      const settled = Promise.all(imgs.map((i) => {
+        if (i.complete && i.naturalWidth) return null
+        i.loading = 'eager'
+        return new Promise((ok) => { i.addEventListener('load', ok); i.addEventListener('error', ok) })
+      }))
+      await Promise.race([settled, new Promise((ok) => setTimeout(ok, 3000))])
+      post({ type: 'loaded', timings: { ...r.timings, images: imgs.length, imagesLoaded: imgs.filter((i) => i.naturalWidth > 0).length } })
+    }
   },
   /** New settings from the Aa panel or another window. */
   async settings(args: { settings: Partial<Settings>; tuning?: Tuning }) {

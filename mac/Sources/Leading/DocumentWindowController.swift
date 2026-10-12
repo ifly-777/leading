@@ -105,7 +105,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         DispatchQueue.main.async { WebViewPool.shared.prepare() }
     }
 
-    func pageDidLoad(_ timings: [String: Any]) {}
+    func pageDidLoad(_ timings: [String: Any]) {
+        OpenTiming.shared.loaded(file: doc?.fileURL, details: timings)
+    }
 
     func pageChangedSettings(_ settings: [String: Any]) {
         SettingsStore.shared.update(fromPage: settings)

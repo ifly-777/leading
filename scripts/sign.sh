@@ -2,11 +2,15 @@
 # Signs the app. Without a paid Apple account this is an "ad-hoc" signature,
 # which Apple Silicon requires before it will run any code at all.
 #
-# The designated requirement is pinned to the bundle identifier. By default an
-# ad-hoc signature identifies the app by a hash of this exact build, so macOS
-# would treat every update as a different app: privacy permissions (such as
-# folder access for local images) would be asked again, and an updater could
-# refuse the new build. Pinning it lets each build be recognised as Leading.
+# The ad-hoc signature's designated requirement is left as macOS makes it: a
+# hash of this exact build, which nobody else can reproduce. An earlier plan
+# pinned it to the bundle identifier, so that macOS would treat each update as
+# the same app and not ask again for folder access (for local images). The
+# Stage 2 update spike showed why that is unsafe: Sparkle accepts an update
+# whose code signature matches the old app's even when its EdDSA signature
+# does not (that is how it supports key rotation), and an identifier-only
+# requirement is matched by anyone's app with the same identifier. With the
+# default requirement, every update must carry a valid EdDSA signature.
 #
 # If a Developer ID ever becomes available, set SIGNING_IDENTITY and the same
 # script switches to a hardened-runtime, timestamped signature for notarisation.
@@ -25,8 +29,7 @@ if [ -d "$APP/Contents/Frameworks" ]; then
 fi
 
 if [ "$IDENTITY" = "-" ]; then
-  codesign --force --sign - --identifier "$BUNDLE_ID" \
-    --requirements "=designated => identifier \"$BUNDLE_ID\"" "$APP"
+  codesign --force --sign - --identifier "$BUNDLE_ID" "$APP"
 else
   codesign --force --options runtime --timestamp --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP"
 fi
