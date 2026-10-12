@@ -103,6 +103,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if let doc { OpenTiming.shared.painted(file: doc.fileURL, openedAt: doc.openedAt, pageMs: ms) }
         // Text is on screen; now is a good moment to warm the next page.
         DispatchQueue.main.async { WebViewPool.shared.prepare() }
+        if SelfTest.enabled, let window { DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { SelfTest.run(in: window, page: self.web) } }
     }
 
     func pageDidLoad(_ timings: [String: Any]) {
