@@ -303,3 +303,39 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .findbar button[aria-pressed="true"] { color: var(--fg); background: color-mix(in srgb, var(--fg) 14%, transparent); }
 .findbar button:focus-visible { outline: 2px solid var(--search); }
 .findbar .sr-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+/* ---- Floating header for tables that scroll sideways --------------------- */
+.float-head {
+  position: absolute; z-index: 8; overflow: hidden;
+  font-family: var(--font-body); font-size: var(--size); line-height: var(--lh); font-weight: var(--weight);
+  background: var(--bg);
+  box-shadow: 0 4px 8px -6px color-mix(in srgb, var(--fg) 35%, transparent);
+}
+.float-head[hidden] { display: none; }
+.float-head .table-scroll { overflow: hidden; -webkit-mask-image: none; mask-image: none; }
+.float-head table { border-collapse: separate; border-spacing: 0; font-size: 0.84em; line-height: 1.4; font-variant-numeric: lining-nums tabular-nums; letter-spacing: 0; }
+.float-head th { padding: 0.5em 0.85em; text-align: left; vertical-align: bottom; font-weight: calc(var(--weight) + 200); background: var(--bg); border-bottom: 1.5px solid color-mix(in srgb, var(--fg) 55%, var(--bg)); }
+.float-head :is(th)[align="right"], .float-head th.num { text-align: right; }
+.float-head :is(th)[align="center"] { text-align: center; }
+.float-head th:first-child { position: sticky; left: 0; z-index: 1; }
+
+/* ---- Table focus view: the table alone, filling the window --------------- */
+.table-focus {
+  position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column;
+  background: var(--bg); color: var(--fg);
+}
+.table-focus .tf-bar { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px; font: 13px system-ui, -apple-system, sans-serif; }
+.table-focus .tf-bar button { all: unset; cursor: default; padding: 4px 10px; border-radius: 6px; color: var(--muted); }
+.table-focus .tf-bar button:hover, .table-focus .tf-bar button:focus-visible { color: var(--fg); background: color-mix(in srgb, var(--fg) 8%, transparent); }
+/* One scroll container in both directions, so the header (top) and the first column (left) both stay put. */
+.table-focus .tf-body { flex: 1; overflow: auto; width: auto; margin: 0; padding: 0 24px 24px; }
+.table-focus .tf-body table { margin: 0 auto; }
+.table-focus .tf-body :is(th, td):first-child { position: sticky; left: 0; z-index: 1; background: var(--bg); }
+.table-focus .tf-body thead th:first-child { z-index: 3; }
+
+/* ---- Plain text: a .txt file shown as written, in the reading face -------- */
+.doc pre.plain {
+  white-space: pre-wrap; overflow-wrap: break-word;
+  font: inherit; letter-spacing: var(--ls); word-spacing: var(--ws); font-variant-ligatures: common-ligatures;
+  background: none; padding: 0; margin: 0; border-radius: 0; tab-size: 4;
+}

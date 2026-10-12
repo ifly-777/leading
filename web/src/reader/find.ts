@@ -3,12 +3,14 @@
 // the text (so colour highlights stay visible underneath); shows ticks beside
 // the scroll bar; announces the count to VoiceOver.
 //
-// Stage 1 builds its index from the page's text. Stage 2 moves the index into
-// the worker so it covers blocks that are not yet in the page.
+// Matching runs on the reader's search index, built while the document is
+// parsed, so it covers blocks that are not painted yet. Matches are found on
+// the page one block at a time, only for blocks near the screen or being
+// jumped to.
 
-import { fold, findAll, type Folded } from '../core/fold'
+import { fold, findAll } from '../core/fold'
+import { blockText, type Match, type SearchIndex } from '../core/search-index'
 
-const BLOCK = 'p,li,h1,h2,h3,h4,h5,h6,td,th,pre,dt,dd,summary,.callout-title,figcaption'
 const MAX_DRAWN = 400
 
 export interface FindOptions { caseSensitive: boolean; wholeWord: boolean }
@@ -18,21 +20,23 @@ export class FindBar {
   private input: HTMLInputElement
   private count: HTMLElement
   private status: HTMLElement
-  private nodes: Text[] = []
-  private starts: number[] = []
-  /** Top-level block holding each text node, and that block's number. */
-  private blocks: HTMLElement[] = []
-  private blockNo: Int32Array = new Int32Array(0)
-  private text = ''
-  private folded: Folded | null = null
-  private foldedCase: Folded | null = null
-  private matches: [number, number][] = []
+  private matches: Match[] = []
   private current = -1
   private opts: FindOptions = { caseSensitive: false, wholeWord: false }
   private raf = 0
+  /** Ranges found on the page for each block, for the current query. */
+  private ranges = new Map<number, Range[]>()
+  private drawn: [number, HTMLElement][] = []
   lastSearchMs = 0
-  /** Where block n sits within the scroller (supplied by the reader, which caches it). */
+
+  /** The reader's search index (replaced when a new document opens). */
+  index: () => SearchIndex | null = () => null
+  /** Block n's element; with `force`, the reader paints up to it first. */
+  getBlock: (b: number, force: boolean) => HTMLElement | null = () => null
+  /** Where block n sits within the scroller (the reader caches it). */
   blockY: (b: number) => number = () => 0
+  /** Called when the page's geometry changes (the reader drops cached positions). */
+  onLayoutShift: () => void = () => {}
 
   /**
    * `frame` is an empty overlay covering the scroller. Geometry is read from it,
@@ -80,11 +84,9 @@ export class FindBar {
     new ResizeObserver(() => { this.onLayoutShift(); this.scheduleDraw() }).observe(doc)
   }
 
-  /** Called when the page's geometry changes (the reader uses it to drop cached positions). */
-  onLayoutShift: () => void = () => {}
-
   get isOpen(): boolean { return !this.el.hidden }
   get query(): string { return this.input.value }
+  set query(q: string) { this.input.value = q }
 
   open(): void {
     this.el.hidden = false
@@ -101,49 +103,17 @@ export class FindBar {
     this.scroller.focus({ preventScroll: true })
   }
 
-  /** Build the index ahead of the first keystroke (call when the page is idle). */
-  prepare(): void { this.hay() }
-
-  /** The page's text changed (new document, more blocks loaded). */
+  /** The index grew or the page changed (new document, more blocks painted). */
   invalidate(): void {
-    this.folded = this.foldedCase = null
+    this.ranges.clear()
     if (this.isOpen && this.input.value) this.search(false)
-  }
-
-  private buildIndex(): void {
-    this.nodes = []
-    this.starts = []
-    this.blocks = []
-    const parts: string[] = []
-    let len = 0
-    let lastBlock: Element | null = null
-    const walker = document.createTreeWalker(this.doc, NodeFilter.SHOW_TEXT)
-    for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
-      // A separator between blocks stops matches running across paragraphs.
-      const block = n.parentElement?.closest(BLOCK) ?? null
-      if (block !== lastBlock && len) { parts.push('\n'); len += 1 }
-      lastBlock = block
-      this.nodes.push(n)
-      this.starts.push(len)
-      // Every top-level block carries data-b (it may sit inside a section wrapper).
-      this.blocks.push((n.parentElement!.closest('[data-b]') as HTMLElement) ?? n.parentElement!)
-      parts.push(n.data)
-      len += n.data.length
-    }
-    this.text = parts.join('')
-    this.blockNo = Int32Array.from(this.blocks, (b) => Number(b.dataset.b ?? -1))
-  }
-
-  private hay(): Folded {
-    if (!this.nodes.length || (!this.folded && !this.foldedCase)) this.buildIndex()
-    if (this.opts.caseSensitive) return (this.foldedCase ??= fold(this.text, true))
-    return (this.folded ??= fold(this.text, false))
   }
 
   search(resetCurrent: boolean): void {
     const t0 = performance.now()
     const q = this.input.value
-    this.matches = q ? findAll(this.hay(), this.text, q, this.opts) : []
+    this.matches = q ? (this.index()?.find(q, this.opts) ?? []) : []
+    this.ranges.clear()
     this.lastSearchMs = performance.now() - t0
     if (resetCurrent || this.current >= this.matches.length) this.current = this.firstVisibleMatch()
     this.updateCount()
@@ -175,21 +145,46 @@ export class FindBar {
     }))
   }
 
-  private nodeIndex(off: number): number {
-    let lo = 0, hi = this.starts.length - 1
-    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (this.starts[mid] <= off) lo = mid; else hi = mid - 1 }
-    return lo
+  /** The matches inside block b, found in the page's own text of that block. */
+  private rangesIn(b: number, force: boolean): Range[] {
+    const cached = this.ranges.get(b)
+    if (cached) return cached
+    const el = this.getBlock(b, force)
+    if (!el) return []
+    const nodes: Text[] = []
+    const starts: number[] = []
+    // Same text rule as the index, so the k-th hit here is the k-th hit there.
+    const text = blockText<Node>(el, (n) => n.childNodes, (n) => (n.nodeType === 1 ? (n as Element).tagName.toLowerCase() : null),
+      (n) => (n.nodeType === 3 ? (n as Text).data : null), (n, start) => { nodes.push(n as Text); starts.push(start) })
+    const at = (off: number): [Text, number] => {
+      let lo = 0, hi = starts.length - 1
+      while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (starts[mid] <= off) lo = mid; else hi = mid - 1 }
+      return [nodes[lo], Math.min(off - starts[lo], nodes[lo].data.length)]
+    }
+    const out = findAll(fold(text, this.opts.caseSensitive), text, this.input.value, this.opts).map(([s, e]) => {
+      const r = document.createRange()
+      const [sn, so] = at(s)
+      const [en, eo] = at(e - 1)
+      r.setStart(sn, so)
+      r.setEnd(en, Math.min(eo + 1, en.data.length))
+      return r
+    })
+    this.ranges.set(b, out)
+    return out
   }
 
-  private blockOf(m: [number, number]): HTMLElement { return this.blocks[this.nodeIndex(m[0])] }
-  private blockNoOf(m: [number, number]): number { return this.blockNo[this.nodeIndex(m[0])] }
+  private rangeOf(i: number, force = false): Range | null {
+    const m = this.matches[i]
+    const rs = this.rangesIn(m.b, force)
+    return rs[Math.min(m.k, rs.length - 1)] ?? null
+  }
 
   /**
    * Number of the block at the top of the window (or `dy` px below it), by a
    * single hit test. Asking for the geometry of off-screen blocks instead can
    * cost hundreds of milliseconds on a 12,000-block page.
    */
-  private blockAtTop(dy = 0): number {
+  private blockAt(dy = 0): number {
     const box = this.frame.getBoundingClientRect()
     // A point just inside the column's left edge (the layout publishes it as --col-left).
     const colLeft = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--col-left')) || box.width / 3
@@ -198,26 +193,14 @@ export class FindBar {
       const el = (document.elementFromPoint(x, y) as HTMLElement | null)?.closest('[data-b]') as HTMLElement | null
       if (el?.dataset.b) return Number(el.dataset.b)
     }
-    return 0
-  }
-
-  private rangeFor(m: [number, number]): Range {
-    const at = (off: number): [Text, number] => {
-      const i = this.nodeIndex(off)
-      return [this.nodes[i], Math.min(off - this.starts[i], this.nodes[i].data.length)]
-    }
-    const r = document.createRange()
-    const [sn, so] = at(m[0])
-    const [en, eo] = at(m[1] - 1)
-    r.setStart(sn, so)
-    r.setEnd(en, Math.min(eo + 1, en.data.length))
-    return r
+    return dy ? Infinity : 0
   }
 
   /** Open anything hiding the match, then centre it in the window (`settle`: only if it has drifted). */
   private reveal(i: number, settle = false): void {
-    const r = this.rangeFor(this.matches[i])
-    let el: Element | null = r.startContainer.parentElement
+    const r = this.rangeOf(i, true)
+    if (!r) return
+    const el: Element | null = r.startContainer.parentElement
     for (let d = el?.closest('details'); d; d = d.parentElement?.closest('details')) (d as HTMLDetailsElement).open = true
     const rect = r.getBoundingClientRect()
     const box = this.frame.getBoundingClientRect()
@@ -234,16 +217,16 @@ export class FindBar {
 
   private firstVisibleMatch(): number {
     if (!this.matches.length) return -1
-    const i = this.firstInBlock(this.blockAtTop())
+    const i = this.firstInBlock(this.blockAt())
     return i >= this.matches.length ? 0 : i
   }
 
-  /** First match in block `b` or later (matches are in block order). */
+  /** First match in block `b` or later. */
   private firstInBlock(b: number): number {
     let lo = 0, hi = this.matches.length
     while (lo < hi) {
       const mid = (lo + hi) >> 1
-      if (this.blockNoOf(this.matches[mid]) < b) lo = mid + 1
+      if (this.matches[mid].b < b) lo = mid + 1
       else hi = mid
     }
     return lo
@@ -257,27 +240,26 @@ export class FindBar {
   /** Outline only the matches near the screen; the count stays exact. */
   draw(): void {
     this.layer.replaceChildren()
+    this.drawn = []
     if (!this.matches.length || !this.isOpen) return
     const box = this.frame.getBoundingClientRect()
-    const margin = box.height
     const origin = this.layer.getBoundingClientRect()
+    // Blocks from a little above the window to a little below it.
+    const first = Math.max(0, this.blockAt() - 2)
+    const last = this.blockAt(box.height - 8) + 2
     const frag = document.createDocumentFragment()
-    this.drawn = []
-    let drawn = 0
-    // Start a couple of blocks above the window so partly visible matches are drawn.
-    for (let i = this.firstInBlock(this.blockAtTop() - 2); i < this.matches.length && drawn < MAX_DRAWN; i++) {
-      const rects = this.rangeFor(this.matches[i]).getClientRects()
-      if (!rects.length) continue
-      if (rects[0].top > box.bottom + margin) break
-      for (const r of rects) {
+    for (let i = this.firstInBlock(first); i < this.matches.length && this.drawn.length < MAX_DRAWN; i++) {
+      if (this.matches[i].b > last) break
+      const r = this.rangeOf(i)
+      if (!r) continue
+      for (const rect of r.getClientRects()) {
         const d = document.createElement('div')
         d.className = i === this.current ? 'sm current' : 'sm'
         // Grow the box a hair so the outline sits around the glyphs, not on them.
-        d.style.cssText = `left:${r.left - origin.left - 2}px;top:${r.top - origin.top - 1}px;width:${r.width + 4}px;height:${r.height + 2}px`
+        d.style.cssText = `left:${rect.left - origin.left - 2}px;top:${rect.top - origin.top - 1}px;width:${rect.width + 4}px;height:${rect.height + 2}px`
         frag.append(d)
         this.drawn.push([i, d])
       }
-      drawn++
     }
     this.layer.append(frag)
   }
@@ -303,22 +285,19 @@ export class FindBar {
     // the reader's cached block geometry, so even 500,000 hits cost little.
     let last = -1
     for (const m of this.matches) {
-      const b = this.blockNoOf(m)
-      if (b === last) continue
-      last = b
-      add(this.blockY(b), '')
+      if (m.b === last) continue
+      last = m.b
+      add(this.blockY(m.b), '')
     }
-    if (this.current >= 0) add(this.blockY(this.blockNoOf(this.matches[this.current])), 'current')
+    if (this.current >= 0) add(this.blockY(this.matches[this.current].b), 'current')
     this.ticks.append(frag)
   }
-
-  private drawn: [number, HTMLElement][] = []
 
   /** For tests: the largest gap (px) between a drawn mark and its text right now. */
   driftNow(): number {
     let worst = 0
     for (const [i, d] of this.drawn) {
-      const r = this.rangeFor(this.matches[i]).getClientRects()[0]
+      const r = this.rangeOf(i)?.getClientRects()[0]
       const b = d.getBoundingClientRect()
       if (r) worst = Math.max(worst, Math.abs(b.top + 1 - r.top))
     }
@@ -327,6 +306,6 @@ export class FindBar {
 
   /** The current match's text range, for "highlight this match" (Stage 4). */
   currentRange(): Range | null {
-    return this.current >= 0 ? this.rangeFor(this.matches[this.current]) : null
+    return this.current >= 0 ? this.rangeOf(this.current, true) : null
   }
 }

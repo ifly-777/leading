@@ -10,6 +10,15 @@ export default defineConfig({
   root: '.',
   resolve: { alias: { 'decode-named-character-reference': plain('decode-named-character-reference/index.js') } },
   server: { port: 5173, strictPort: true },
+  // `npm run build` makes the page the Mac app loads. Relative paths, because
+  // the app serves it from its own leading:// address, not a web server.
+  base: './',
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    target: 'safari18',
+    rollupOptions: { input: { app: fileURLToPath(new URL('./app.html', import.meta.url)) } },
+  },
   worker: { format: 'es' },
   test: { include: ['test/unit/**/*.test.ts'] },
 } as any)

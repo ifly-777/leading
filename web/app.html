@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- No network, ever: only the app's own files and the document's local images. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' leading: data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Leading</title>
+  <link rel="stylesheet" href="/src/styles/leading.css">
+  <link rel="stylesheet" href="/src/app/app.css">
+</head>
+<body>
+  <main id="window">
+    <div id="scroller" tabindex="-1">
+      <article class="doc" id="doc" lang="en"></article>
+      <div class="search-layer" id="layer" aria-hidden="true"></div>
+    </div>
+    <div id="frame" aria-hidden="true"></div>
+    <nav class="outline" id="outline" hidden></nav>
+    <div class="scroll-ticks" id="ticks" aria-hidden="true"></div>
+  </main>
+  <script type="module" src="/src/app/main.ts"></script>
+</body>
+</html>

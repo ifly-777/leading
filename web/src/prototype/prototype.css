@@ -41,6 +41,4 @@ body.rail-hidden #rail { display: none; }
 #rail .hint { opacity: 0.65; font-size: 11px; margin: 4px 0; }
 #rail kbd { font: 10px ui-monospace, monospace; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); border-radius: 3px; padding: 0 3px; }
 
-/* Plain-text view for .txt files the reader chooses not to render as Markdown. */
-.doc .plain { white-space: pre-wrap; font: inherit; margin: 0; background: none; padding: 0; }
 #rail [hidden] { display: none; }

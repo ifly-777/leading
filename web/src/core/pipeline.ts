@@ -22,9 +22,16 @@ import { transformInline } from './plugins/inline'
 import { smarten } from './plugins/smartquotes'
 import { classifyTables } from './tables'
 import { textOf } from './text'
+import { blockText } from './search-index'
 
 export interface OutlineItem { depth: number; text: string; id: string; s: number; /** top-level block holding it */ b: number }
-export interface Block { html: string; s: number; e: number }
+export interface Block {
+  html: string
+  s: number
+  e: number
+  /** Displayed text, for the search index (see search-index.ts for the rule) */
+  text: string
+}
 export interface RenderResult { blocks: Block[]; outline: OutlineItem[] }
 export interface RenderOptions {
   /** URL prefix for local images, relative to the document. Null: show alt text only.
@@ -226,7 +233,8 @@ export function render(tree: Root, opts: RenderOptions = {}): RenderResult {
     const s = (group[0].position?.start.offset ?? -1) as number
     const e = (group[group.length - 1].position?.end.offset ?? -1) as number
     Object.assign(node.properties, { dataB: blocks.length, ...(s >= 0 ? { dataS: s, dataE: e } : {}) })
-    blocks.push({ html: toHtml(node), s, e })
+    const text = blockText<any>(node, (n) => n.children ?? null, (n) => (n.type === 'element' ? n.tagName : null), (n) => (n.type === 'text' ? n.value : null))
+    blocks.push({ html: toHtml(node), s, e, text })
   }
   // Which block holds each heading (most are blocks themselves; some sit in callouts or lists).
   let b = 0

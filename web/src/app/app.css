@@ -1,0 +1,9 @@
+/* The app page: one window, the reading view filling it. */
+html, body { height: 100%; overflow: hidden; }
+#window { position: relative; height: 100vh; }
+/* A layout boundary: changes elsewhere never re-lay out the document. */
+#scroller { position: relative; height: 100%; overflow-y: auto; overflow-x: hidden; outline: none; contain: strict; }
+/* Leave room under the window's title bar, which the page extends beneath. */
+.doc { padding-top: calc(4.5em + 12px); }
+.findbar { top: 40px; }
+.outline { top: calc(4.5rem + 12px); }

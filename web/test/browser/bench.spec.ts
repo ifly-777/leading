@@ -17,6 +17,8 @@ test('5 MB stress file: open and search', async ({ page }) => {
   const search = await page.evaluate(async () => {
     const f = (window as any).leading.find
     f.open()
+    // A person cannot type within a frame of pressing ⌘F; let the bar's own layout settle first.
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
     const input = document.querySelector('.findbar input') as HTMLInputElement
     const times: Record<string, number> = {}
     for (const q of ['l', 'le', 'lea', 'lead', 'leadi', 'leadin', 'leading', 'e', 'cafe', "it's"]) {

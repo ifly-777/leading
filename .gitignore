@@ -6,3 +6,7 @@ web/playwright-report/
 .DS_Store
 # Your own notes dropped in for testing never get committed
 web/test/fixtures/private/
+build/
+mac/.build/
+.swiftpm/
+mac/.swiftpm/

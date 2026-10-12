@@ -9,6 +9,7 @@
 import { renderMarkdown, type Block, type OutlineItem, type RenderOptions, type RenderResult } from '../core/pipeline'
 import { splitForParallel, referenceDefinitions } from '../core/chunks'
 import { topIn } from './geometry'
+import { SearchIndex } from '../core/search-index'
 
 export const PREVIEW_BYTES = 20_000
 export const LARGE_DOC = 300_000 // above this, far-away blocks skip layout
@@ -53,11 +54,30 @@ export function cutPrefix(src: string, target = PREVIEW_BYTES): string {
   return src
 }
 
-const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()))
+// The next screen refresh, or 100 ms, whichever comes first. WebKit stops
+// refreshing a window that is hidden behind others, and loading must never
+// stall on that.
+const nextFrame = () => new Promise<void>((r) => {
+  let done = false
+  const go = () => { if (!done) { done = true; r() } }
+  requestAnimationFrame(go)
+  setTimeout(go, 100)
+})
 // A task boundary without setTimeout's minimum delay.
 const channel = new MessageChannel()
 const queue: (() => void)[] = []
 channel.port1.onmessage = () => queue.shift()?.()
+/**
+ * Lay the page out now and report it as ready to show. Measured here rather
+ * than at the next screen refresh, because WebKit stops refreshing windows
+ * that are covered by others; on a visible window the screen picks the text
+ * up within one refresh (8–16 ms).
+ */
+function laidOut(doc: HTMLElement, t0: number): number {
+  void doc.offsetHeight // forces style and layout
+  return performance.now() - t0
+}
+
 const yieldTask = () => new Promise<void>((r) => { queue.push(r); channel.port2.postMessage(0) })
 
 // Leave a core for the main thread; more than four workers gains little.
@@ -69,7 +89,7 @@ export function warmPool(): Worker[] {
   return pool
 }
 
-interface PieceResult extends RenderResult { index: number; ms: number }
+interface PieceResult extends RenderResult { index: number; ms: number; folded: { text: string; map: Int32Array } }
 
 export class Reader {
   private gen = 0
@@ -86,12 +106,18 @@ export class Reader {
   private sectionCount = 0
   private sectionBytes = 0
   onBlocksAdded: (() => void) | null = null
+  /** The first text of a document is on screen (ms since load began). */
+  onFirstPaint: ((ms: number) => void) | null = null
+  /** Search index for the current document; grows as pieces are parsed. */
+  index = new SearchIndex()
+  onIndexGrew: (() => void) | null = null
 
   constructor(public doc: HTMLElement) {}
 
   async load(src: string, opts: RenderOptions = {}): Promise<LoadResult | null> {
     const gen = ++this.gen
     const t0 = performance.now()
+    this.index = new SearchIndex()
     this.sectioned = src.length > LARGE_DOC
     document.documentElement.dataset.large = String(this.sectioned)
     this.sections = []
@@ -101,11 +127,14 @@ export class Reader {
     if (prefix.length === src.length) {
       const r = renderMarkdown(src, opts)
       this.doc.innerHTML = r.blocks.map((b) => b.html).join('')
+      this.index.add({ texts: r.blocks.map((b) => b.text) })
+      this.onIndexGrew?.()
       this.pending = r.blocks
       this.nextIndex = r.blocks.length
       this.onBlocksAdded?.()
+      const t = laidOut(this.doc, t0)
+      this.onFirstPaint?.(t)
       await nextFrame()
-      const t = performance.now() - t0
       return { outline: r.outline, blocks: r.blocks, timings: { firstPaint: t, complete: t, blocks: r.blocks.length, bytes: src.length } }
     }
 
@@ -117,8 +146,9 @@ export class Reader {
     this.pending = []
     this.nextIndex = 0
     this.onBlocksAdded?.()
+    const firstPaint = laidOut(this.doc, t0)
+    this.onFirstPaint?.(firstPaint)
     await nextFrame()
-    const firstPaint = performance.now() - t0
 
     // 2. Parse the whole file in pieces, in parallel.
     const workers = warmPool()
@@ -137,9 +167,11 @@ export class Reader {
         const base = this.pending.length
         for (const item of r.outline) outline.push({ ...item, b: item.b + base })
         for (const b of r.blocks) this.pending.push(b)
+        this.index.add({ texts: r.blocks.map((b) => b.text), folded: r.folded })
         results[flushed++] = undefined // free the memory
         if (!previewChecked) { previewChecked = true; this.reconcilePreview() }
       }
+      this.onIndexGrew?.()
       this.wake?.()
     }
 
@@ -167,6 +199,9 @@ export class Reader {
     // 3. Paint pieces as they arrive.
     await this.drain(gen, parsing)
     if (gen !== this.gen) return null
+    // Assemble the search index in the next idle moment, not on the first keystroke.
+    const index = this.index
+    setTimeout(() => { if (index === this.index) index.prepare() }, 50)
     return {
       outline,
       blocks: this.pending,
@@ -175,6 +210,27 @@ export class Reader {
         complete: performance.now() - t0, blocks: this.pending.length, bytes: src.length,
       },
     }
+  }
+
+  /** Show text as-is, without Markdown (for .txt files the reader wants plain). */
+  showPlain(src: string): LoadResult {
+    ++this.gen
+    const t0 = performance.now()
+    this.sectioned = false
+    document.documentElement.dataset.large = 'false'
+    this.sections = []
+    this.sectionStart = []
+    const esc = src.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)
+    const block = { html: `<pre class="plain" data-b="0" data-s="0" data-e="${src.length}">${esc}</pre>`, s: 0, e: src.length, text: src }
+    this.doc.innerHTML = block.html
+    this.pending = [block]
+    this.nextIndex = 1
+    this.index = new SearchIndex()
+    this.index.add({ texts: [src] })
+    this.onIndexGrew?.()
+    const t = performance.now() - t0
+    this.onFirstPaint?.(laidOut(this.doc, t0))
+    return { outline: [], blocks: this.pending, timings: { firstPaint: t, complete: t, blocks: 1, bytes: src.length } }
   }
 
   /**

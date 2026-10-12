@@ -2,107 +2,44 @@
 // rail of live controls for tuning defaults by eye. The rail is throwaway;
 // everything it drives (settings.ts, leading.css, reader/*) is the real thing.
 
-import {
-  DEFAULTS, RANGES, TUNING, FONTS, MONO_FONTS, MEASURE_CHARS, applySettings, resolveTheme,
-  type Settings, type Tuning, type FontId, type Measure, type Theme,
-} from '../core/settings'
+import { DEFAULTS, RANGES, TUNING, FONTS, MONO_FONTS, type Settings, type Tuning, type FontId, type Measure, type Theme } from '../core/settings'
 import { SLOTS } from '../core/highlight-colors'
-import { Reader, warmPool, type LoadTimings } from '../reader/render'
-import { computeLayout, applyLayout } from '../reader/layout'
-import { avgCharEm } from '../reader/measure'
-import { OutlinePanel } from '../reader/outline'
-import { FindBar } from '../reader/find'
-import { TableWatcher } from '../reader/tables'
+import { warmPool, type LoadTimings } from '../reader/render'
+import { ReaderView } from '../reader/view'
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T
-const root = document.documentElement
 const rail = $('rail')
-const win = $('window')
 const scroller = $('scroller')
-const doc = $('doc')
+
+const view = new ReaderView({
+  win: $('window'), scroller, doc: $('doc'), layer: $('layer'), ticks: $('ticks'), frame: $('frame'), outline: $('outline'),
+})
+const { find } = view
 
 // ---------------------------------------------------------------------------
 // State, persisted locally so a reload keeps your tuning.
 
 const STORE = 'leading-prototype-v1'
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x))
-let settings: Settings = clone(DEFAULTS)
-let tuning: Tuning = clone(TUNING)
 try {
   const saved = JSON.parse(localStorage.getItem(STORE) ?? 'null')
-  if (saved?.settings) settings = { ...settings, ...saved.settings }
-  if (saved?.tuning) tuning = { ...tuning, ...saved.tuning, themes: { ...tuning.themes, ...saved.tuning.themes } }
+  if (saved?.settings) view.settings = { ...view.settings, ...saved.settings }
+  if (saved?.tuning) view.tuning = { ...view.tuning, ...saved.tuning, themes: { ...view.tuning.themes, ...saved.tuning.themes } }
 } catch { /* private window or blocked storage: start from defaults */ }
-const save = () => { try { localStorage.setItem(STORE, JSON.stringify({ settings, tuning })) } catch { /* ignore */ } }
-
-let wcag = false
-const dark = matchMedia('(prefers-color-scheme: dark)')
-
-// ---------------------------------------------------------------------------
-// Reader pieces
-
-const reader = new Reader(doc)
-const outline = new OutlinePanel($('outline'), scroller)
-const find = new FindBar(win, scroller, doc, $('layer'), $('ticks'), $('frame'))
-const tables = new TableWatcher(scroller)
-let blocksLoaded: { s: number }[] = []
-
-outline.locate = (item, force) => {
-  const blk = reader.blockEl(item.b, force)
-  if (!blk) return null
-  // Most headings are blocks themselves; some sit inside a callout or list.
-  return blk.matches('h1,h2,h3,h4,h5,h6') ? blk : blk.querySelector<HTMLElement>(`:is(h1,h2,h3,h4,h5,h6)[data-s="${item.s}"]`)
-}
-find.blockY = (b) => reader.blockY(b, scroller)
-find.onLayoutShift = () => reader.invalidateGeometry()
-reader.onBlocksAdded = () => reader.invalidateGeometry()
-outline.onClose = () => { settings.outlineOpen = false; refresh() }
-
-// ---------------------------------------------------------------------------
-// Applying settings
-
-let avg = 0.5
-let avgKey = ''
-
-function effective(): Settings {
-  // The WCAG 1.4.12 check overrides spacing with the criterion's own values.
-  return wcag ? { ...settings, lineHeight: Math.max(1.5, settings.lineHeight), letterSpacing: 0.12, wordSpacing: 0.16, paragraphStyle: 'space', paragraphSpacing: 2 } : settings
-}
+const save = () => { try { localStorage.setItem(STORE, JSON.stringify({ settings: view.settings, tuning: view.tuning })) } catch { /* ignore */ } }
+// Shorthands the rail code reads and writes.
+const S = () => view.settings
+const T = () => view.tuning
 
 async function refresh(): Promise<void> {
-  const s = effective()
-  applySettings(root, s, tuning, { prefersDark: dark.matches, avgCharEm: avg })
-  const key = [getComputedStyle(doc).fontFamily, s.letterSpacing, s.wordSpacing, root.style.getPropertyValue('--weight')].join('|')
-  if (key !== avgKey) {
-    avgKey = key
-    avg = await avgCharEm(doc)
-    applySettings(root, s, tuning, { prefersDark: dark.matches, avgCharEm: avg })
-  }
-  relayout()
+  await view.apply()
   save()
   syncRail()
-}
-
-function relayout(): void {
-  const s = effective()
-  const r = computeLayout({
-    width: scroller.clientWidth, fontPx: s.size,
-    measureEm: MEASURE_CHARS[s.measure] * avg, narrowEm: MEASURE_CHARS.narrow * avg, outlineOpen: s.outlineOpen,
-  })
-  applyLayout(root, r)
-  const o = outline.el
-  o.hidden = r.outline === 'hidden'
-  o.classList.toggle('popover', r.outline === 'popover')
-  tables.recheckAll(doc)
-  reader.invalidateGeometry()
-  outline.updateCurrent()
-  find.draw()
-  layoutInfo = `${Math.round(r.colW)} px column (${(r.colW / s.size / avg).toFixed(0)} chars), outline: ${r.outline}`
   showTimings()
 }
-
-new ResizeObserver(() => relayout()).observe(scroller)
-dark.addEventListener('change', () => refresh())
+view.onSettingsChanged = () => { save(); syncRail(); showTimings() }
+new ResizeObserver(() => showTimings()).observe(scroller)
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => syncRail())
 
 // ---------------------------------------------------------------------------
 // Documents
@@ -111,10 +48,10 @@ const FIXTURES = ['prose.md', 'highlights.md', 'obsidian.md', 'tables.md', 'tort
 const privateDocs = import.meta.glob('/test/fixtures/private/*.{md,markdown,txt}', { query: '?url', import: 'default' })
 
 let timings: LoadTimings | null = null
-let layoutInfo = ''
 let currentName = ''
 let plainText = false
 let currentSrc = ''
+let currentBase: string | null = null
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
@@ -123,36 +60,19 @@ function escapeHtml(s: string): string {
 async function openText(name: string, src: string, imageBase: string | null): Promise<void> {
   currentName = name
   currentSrc = src
-  find.invalidate()
-  scroller.scrollTop = 0
-  if (plainText) {
-    doc.innerHTML = `<pre class="plain">${escapeHtml(src)}</pre>`
-    outline.setItems([])
-    timings = null
-  } else {
-    const r = await reader.load(src, { imageBase })
-    if (!r) return // a newer load replaced this one
-    timings = r.timings
-    blocksLoaded = r.blocks
-    outline.setItems(r.outline)
-  }
-  tables.scan(doc)
-  tables.recheckAll(doc)
-  find.invalidate()
-  outline.updateCurrent()
+  currentBase = imageBase
+  const r = await view.open(src, { imageBase, plain: plainText })
+  if (!r) return // a newer open replaced this one
+  timings = r.timings
   showTimings()
   syncRail()
-  // Warm the search index and block geometry once the page has settled, so the
-  // first keystroke in Find is as quick as the rest. (Stage 2 does this in the worker.)
-  const loaded = currentName
-  setTimeout(() => { if (currentName === loaded) { find.prepare(); reader.blockY(0, scroller) } }, 300)
 }
 
 async function openFixture(name: string): Promise<void> {
   const url = name.startsWith('/') ? name : `/test/fixtures/${name}`
   const res = await fetch(url)
   if (!res.ok) {
-    doc.innerHTML = name.includes('stress')
+    $('doc').innerHTML = name.includes('stress')
       ? '<p>The stress file has not been generated. Run <code>npm run stress</code> in the <code>web</code> folder, then reload.</p>'
       : `<p>Could not load ${escapeHtml(name)}.</p>`
     return
@@ -172,7 +92,7 @@ function showTimings(): void {
     t?.pieces != null ? `parallel pieces  ${t.pieces}\nall parsed       ${f(t.parsed)} ms` : '',
     t ? `all in page      ${f(t.complete)} ms` : '',
     find.isOpen && find.query ? `last search      ${f(find.lastSearchMs)} ms` : '',
-    layoutInfo,
+    view.layout ? `${Math.round(view.layout.colW)} px column (${view.charsPerLine.toFixed(0)} chars), outline: ${view.layout.outline}` : '',
   ]
   el.textContent = lines.filter(Boolean).join('\n')
 }
@@ -253,7 +173,7 @@ function buildRail(): void {
   const file = btns.querySelector<HTMLInputElement>('#file')!
   btns.querySelector('#openfile')!.addEventListener('click', () => file.click())
   file.addEventListener('change', async () => { const f = file.files?.[0]; if (f) openText(f.name, await f.text(), null) })
-  checkbox(d0, 'Show as plain text', () => plainText, (v) => { plainText = v; openText(currentName, currentSrc, null) })
+  checkbox(d0, 'Show as plain text', () => plainText, (v) => { plainText = v; openText(currentName, currentSrc, currentBase) })
   const hint = document.createElement('p')
   hint.className = 'hint'
   hint.innerHTML = 'Or drop a file anywhere. Files you put in <code>web/test/fixtures/private/</code> appear in the list; they never leave your Mac and are never committed.'
@@ -269,33 +189,33 @@ function buildRail(): void {
   frow.className = 'row wide'
   frow.innerHTML = `<label>Font</label><select aria-label="Font">${Object.entries(FONTS).map(([k, f]) => `<option value="${k}">${f.label}</option>`).join('')}<option value="custom">Other installed font…</option></select>`
   const fsel = frow.querySelector('select')!
-  fsel.addEventListener('change', () => { settings.font = fsel.value as FontId; refresh() })
-  syncers.push(() => { fsel.value = settings.font })
+  fsel.addEventListener('change', () => { S().font = fsel.value as FontId; refresh() })
+  syncers.push(() => { fsel.value = S().font })
   d1.append(frow)
   const crow = document.createElement('div')
   crow.className = 'row wide'
   crow.innerHTML = `<label>Font name</label><input type="text" placeholder="e.g. Iowan Old Style" aria-label="Other font name">`
   const cin = crow.querySelector('input')!
-  cin.addEventListener('change', () => { settings.customFont = cin.value; refresh() })
-  syncers.push(() => { crow.hidden = settings.font !== 'custom'; cin.value = settings.customFont })
+  cin.addEventListener('change', () => { S().customFont = cin.value; refresh() })
+  syncers.push(() => { crow.hidden = S().font !== 'custom'; cin.value = S().customFont })
   d1.append(crow)
-  slider(d1, 'Size', RANGES.size, () => settings.size, (v) => (settings.size = v), (v) => v + ' px')
-  slider(d1, 'Line height', RANGES.lineHeight, () => settings.lineHeight, (v) => (settings.lineHeight = v), (v) => v.toFixed(2))
-  segmented<Measure>(d1, 'Line width', [['narrow', 'Narrow'], ['medium', 'Medium'], ['wide', 'Wide']], () => settings.measure, (v) => (settings.measure = v))
-  segmented<Theme>(d1, 'Theme', [['system', 'Auto'], ['light', 'Light'], ['sepia', 'Sepia'], ['dark', 'Dark']], () => settings.theme, (v) => (settings.theme = v))
+  slider(d1, 'Size', RANGES.size, () => S().size, (v) => (S().size = v), (v) => v + ' px')
+  slider(d1, 'Line height', RANGES.lineHeight, () => S().lineHeight, (v) => (S().lineHeight = v), (v) => v.toFixed(2))
+  segmented<Measure>(d1, 'Line width', [['narrow', 'Narrow'], ['medium', 'Medium'], ['wide', 'Wide']], () => S().measure, (v) => (S().measure = v))
+  segmented<Theme>(d1, 'Theme', [['system', 'Auto'], ['light', 'Light'], ['sepia', 'Sepia'], ['dark', 'Dark']], () => S().theme, (v) => (S().theme = v))
 
   const d2 = section('Advanced', false)
-  slider(d2, 'Letter spacing', RANGES.letterSpacing, () => settings.letterSpacing, (v) => (settings.letterSpacing = v), (v) => v.toFixed(3) + ' em')
-  slider(d2, 'Word spacing', RANGES.wordSpacing, () => settings.wordSpacing, (v) => (settings.wordSpacing = v), (v) => v.toFixed(2) + ' em')
-  segmented(d2, 'Paragraphs', [['space', 'Space'], ['indent', 'Indent']] as [Settings['paragraphStyle'], string][], () => settings.paragraphStyle, (v) => (settings.paragraphStyle = v))
-  slider(d2, 'Para. spacing', RANGES.paragraphSpacing, () => settings.paragraphSpacing, (v) => (settings.paragraphSpacing = v), (v) => v.toFixed(1) + ' em')
-  segmented(d2, 'Alignment', [['left', 'Left'], ['justify', 'Justified']] as [Settings['align'], string][], () => settings.align, (v) => (settings.align = v))
-  segmented(d2, 'Code font', Object.entries(MONO_FONTS).map(([k, f]) => [k, f.label]) as [Settings['monoFont'], string][], () => settings.monoFont, (v) => (settings.monoFont = v))
+  slider(d2, 'Letter spacing', RANGES.letterSpacing, () => S().letterSpacing, (v) => (S().letterSpacing = v), (v) => v.toFixed(3) + ' em')
+  slider(d2, 'Word spacing', RANGES.wordSpacing, () => S().wordSpacing, (v) => (S().wordSpacing = v), (v) => v.toFixed(2) + ' em')
+  segmented(d2, 'Paragraphs', [['space', 'Space'], ['indent', 'Indent']] as [Settings['paragraphStyle'], string][], () => S().paragraphStyle, (v) => (S().paragraphStyle = v))
+  slider(d2, 'Para. spacing', RANGES.paragraphSpacing, () => S().paragraphSpacing, (v) => (S().paragraphSpacing = v), (v) => v.toFixed(1) + ' em')
+  segmented(d2, 'Alignment', [['left', 'Left'], ['justify', 'Justified']] as [Settings['align'], string][], () => S().align, (v) => (S().align = v))
+  segmented(d2, 'Code font', Object.entries(MONO_FONTS).map(([k, f]) => [k, f.label]) as [Settings['monoFont'], string][], () => S().monoFont, (v) => (S().monoFont = v))
 
   const d3 = section('Highlights, tables, outline, find')
-  segmented(d3, 'Highlights', [['marker', 'Marker'], ['lowlight', 'Lowlight'], ['underline', 'Underline']] as [Settings['highlightStyle'], string][], () => settings.highlightStyle, (v) => (settings.highlightStyle = v))
-  checkbox(d3, 'Zebra rows', () => settings.zebra, (v) => (settings.zebra = v))
-  checkbox(d3, 'Outline (⌥⌘O)', () => settings.outlineOpen, (v) => (settings.outlineOpen = v))
+  segmented(d3, 'Highlights', [['marker', 'Marker'], ['lowlight', 'Lowlight'], ['underline', 'Underline']] as [Settings['highlightStyle'], string][], () => S().highlightStyle, (v) => (S().highlightStyle = v))
+  checkbox(d3, 'Zebra rows', () => S().zebra, (v) => (S().zebra = v))
+  checkbox(d3, 'Outline (⌥⌘O)', () => S().outlineOpen, (v) => (S().outlineOpen = v))
   const fb = document.createElement('div')
   fb.className = 'btns'
   fb.innerHTML = `<button>Find (⌘F)</button>`
@@ -304,14 +224,14 @@ function buildRail(): void {
 
   // Values tuned by eye; Export turns them into the app's defaults.
   const d4 = section('Tuning (becomes the defaults)', false)
-  slider(d4, 'Heading ratio', { min: 1.1, max: 1.35, step: 0.01 }, () => tuning.headingRatio, (v) => (tuning.headingRatio = v), (v) => v.toFixed(2))
-  slider(d4, 'Dark weight', { min: 300, max: 420, step: 5 }, () => tuning.darkWeight, (v) => (tuning.darkWeight = v))
-  slider(d4, 'Outline size', { min: 11, max: 16, step: 0.5 }, () => tuning.outlineSize, (v) => (tuning.outlineSize = v), (v) => v + ' px')
-  slider(d4, 'Outline fade', { min: 0.15, max: 1, step: 0.05 }, () => tuning.outlineIdleOpacity, (v) => (tuning.outlineIdleOpacity = v), (v) => v.toFixed(2))
+  slider(d4, 'Heading ratio', { min: 1.1, max: 1.35, step: 0.01 }, () => T().headingRatio, (v) => (T().headingRatio = v), (v) => v.toFixed(2))
+  slider(d4, 'Dark weight', { min: 300, max: 420, step: 5 }, () => T().darkWeight, (v) => (T().darkWeight = v))
+  slider(d4, 'Outline size', { min: 11, max: 16, step: 0.5 }, () => T().outlineSize, (v) => (T().outlineSize = v), (v) => v + ' px')
+  slider(d4, 'Outline fade', { min: 0.15, max: 1, step: 0.05 }, () => T().outlineIdleOpacity, (v) => (T().outlineIdleOpacity = v), (v) => v.toFixed(2))
   const themeNote = document.createElement('p')
   themeNote.className = 'hint'
   d4.append(themeNote)
-  syncers.push(() => { themeNote.textContent = `Colours below edit the ${resolveTheme(settings.theme, dark.matches)} theme.` })
+  syncers.push(() => { themeNote.textContent = `Colours below edit the ${view.theme} theme.` })
   const tcols = document.createElement('div')
   tcols.className = 'colors'
   const themeKeys: [keyof Tuning['themes']['light'], string][] = [['bg', 'paper'], ['fg', 'ink'], ['muted', 'muted'], ['link', 'link'], ['search', 'search']]
@@ -324,24 +244,24 @@ function buildRail(): void {
   d4.append(fills)
 
   const d5 = section('Checks and export')
-  checkbox(d5, 'WCAG 1.4.12 stress', () => wcag, (v) => { wcag = v })
+  checkbox(d5, 'WCAG 1.4.12 stress', () => view.wcag, (v) => { view.wcag = v })
   const exp = document.createElement('div')
   exp.innerHTML = `<div class="btns"><button id="export">Export settings</button><button id="reset">Reset to defaults</button></div><textarea id="exported" readonly aria-label="Exported settings" placeholder="Press Export, then send me this text."></textarea>`
   d5.append(exp)
   exp.querySelector('#export')!.addEventListener('click', async () => {
-    const text = JSON.stringify({ settings, tuning }, null, 2)
+    const text = JSON.stringify({ settings: view.settings, tuning: view.tuning }, null, 2)
     const ta = exp.querySelector('textarea')!
     ta.value = text
     try { await navigator.clipboard.writeText(text) } catch { ta.select() }
   })
-  exp.querySelector('#reset')!.addEventListener('click', () => { settings = clone(DEFAULTS); tuning = clone(TUNING); refresh() })
+  exp.querySelector('#reset')!.addEventListener('click', () => { view.settings = clone(DEFAULTS); view.tuning = clone(TUNING); refresh() })
   const keys = document.createElement('p')
   keys.className = 'hint'
   keys.innerHTML = '<kbd>⌘F</kbd> find · <kbd>⌘G</kbd>/<kbd>⇧⌘G</kbd> next/previous · <kbd>⌥⌘O</kbd> outline (type to filter) · <kbd>⌥⌘[</kbd>/<kbd>⌥⌘]</kbd> narrower/wider · <kbd>⌥⌘T</kbd> theme · <kbd>\\</kbd> hide this panel'
   d5.append(keys)
 }
 
-function cur() { return tuning.themes[resolveTheme(settings.theme, dark.matches)] }
+function cur() { return T().themes[view.theme] }
 
 function colorInput(parent: HTMLElement, label: string, get: () => string, set: (v: string) => void): void {
   const l = document.createElement('label')
@@ -353,35 +273,20 @@ function colorInput(parent: HTMLElement, label: string, get: () => string, set: 
 }
 
 // ---------------------------------------------------------------------------
-// Keyboard: the same shortcuts the app will have, where Safari lets a page have them.
-
-const MEASURES: Measure[] = ['narrow', 'medium', 'wide']
-const THEMES: Theme[] = ['light', 'sepia', 'dark']
+// Keyboard: the same shortcuts the app has, where Safari lets a page have them.
 
 document.addEventListener('keydown', (e) => {
   const typing = (e.target as HTMLElement).closest('input, textarea, select')
-  if (e.key === '\\' && !typing) { document.body.classList.toggle('rail-hidden'); relayout(); return }
+  if (e.key === '\\' && !typing) { document.body.classList.toggle('rail-hidden'); view.relayout(); return }
   if (!e.metaKey) return
   const k = e.key.toLowerCase()
-  if (k === 'f' && !e.altKey) { e.preventDefault(); find.open(); return }
-  if (k === 'g') { e.preventDefault(); if (!find.isOpen) find.open(); find.step(e.shiftKey ? -1 : 1); return }
+  if (k === 'f' && !e.altKey) { e.preventDefault(); view.command('find'); return }
+  if (k === 'g') { e.preventDefault(); view.command(e.shiftKey ? 'findPrevious' : 'findNext'); return }
   if (!e.altKey) return
   // With ⌥ held, e.key is a special character, so match on the physical key.
-  if (e.code === 'KeyO') {
-    e.preventDefault()
-    settings.outlineOpen = !settings.outlineOpen
-    refresh().then(() => { if (settings.outlineOpen) outline.focusForTyping() })
-  } else if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
-    e.preventDefault()
-    const i = MEASURES.indexOf(settings.measure) + (e.code === 'BracketLeft' ? -1 : 1)
-    settings.measure = MEASURES[Math.max(0, Math.min(2, i))]
-    refresh()
-  } else if (e.code === 'KeyT') {
-    e.preventDefault()
-    const now = resolveTheme(settings.theme, dark.matches)
-    settings.theme = THEMES[(THEMES.indexOf(now) + 1) % THEMES.length]
-    refresh()
-  }
+  const byCode: Record<string, Parameters<typeof view.command>[0]> = { KeyO: 'toggleOutline', BracketLeft: 'narrower', BracketRight: 'wider', KeyT: 'cycleTheme' }
+  const c = byCode[e.code]
+  if (c) { e.preventDefault(); view.command(c) }
 })
 
 // Drag and drop a file anywhere to read it.
@@ -396,7 +301,7 @@ window.addEventListener('drop', async (e) => {
 })
 
 // Expose a hook for the automated browser checks.
-;(window as any).leading = { openFixture, openText, refresh, settings: () => settings, setWcag: (v: boolean) => { wcag = v; return refresh() }, timings: () => timings, find, blocks: () => blocksLoaded }
+;(window as any).leading = { openFixture, openText, refresh, settings: () => view.settings, setWcag: (v: boolean) => { view.wcag = v; return refresh() }, timings: () => timings, find, view }
 
 buildRail()
 warmPool() // as the app will at launch
