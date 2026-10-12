@@ -5,6 +5,8 @@
 // safe: a non-indented "#" line after a blank line always ends every list,
 // quote and paragraph, so each piece parses exactly as it would in place.
 
+import { containerDepth } from './pipeline'
+
 export interface Chunk { start: number; end: number }
 
 const HEADING = /^#{1,6}(?:[ \t]|$)/
@@ -17,6 +19,7 @@ function cutPoints(src: string): number[] {
   let i = 0
   let fence: string | null = null
   let prevBlank = true
+  let html = 0 // open HTML containers (<details>…), which must not be cut apart
   if (src.startsWith('---\n') || src.startsWith('---\r\n')) {
     const end = src.indexOf('\n---', 3)
     if (end > 0) i = src.indexOf('\n', end + 4) + 1 || src.length
@@ -29,7 +32,9 @@ function cutPoints(src: string): number[] {
     if (f) {
       if (!fence) fence = f[1]
       else if (f[1][0] === fence[0] && f[1].length >= fence.length && line.trim() === f[1]) fence = null
-    } else if (!fence && prevBlank && HEADING.test(line)) {
+    } else if (!fence && /^ {0,3}</.test(line)) {
+      html = Math.max(0, html + containerDepth(line))
+    } else if (!fence && !html && prevBlank && HEADING.test(line)) {
       cuts.push(i)
     }
     prevBlank = line.trim() === ''

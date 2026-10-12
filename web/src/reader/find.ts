@@ -74,7 +74,14 @@ export class FindBar {
     this.el.querySelector('.next')!.addEventListener('click', () => this.step(1))
     this.el.querySelector('.close')!.addEventListener('click', () => this.close())
     scroller.addEventListener('scroll', () => this.scheduleDraw(), { passive: true })
+    // On long pages, sections start with estimated heights and settle to their
+    // real ones as they come into view. That moves text without a scroll event,
+    // so redraw whenever the document's size changes, or marks would drift.
+    new ResizeObserver(() => { this.onLayoutShift(); this.scheduleDraw() }).observe(doc)
   }
+
+  /** Called when the page's geometry changes (the reader uses it to drop cached positions). */
+  onLayoutShift: () => void = () => {}
 
   get isOpen(): boolean { return !this.el.hidden }
   get query(): string { return this.input.value }
@@ -158,6 +165,14 @@ export class FindBar {
     this.updateCount()
     this.drawTicks()
     this.draw()
+    // A jump into a never-seen part of a long page lays out new sections over
+    // the next frame or two; centre again once they have settled.
+    const i = this.current
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (this.current !== i || !this.isOpen) return
+      this.reveal(i, true)
+      this.draw()
+    }))
   }
 
   private nodeIndex(off: number): number {
@@ -199,14 +214,16 @@ export class FindBar {
     return r
   }
 
-  /** Open anything hiding the match, then centre it in the window. */
-  private reveal(i: number): void {
+  /** Open anything hiding the match, then centre it in the window (`settle`: only if it has drifted). */
+  private reveal(i: number, settle = false): void {
     const r = this.rangeFor(this.matches[i])
     let el: Element | null = r.startContainer.parentElement
     for (let d = el?.closest('details'); d; d = d.parentElement?.closest('details')) (d as HTMLDetailsElement).open = true
     const rect = r.getBoundingClientRect()
     const box = this.frame.getBoundingClientRect()
-    this.scroller.scrollTop += rect.top - (box.top + box.height / 2)
+    const off = rect.top - (box.top + box.height / 2)
+    if (settle && Math.abs(off) < box.height / 4) return // still comfortably in view: don't nudge the page
+    this.scroller.scrollTop += off
     const wide = el?.closest('.table-scroll.scrolls') as HTMLElement | null
     if (wide) {
       const wr = wide.getBoundingClientRect()
@@ -245,6 +262,7 @@ export class FindBar {
     const margin = box.height
     const origin = this.layer.getBoundingClientRect()
     const frag = document.createDocumentFragment()
+    this.drawn = []
     let drawn = 0
     // Start a couple of blocks above the window so partly visible matches are drawn.
     for (let i = this.firstInBlock(this.blockAtTop() - 2); i < this.matches.length && drawn < MAX_DRAWN; i++) {
@@ -257,6 +275,7 @@ export class FindBar {
         // Grow the box a hair so the outline sits around the glyphs, not on them.
         d.style.cssText = `left:${r.left - origin.left - 2}px;top:${r.top - origin.top - 1}px;width:${r.width + 4}px;height:${r.height + 2}px`
         frag.append(d)
+        this.drawn.push([i, d])
       }
       drawn++
     }
@@ -291,6 +310,19 @@ export class FindBar {
     }
     if (this.current >= 0) add(this.blockY(this.blockNoOf(this.matches[this.current])), 'current')
     this.ticks.append(frag)
+  }
+
+  private drawn: [number, HTMLElement][] = []
+
+  /** For tests: the largest gap (px) between a drawn mark and its text right now. */
+  driftNow(): number {
+    let worst = 0
+    for (const [i, d] of this.drawn) {
+      const r = this.rangeFor(this.matches[i]).getClientRects()[0]
+      const b = d.getBoundingClientRect()
+      if (r) worst = Math.max(worst, Math.abs(b.top + 1 - r.top))
+    }
+    return worst
   }
 
   /** The current match's text range, for "highlight this match" (Stage 4). */

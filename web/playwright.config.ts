@@ -3,6 +3,8 @@ import { defineConfig, devices } from '@playwright/test'
 // WebKit only: Leading runs inside the system WebKit, so Chrome results would mislead.
 export default defineConfig({
   testDir: 'test/browser',
+  // One at a time: the speed tests use every core, so parallel runs would skew their timings.
+  workers: 1,
   timeout: 120_000,
   use: { ...devices['Desktop Safari'], baseURL: 'http://localhost:5174' },
   projects: [{ name: 'webkit', use: { browserName: 'webkit' } }],

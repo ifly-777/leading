@@ -89,3 +89,16 @@ describe('safety', () => {
     for (const b of r.blocks) expect(b.html.match(/ data-b="/g)).toHaveLength(1)
   })
 })
+
+describe('HTML containers around Markdown', () => {
+  it('keeps Markdown content inside <details> hidden until opened', () => {
+    const r = renderMarkdown('before\n\n<details><summary>More</summary>\n\nHidden **content**.\n\n</details>\n\nafter')
+    expect(r.blocks).toHaveLength(3)
+    const d = r.blocks[1].html
+    expect(d).toMatch(/^<details[^>]*><summary>More<\/summary>.*Hidden .*<strong>.*<\/details>$/s)
+    expect(d.match(/ data-b="/g)).toHaveLength(1)
+  })
+  it('does not swallow the rest of the document after a closed container', () => {
+    expect(renderMarkdown('<div>x</div>\n\npara\n\n<details>\n<summary>s</summary>\n\nbody\n</details>\n\nend').blocks).toHaveLength(4)
+  })
+})

@@ -183,6 +183,17 @@ const SCHEMA: Schema = {
   },
 }
 
+// Block-level HTML containers that Markdown authors open and close around
+// ordinary Markdown content (GitHub-style collapsible sections, centred divs).
+const CONTAINER_TAG = /<(\/?)(details|div|section|figure|aside|center)\b[^>]*>/gi
+
+/** Opened minus closed container tags in a piece of raw HTML. */
+export function containerDepth(html: string): number {
+  let d = 0
+  for (const m of html.matchAll(CONTAINER_TAG)) d += m[1] ? -1 : 1
+  return d
+}
+
 function hasRaw(node: any): boolean {
   if (node.type === 'raw') return true
   return Array.isArray(node.children) && node.children.some(hasRaw)
@@ -192,18 +203,28 @@ export function render(tree: Root, opts: RenderOptions = {}): RenderResult {
   const outline: OutlineItem[] = []
   const hast = toHast(tree, { allowDangerousHtml: true, handlers: makeHandlers(outline, opts) }) as HastRoot
   const blocks: Block[] = []
-  for (const child of hast.children) {
-    // HTML blocks arrive as top-level "raw" nodes; everything else as elements.
-    if (child.type !== 'element' && child.type !== ('raw' as string)) continue
-    let node = child as Element
-    if (hasRaw(child)) {
-      const cleaned = sanitize(raw({ type: 'root', children: [child] }), SCHEMA) as HastRoot
+  // HTML blocks arrive as top-level "raw" nodes; everything else as elements.
+  const kids = hast.children.filter((c) => c.type === 'element' || c.type === ('raw' as string))
+  for (let k = 0; k < kids.length; k++) {
+    // An HTML block that opens a container (<details>, <div>…) and leaves it
+    // open swallows the following blocks up to its closing tag, as a browser
+    // would: Markdown splits them apart at blank lines, HTML does not.
+    const group = [kids[k]]
+    let depth = kids[k].type === ('raw' as string) ? containerDepth((kids[k] as any).value) : 0
+    while (depth > 0 && k + 1 < kids.length) {
+      const next = kids[++k]
+      group.push(next)
+      if (next.type === ('raw' as string)) depth += containerDepth((next as any).value)
+    }
+    let node = group[0] as Element
+    if (group.length > 1 || hasRaw(group[0])) {
+      const cleaned = sanitize(raw({ type: 'root', children: group } as HastRoot), SCHEMA) as HastRoot
       const els = cleaned.children.filter((n): n is Element => n.type === 'element')
       // Exactly one element per block, so block n is always doc.children[n].
       node = els.length === 1 ? els[0] : el('div', { className: ['html-block'] }, els)
     }
-    const s = (child.position?.start.offset ?? -1) as number
-    const e = (child.position?.end.offset ?? -1) as number
+    const s = (group[0].position?.start.offset ?? -1) as number
+    const e = (group[group.length - 1].position?.end.offset ?? -1) as number
     Object.assign(node.properties, { dataB: blocks.length, ...(s >= 0 ? { dataS: s, dataE: e } : {}) })
     blocks.push({ html: toHtml(node), s, e })
   }
