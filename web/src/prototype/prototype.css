@@ -1,0 +1,46 @@
+/* Prototype-only chrome: the control rail. Not part of the app. */
+
+body { display: flex; height: 100vh; overflow: hidden; }
+#window { position: relative; flex: 1; min-width: 0; height: 100vh; }
+/* A layout boundary: changes elsewhere in the window never re-lay out the document. */
+#scroller { position: relative; height: 100%; overflow-y: auto; overflow-x: hidden; outline: none; contain: strict; }
+#drop {
+  position: absolute; inset: 12px; z-index: 50; display: grid; place-items: center;
+  border: 2px dashed var(--muted); border-radius: 14px; background: color-mix(in srgb, var(--bg) 85%, transparent);
+  font: 15px system-ui; color: var(--fg);
+}
+#drop[hidden] { display: none; }
+
+#rail {
+  width: 290px; flex: none; height: 100vh; overflow-y: auto; box-sizing: border-box;
+  padding: 10px 14px 40px; font: 12px/1.35 system-ui, -apple-system, sans-serif;
+  background: #EDEBE7; color: #222; border-right: 1px solid #D6D2CB;
+}
+:root[data-theme="dark"] #rail { background: #2A2927; color: #E6E2DA; border-color: #3A3835; }
+body.rail-hidden #rail { display: none; }
+#rail h1 { font-size: 13px; margin: 2px 0 8px; display: flex; justify-content: space-between; align-items: baseline; }
+#rail h1 small { font-weight: 400; opacity: 0.6; }
+#rail details { border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent); padding: 6px 0; }
+#rail summary { font-weight: 600; cursor: default; padding: 2px 0; }
+#rail .row { display: grid; grid-template-columns: 92px 1fr 46px; align-items: center; gap: 6px; margin: 5px 0; }
+#rail .row.wide { grid-template-columns: 92px 1fr; }
+#rail label { opacity: 0.8; }
+#rail output { font-variant-numeric: tabular-nums; text-align: right; opacity: 0.8; }
+#rail input[type="range"] { width: 100%; margin: 0; }
+#rail select, #rail input[type="text"] { width: 100%; font: inherit; }
+#rail .seg { display: flex; gap: 2px; }
+#rail .seg button { flex: 1; font: inherit; padding: 3px 2px; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); background: transparent; color: inherit; border-radius: 4px; }
+#rail .seg button[aria-pressed="true"] { background: color-mix(in srgb, currentColor 18%, transparent); font-weight: 600; }
+#rail .colors { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin: 4px 0; }
+#rail .colors label { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10px; }
+#rail input[type="color"] { width: 34px; height: 22px; padding: 0; border: 0; background: none; }
+#rail .btns { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+#rail .btns button { font: inherit; padding: 4px 8px; }
+#rail .timings { font: 11px/1.45 ui-monospace, monospace; white-space: pre-wrap; background: color-mix(in srgb, currentColor 7%, transparent); border-radius: 4px; padding: 6px; margin: 6px 0; min-height: 3em; }
+#rail textarea { width: 100%; height: 110px; font: 10px ui-monospace, monospace; box-sizing: border-box; }
+#rail .hint { opacity: 0.65; font-size: 11px; margin: 4px 0; }
+#rail kbd { font: 10px ui-monospace, monospace; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); border-radius: 3px; padding: 0 3px; }
+
+/* Plain-text view for .txt files the reader chooses not to render as Markdown. */
+.doc .plain { white-space: pre-wrap; font: inherit; margin: 0; background: none; padding: 0; }
+#rail [hidden] { display: none; }

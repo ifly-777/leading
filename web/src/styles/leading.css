@@ -1,0 +1,305 @@
+/* Leading — reading typography.
+ * Every adjustable value arrives as a custom property or a data attribute
+ * on <html>, written by settings.ts. Nothing here hard-codes a user choice. */
+
+/* ---- Bundled fonts (original files, unmodified, SIL OFL) ---------------- */
+@font-face { font-family: "Literata"; src: url("../../fonts/literata/Literata-VF.ttf") format("truetype"); font-weight: 200 900; font-style: normal; font-display: block; }
+@font-face { font-family: "Literata"; src: url("../../fonts/literata/Literata-Italic-VF.ttf") format("truetype"); font-weight: 200 900; font-style: italic; font-display: block; }
+@font-face { font-family: "Atkinson Hyperlegible Next"; src: url("../../fonts/atkinson-hyperlegible-next/AtkinsonHyperlegibleNext-VF.ttf") format("truetype"); font-weight: 200 800; font-style: normal; font-display: block; }
+@font-face { font-family: "Atkinson Hyperlegible Next"; src: url("../../fonts/atkinson-hyperlegible-next/AtkinsonHyperlegibleNext-Italic-VF.ttf") format("truetype"); font-weight: 200 800; font-style: italic; font-display: block; }
+@font-face { font-family: "iA Writer Quattro V"; src: url("../../fonts/ia-writer-quattro/iAWriterQuattroV.ttf") format("truetype"); font-weight: 400 700; font-style: normal; font-display: block; }
+@font-face { font-family: "iA Writer Quattro V"; src: url("../../fonts/ia-writer-quattro/iAWriterQuattroV-Italic.ttf") format("truetype"); font-weight: 400 700; font-style: italic; font-display: block; }
+@font-face { font-family: "iA Writer Mono V"; src: url("../../fonts/ia-writer-mono/iAWriterMonoV.ttf") format("truetype"); font-weight: 400 700; font-style: normal; font-display: block; }
+@font-face { font-family: "iA Writer Mono V"; src: url("../../fonts/ia-writer-mono/iAWriterMonoV-Italic.ttf") format("truetype"); font-weight: 400 700; font-style: italic; font-display: block; }
+
+/* ---- Fallback tokens (settings.ts overwrites all of these) -------------- */
+:root {
+  color-scheme: light;
+  --bg: #FBF8F2; --fg: #2B2824; --muted: #837B70; --rule: #E4DDD1; --code-bg: #F3EEE5; --link: #2F5F8F; --search: #7A5CFA;
+  --font-body: "Literata", ui-serif, serif; --font-mono: ui-monospace, monospace;
+  --size: 19px; --lh: 1.5; --measure: 33em; --measure-narrow: 27.5em;
+  --ls: 0em; --ws: 0em; --para: 0.8em; --indent: 0; --ratio: 1.2; --weight: 400;
+  --outline-size: 13px; --outline-idle: 0.5;
+  --col-left: auto; --col-w: var(--measure); --avail-w: 100%; --avail-offset: 0px;
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+
+html, body { margin: 0; background: var(--bg); color: var(--fg); }
+
+/* ---- The reading column ------------------------------------------------- */
+.doc {
+  box-sizing: border-box;
+  width: var(--col-w);
+  margin-left: var(--col-left);
+  margin-right: auto;
+  padding: 4.5em 0 40vh;
+  font-family: var(--font-body);
+  font-size: var(--size);
+  line-height: var(--lh);
+  font-weight: var(--weight);
+  letter-spacing: var(--ls);
+  word-spacing: var(--ws);
+  font-optical-sizing: auto;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures contextual;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+  hanging-punctuation: first allow-end last;
+  overflow-wrap: break-word;
+  -webkit-font-smoothing: auto;
+}
+.doc b, .doc strong { font-weight: calc(var(--weight) + 250); }
+
+.doc p { margin: 0 0 var(--para); text-wrap: pretty; }
+:root[data-para="indent"] .doc p + p { text-indent: var(--indent); }
+
+:root[data-align="justify"] .doc :is(p, li, dd) {
+  text-align: justify;
+  -webkit-hyphens: auto; hyphens: auto;
+  /* Only hyphenate words of 6+ letters, keeping 3 before and 2 after the break. */
+  hyphenate-limit-chars: 6 3 2;
+  -webkit-hyphenate-limit-before: 3; -webkit-hyphenate-limit-after: 2; -webkit-hyphenate-limit-lines: 2;
+}
+
+/* All-caps runs need air; small heading text pulls in slightly. */
+.doc .caps { letter-spacing: calc(var(--ls) + 0.06em); }
+
+/* ---- Headings: one family, semibold, ~1.2 ratio ------------------------- */
+.doc :is(h1, h2, h3, h4, h5, h6) {
+  font-weight: calc(var(--weight) + 200);
+  line-height: 1.22;
+  text-wrap: balance;
+  font-variant-numeric: lining-nums proportional-nums;
+  margin: 1.9em 0 0.55em;
+  break-after: avoid;
+}
+.doc h1 { font-size: calc(1em * pow(var(--ratio), 3)); letter-spacing: calc(var(--ls) - 0.01em); margin-top: 1.4em; }
+.doc h2 { font-size: calc(1em * pow(var(--ratio), 2)); letter-spacing: calc(var(--ls) - 0.01em); }
+.doc h3 { font-size: calc(1em * var(--ratio)); }
+.doc h4 { font-size: 1em; }
+.doc h5 { font-size: 1em; font-weight: var(--weight); font-style: italic; }
+.doc h6 { font-size: 0.9em; color: var(--muted); }
+.doc > :first-child, .doc > .props + * { margin-top: 0; }
+
+/* ---- Lists: bullets hang in the margin so text aligns with the column --- */
+.doc :is(ul, ol) { margin: 0 0 var(--para); padding-left: 0; }
+.doc li { margin: 0.2em 0; }
+.doc li > :is(ul, ol) { padding-left: 1.3em; margin-bottom: 0; }
+.doc li > p { margin-bottom: 0.4em; }
+.doc ul > li::marker { color: var(--muted); }
+.doc ol > li::marker { color: var(--muted); font-variant-numeric: lining-nums tabular-nums; }
+.doc li.task-list-item { list-style: none; }
+.doc li.task-list-item > input { margin: 0 0.5em 0 -1.4em; vertical-align: 0.05em; }
+
+/* ---- Quotes, rules, code ------------------------------------------------- */
+.doc blockquote {
+  margin: 1.2em 0; padding: 0 0 0 1em;
+  border-left: 2px solid var(--rule);
+  color: color-mix(in srgb, var(--fg) 85%, var(--bg));
+}
+.doc hr { border: 0; height: 1px; background: var(--rule); width: 33%; margin: 2.4em auto; }
+.doc :is(code, pre, kbd) { font-family: var(--font-mono); letter-spacing: 0; word-spacing: 0; font-variant-ligatures: none; font-weight: 400; }
+.doc code { font-size: 0.84em; background: var(--code-bg); padding: 0.08em 0.3em; border-radius: 3px; }
+.doc pre { font-size: 0.82em; line-height: 1.5; background: var(--code-bg); padding: 0.9em 1.1em; margin: 1.2em 0; border-radius: 6px; overflow-x: auto; tab-size: 4; }
+.doc pre code { background: none; padding: 0; font-size: 1em; }
+
+.doc a { color: var(--link); text-decoration-line: underline; text-decoration-thickness: 1px; text-underline-offset: 0.18em; text-decoration-color: color-mix(in srgb, var(--link) 40%, transparent); }
+.doc a:hover { text-decoration-color: var(--link); }
+.doc .wikilink { color: var(--link); text-decoration: underline dotted 1px color-mix(in srgb, var(--link) 60%, transparent); text-underline-offset: 0.2em; cursor: default; }
+.doc .wikilink.embed::before { content: "\21B3\2009"; color: var(--muted); }
+
+.doc img { display: block; max-width: 100%; height: auto; margin: 1.4em auto; border-radius: 3px; }
+.doc .img-blocked { display: inline-block; font-size: 0.8em; color: var(--muted); border: 1px dashed var(--rule); border-radius: 4px; padding: 0.1em 0.5em; }
+.doc .img-blocked::before { content: "Image: "; font-style: italic; }
+
+.doc sup, .doc sub { line-height: 0; font-size: 0.7em; }
+.doc .footnotes { margin-top: 3em; padding-top: 1em; border-top: 1px solid var(--rule); font-size: 0.85em; color: var(--muted); }
+.doc .footnotes h2 { font-size: 1em; }
+.doc .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+/* ---- Front matter: one quiet line, open on demand ------------------------ */
+.doc .props { font-size: 0.78em; color: var(--muted); margin: 0 0 2.2em; }
+.doc .props summary { cursor: pointer; list-style: none; font-variant-caps: all-small-caps; letter-spacing: 0.08em; width: max-content; }
+.doc .props summary::-webkit-details-marker { display: none; }
+.doc .props summary::before { content: "\25B8\2002"; display: inline-block; transition: transform 0.15s; }
+.doc .props[open] summary::before { transform: rotate(90deg); }
+.doc .props dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.15em 1.2em; margin: 0.6em 0 0; padding-left: 1.1em; }
+.doc .props dt { font-weight: 600; }
+.doc .props dd { margin: 0; color: var(--fg); }
+
+/* ---- Highlights: three global styles, five colours ----------------------- */
+.doc mark.hl { color: inherit; background: none; }
+.doc mark.hl[data-c="yellow"] { --c: var(--hl-yellow); --cl: var(--hl-yellow-line); }
+.doc mark.hl[data-c="green"]  { --c: var(--hl-green);  --cl: var(--hl-green-line); }
+.doc mark.hl[data-c="blue"]   { --c: var(--hl-blue);   --cl: var(--hl-blue-line); }
+.doc mark.hl[data-c="pink"]   { --c: var(--hl-pink);   --cl: var(--hl-pink-line); }
+.doc mark.hl[data-c="orange"] { --c: var(--hl-orange); --cl: var(--hl-orange-line); }
+/* Marker: soft fill with rounded ends; padding is cancelled by margin so text never moves. */
+:root[data-hl-style="marker"] .doc mark.hl {
+  background: var(--c);
+  border-radius: 0.3em 0.22em 0.3em 0.22em;
+  padding: 0.02em 0.14em;
+  margin: 0 -0.14em;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
+/* Code inside a highlight takes the highlight, not its own grey box. */
+.doc mark.hl code { background: transparent; }
+:root[data-hl-style="lowlight"] .doc mark.hl {
+  background: color-mix(in srgb, var(--c) 45%, transparent);
+  text-decoration: underline 2px var(--cl);
+  text-underline-offset: 0.24em;
+  text-decoration-skip-ink: none;
+}
+:root[data-hl-style="underline"] .doc mark.hl {
+  text-decoration: underline 2.5px var(--cl);
+  text-underline-offset: 0.22em;
+  text-decoration-skip-ink: auto;
+}
+
+/* ---- Callouts ------------------------------------------------------------ */
+.doc .callout {
+  --cc: #4A7FC1;
+  margin: 1.4em 0; padding: 0.65em 1em 0.7em;
+  border-left: 3px solid var(--cc);
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, var(--cc) 7%, var(--bg));
+}
+.doc .callout[data-callout="abstract"], .doc .callout[data-callout="tip"] { --cc: #2E9A8E; }
+.doc .callout[data-callout="success"] { --cc: #4A9A55; }
+.doc .callout[data-callout="question"] { --cc: #C38B2E; }
+.doc .callout[data-callout="warning"] { --cc: #D27B2C; }
+.doc .callout:is([data-callout="failure"], [data-callout="danger"], [data-callout="bug"]) { --cc: #C9483F; }
+.doc .callout[data-callout="example"] { --cc: #8A63C9; }
+.doc .callout[data-callout="quote"] { --cc: var(--muted); }
+.doc .callout-title { font-weight: calc(var(--weight) + 200); color: color-mix(in srgb, var(--cc) 70%, var(--fg)); font-size: 0.94em; }
+.doc details.callout > summary { cursor: pointer; list-style: none; }
+.doc details.callout > summary::-webkit-details-marker { display: none; }
+.doc details.callout > summary::after { content: "\25B8"; display: inline-block; margin-left: 0.5em; font-size: 0.8em; transition: transform 0.15s; }
+.doc details.callout[open] > summary::after { transform: rotate(90deg); }
+.doc .callout-content { margin-top: 0.35em; }
+.doc .callout-content > :last-child { margin-bottom: 0; }
+.doc .callout-content:empty { display: none; }
+
+/* ---- Tables -------------------------------------------------------------- */
+/* The bleed wrapper spans the whole available width (computed in layout.ts),
+ * so a wide table can leave the prose column and still be centred. */
+.doc .table-bleed {
+  width: var(--avail-w);
+  margin: 1.6em 0 1.6em var(--avail-offset);
+  display: flex; justify-content: center;
+}
+.doc .table-scroll { max-width: 100%; position: relative; }
+.doc .table-scroll.scrolls {
+  overflow-x: auto;
+  /* Fade the edge that has more content beyond it. */
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--fade-r, 0px)), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--fade-r, 0px)), transparent);
+}
+.doc table {
+  border-collapse: separate; border-spacing: 0;
+  font-size: 0.84em; line-height: 1.4;
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: 0;
+}
+.doc th, .doc td { padding: 0.5em 0.85em; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); }
+.doc thead th {
+  font-weight: calc(var(--weight) + 200);
+  border-bottom: 1.5px solid color-mix(in srgb, var(--fg) 55%, var(--bg));
+  vertical-align: bottom;
+  position: sticky; top: 0; z-index: 2; background: var(--bg);
+}
+.doc tbody tr:last-child > * { border-bottom: 0; }
+.doc :is(th, td)[align="right"], .doc :is(th, td).num { text-align: right; }
+.doc :is(th, td)[align="center"] { text-align: center; }
+.doc :is(th, td).short { white-space: nowrap; }
+/* Columns that wrap must not be squeezed by their non-wrapping neighbours. */
+.doc :is(th, td).wrap { min-width: 11em; }
+.doc :is(th, td).long { min-width: 16em; }
+:root[data-zebra="true"] .doc tbody tr:nth-child(even) > * { background: color-mix(in srgb, var(--fg) 3.5%, var(--bg)); }
+/* When a table scrolls sideways, its first column stays put. */
+.doc .table-scroll.scrolls :is(th, td):first-child { position: sticky; left: 0; z-index: 1; background: var(--bg); }
+.doc .table-scroll.scrolls thead th:first-child { z-index: 3; }
+.doc .table-scroll.scrolled :is(th, td):first-child { box-shadow: 6px 0 6px -6px color-mix(in srgb, var(--fg) 30%, transparent); }
+
+/* ---- Long documents: skip layout of far-away blocks ---------------------- */
+:root[data-large="true"] .doc > section.cv { content-visibility: auto; contain-intrinsic-size: auto 4000px; }
+.doc > section.cv.hcut > :last-child { margin-bottom: 0; }
+.doc > section.cv:first-child > :first-child { margin-top: 0; }
+
+/* ---- Outline: a margin note, not interface ------------------------------- */
+.outline {
+  position: absolute; top: 4.5rem;
+  left: var(--outline-left, auto);
+  width: var(--outline-w, 220px);
+  max-height: calc(100% - 7rem); overflow-y: auto; scrollbar-width: none;
+  font-family: var(--font-body); font-size: var(--outline-size); line-height: 1.45;
+  font-variant-numeric: lining-nums;
+  color: var(--muted);
+  opacity: var(--outline-idle);
+  transition: opacity 0.25s ease, color 0.25s ease;
+}
+.outline::-webkit-scrollbar { display: none; }
+.outline:hover, .outline:focus-within { opacity: 1; color: color-mix(in srgb, var(--fg) 80%, var(--muted)); }
+.outline[hidden] { display: none; }
+.outline input { all: unset; display: block; width: 100%; font: inherit; color: var(--fg); border-bottom: 1px solid var(--rule); margin-bottom: 0.5em; padding: 0.1em 0 0.25em; }
+.outline input[hidden] { display: none; }
+.outline input::placeholder { color: var(--muted); }
+.outline ol { list-style: none; margin: 0; padding: 0; }
+.outline li > ol[hidden] { display: none; }
+.outline a {
+  display: block; color: inherit; text-decoration: none; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 0.16em 0 0.16em 0.75em;
+  border-left: 1px solid transparent;
+}
+.outline a:hover, .outline a.selected { color: var(--fg); }
+.outline a.current { color: var(--fg); border-left-color: color-mix(in srgb, var(--fg) 45%, transparent); }
+.outline li li > a { padding-left: 1.6em; }
+.outline li li li > a { padding-left: 2.45em; }
+.outline .fold { float: left; margin-left: -0.6em; width: 0.9em; text-align: center; opacity: 0; cursor: pointer; transition: opacity 0.15s, transform 0.15s; }
+.outline:hover .fold { opacity: 0.7; }
+.outline .fold.closed { transform: rotate(-90deg); opacity: 0.7; }
+.outline .empty { font-style: italic; padding-left: 0.75em; }
+/* Narrow windows: the outline becomes a popover with its own surface. */
+.outline.popover {
+  left: auto; right: 12px; top: 3rem; opacity: 1;
+  background: var(--bg); color: var(--fg);
+  padding: 0.8em 1em; border-radius: 8px;
+  box-shadow: 0 6px 30px rgba(0,0,0,0.18), 0 0 0 1px var(--rule);
+}
+
+/* An empty overlay matching the scroller, used only for measuring (see find.ts). */
+#frame { position: absolute; inset: 0; pointer-events: none; visibility: hidden; }
+
+/* ---- Search marks: outlines, never fills, so highlights stay visible ----- */
+.search-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; z-index: 5; }
+.search-layer .sm { position: absolute; box-sizing: border-box; border: 1.5px solid color-mix(in srgb, var(--search) 70%, transparent); border-radius: 3px; }
+.search-layer .sm.current { border: 2.5px solid var(--search); box-shadow: 0 0 0 3px color-mix(in srgb, var(--search) 22%, transparent); }
+.scroll-ticks { position: absolute; right: 2px; top: 0; bottom: 0; width: 6px; pointer-events: none; z-index: 6; }
+.scroll-ticks i { position: absolute; left: 0; width: 6px; height: 2px; border-radius: 1px; background: var(--search); opacity: 0.75; }
+.scroll-ticks i.current { height: 3px; opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .outline, .outline a, .outline .fold, .doc details summary::before, .doc details summary::after { transition: none; }
+}
+
+/* ---- Find bar: slim, top right, clear of the text column on wide windows -- */
+.findbar {
+  position: absolute; top: 10px; right: 16px; z-index: 20;
+  display: flex; align-items: center; gap: 2px;
+  font: 13px/1 system-ui, -apple-system, sans-serif;
+  background: color-mix(in srgb, var(--bg) 92%, var(--fg));
+  color: var(--fg);
+  border-radius: 8px; padding: 4px 4px 4px 8px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.12), 0 0 0 0.5px color-mix(in srgb, var(--fg) 25%, transparent);
+  /* Typing in the box must never trigger layout of the document beside it. */
+  contain: layout style;
+}
+.findbar[hidden] { display: none; }
+.findbar input { all: unset; width: 13em; padding: 4px 2px; font: inherit; color: var(--fg); }
+.findbar input::-webkit-search-cancel-button { display: none; }
+.findbar .count { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 6.5em; text-align: right; padding-right: 6px; white-space: nowrap; }
+.findbar button { all: unset; cursor: default; padding: 3px 7px; border-radius: 5px; color: var(--muted); font: inherit; }
+.findbar button:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 8%, transparent); }
+.findbar button[aria-pressed="true"] { color: var(--fg); background: color-mix(in srgb, var(--fg) 14%, transparent); }
+.findbar button:focus-visible { outline: 2px solid var(--search); }
+.findbar .sr-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

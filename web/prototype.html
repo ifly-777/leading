@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Leading — typography prototype</title>
+  <link rel="stylesheet" href="/src/styles/leading.css">
+  <link rel="stylesheet" href="/src/prototype/prototype.css">
+</head>
+<body>
+  <aside id="rail" aria-label="Prototype controls"></aside>
+  <main id="window">
+    <div id="scroller" tabindex="-1">
+      <article class="doc" id="doc" lang="en"></article>
+      <div class="search-layer" id="layer" aria-hidden="true"></div>
+    </div>
+    <div id="frame" aria-hidden="true"></div>
+    <nav class="outline" id="outline" hidden></nav>
+    <div class="scroll-ticks" id="ticks" aria-hidden="true"></div>
+    <div id="drop" hidden>Drop a Markdown or text file to read it</div>
+  </main>
+  <script type="module" src="/src/prototype/main.ts"></script>
+</body>
+</html>
