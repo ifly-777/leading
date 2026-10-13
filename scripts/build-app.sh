@@ -47,7 +47,10 @@ mkdir -p "$APP/Contents/Frameworks"
 SPARKLE="$ROOT/mac/Vendor/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
 cp "$ROOT/mac/Resources/Credits.html" "$APP/Contents/Resources/"
-[ -f "$ROOT/mac/Resources/AppIcon.icns" ] && cp "$ROOT/mac/Resources/AppIcon.icns" "$APP/Contents/Resources/"
+# The icon: layers made in the Icon Composer format, which macOS 26 lights and
+# tints itself; actool (part of Xcode) also writes a flat copy for older places.
+xcrun actool "$ROOT/mac/Resources/AppIcon.icon" --compile "$APP/Contents/Resources" --platform macosx \
+  --minimum-deployment-target "$MIN_MACOS" --app-icon AppIcon --output-partial-info-plist "$OUT/icon-info.plist" >/dev/null
 # Each bundled font's licence travels with it, as the OFL requires.
 cp "$ROOT/LICENSE" "$APP/Contents/Resources/Licenses/Leading-MIT.txt"
 cp "$ROOT/mac/Vendor/LICENSE" "$APP/Contents/Resources/Licenses/Sparkle-LICENSE.txt"
