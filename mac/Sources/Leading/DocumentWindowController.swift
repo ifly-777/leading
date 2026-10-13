@@ -16,6 +16,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private var canUndo = false
     private var canRedo = false
     private let aaPopover = NSPopover()
+    /// The outline button stays pressed while the outline is showing.
+    private var outlineButton: NSButton?
 
     private var doc: MarkdownDocument? { document as? MarkdownDocument }
     /// The window's page, for the self-test only.
@@ -53,6 +55,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         sendSettings(SettingsStore.shared.settings)
         settingsWatch = SettingsStore.shared.$settings.dropFirst().sink { [weak self] s in
             self?.applyAppearance(s)
+            self?.outlineButton?.state = s.outlineOpen ? .on : .off
             self?.sendSettings(s)
         }
         // AppKit attaches `document` only after this initialiser returns, so pass it in directly.
@@ -201,6 +204,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingStrike(_ sender: Any?) { command("strike") }
     @objc func leadingCode(_ sender: Any?) { command("code") }
     @objc func leadingLink(_ sender: Any?) { command("link") }
+    @objc func leadingBulletList(_ sender: Any?) { command("bulletList") }
+    @objc func leadingNumberList(_ sender: Any?) { command("numberList") }
+    @objc func leadingTable(_ sender: Any?) { command("table") }
     @objc func leadingToggleSmartTyping(_ sender: Any?) { SettingsStore.shared.settings.smartTyping.toggle() }
     @objc func leadingHighlight(_ sender: Any?) { command("highlight") }
     @objc func leadingHighlightYellow(_ sender: Any?) { command("highlightYellow") }
@@ -229,6 +235,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // Formatting and Replace change the file, so they exist only while editing.
         case #selector(leadingBold(_:)), #selector(leadingItalic(_:)), #selector(leadingUnderline(_:)),
              #selector(leadingStrike(_:)), #selector(leadingCode(_:)), #selector(leadingLink(_:)),
+             #selector(leadingBulletList(_:)), #selector(leadingNumberList(_:)), #selector(leadingTable(_:)),
              #selector(leadingFindReplace(_:)):
             return editing
         // Highlights need the rendered Markdown (or its source); not plain text.
@@ -259,10 +266,17 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         item.isBordered = true
         item.target = self
         if id == Self.outlineID {
-            item.image = NSImage(systemSymbolName: "list.bullet.indent", accessibilityDescription: "Outline")
+            // A button that stays pressed, so the toolbar shows whether the outline is on.
+            // (A plain toolbar item has no on state.)
+            let image = NSImage(systemSymbolName: "list.bullet.indent", accessibilityDescription: "Outline")!
+            let button = NSButton(image: image, target: self, action: #selector(leadingToggleOutline(_:)))
+            button.bezelStyle = .toolbar
+            button.setButtonType(.pushOnPushOff)
+            button.state = SettingsStore.shared.settings.outlineOpen ? .on : .off
+            outlineButton = button
+            item.view = button
             item.label = "Outline"
             item.toolTip = "Show or hide the outline (⌥⌘O)"
-            item.action = #selector(leadingToggleOutline(_:))
         } else {
             item.image = NSImage(systemSymbolName: "textformat.size", accessibilityDescription: "Reading settings")
             item.label = "Aa"

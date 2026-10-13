@@ -137,17 +137,68 @@ test('undo works while reading too, and the page shows the result', async ({ pag
   await expect(page.locator('#doc')).toContainText('Original sentence.')
 })
 
-test('smart punctuation while typing: off by default, curly when turned on, never in code', async ({ page }) => {
+test('smart punctuation while typing: on by default, straight when turned off, never in code', async ({ page }) => {
   await openApp(page, 'x\n')
   await cmd(page, 'toggleEdit')
   await page.keyboard.press('ControlOrMeta+End')
-  await page.keyboard.type('"plain" -- ...')
-  expect(await editorText(page)).toContain('"plain" -- ...')
-  await page.evaluate(() => (window as any).leading.settings({ settings: { smartTyping: true } }))
   await page.keyboard.type(' "curly" it\'s -- --- ... `"code"`')
   const t = await editorText(page)
   expect(t).toContain('“curly” it’s – — …')
   expect(t).toContain('`"code"`')
+  await page.evaluate(() => (window as any).leading.settings({ settings: { smartTyping: false } }))
+  await page.keyboard.type(' "plain" -- ...')
+  expect(await editorText(page)).toContain('"plain" -- ...')
+})
+
+test('lines become a list and back; a table starts at the cursor', async ({ page }) => {
+  await openApp(page, 'one\ntwo\n')
+  await cmd(page, 'toggleEdit')
+  await page.evaluate(() => { const v = (window as any).leading.view.editor.view; v.dispatch({ selection: { anchor: 0, head: 7 } }) })
+  await cmd(page, 'bulletList')
+  expect(await editorText(page)).toBe('- one\n- two\n')
+  await cmd(page, 'numberList')
+  expect(await editorText(page)).toBe('1. one\n2. two\n')
+  await cmd(page, 'numberList')
+  expect(await editorText(page)).toBe('one\ntwo\n')
+  // A table after the last line; typing replaces the first header, Tab moves on.
+  await page.keyboard.press('ControlOrMeta+End')
+  await cmd(page, 'table')
+  await page.keyboard.type('Name')
+  await page.keyboard.press('Tab')
+  await page.keyboard.type('Age')
+  expect(await editorText(page)).toContain('| Name | Age |')
+  // Tab into an empty body cell: the cursor waits inside it, nothing selected.
+  await page.keyboard.press('Tab')
+  await page.keyboard.type('Asha')
+  await page.keyboard.press('Tab')
+  await page.keyboard.type('7')
+  expect(await editorText(page)).toMatch(/\| Asha +\| 7 +\|/)
+})
+
+test('a wrapped list item continues under its text, not its bullet', async ({ page }) => {
+  await openApp(page, '- ' + 'word '.repeat(60) + '\n\n1. ' + 'word '.repeat(60) + '\n')
+  await cmd(page, 'toggleEdit')
+  for (const i of [0, 2]) {
+    const line = page.locator('.cm-line').nth(i)
+    const rects = await line.evaluate((el) => {
+      // The left edge of the first word, and of the first character on the next visual line.
+      const r = document.createRange()
+      const chars: { top: number; left: number; ch: string }[] = []
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        for (let k = 0; k < n.textContent!.length; k++) {
+          r.setStart(n, k); r.setEnd(n, k + 1)
+          const b = r.getBoundingClientRect()
+          chars.push({ top: b.top, left: b.left, ch: n.textContent![k] })
+        }
+      }
+      const word = chars.find((c) => c.ch === 'w')!
+      const next = chars.find((c) => c.top > word.top + 5 && c.ch !== ' ')
+      return next ? [word.left, next.left] : [word.left]
+    })
+    expect(rects.length).toBe(2) // the item wraps
+    expect(Math.abs(rects[1] - rects[0])).toBeLessThan(1.5) // and its second line starts under the first word
+  }
 })
 
 test('the formatting bar appears over a mouse selection and its buttons format', async ({ page }) => {

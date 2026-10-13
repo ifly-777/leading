@@ -15,7 +15,7 @@ import { topIn } from './geometry'
 import type { SourceEditor } from '../editor/editor'
 import type { EditorSession } from '../editor/session'
 import { scanHeadings } from '../core/headings'
-import type { Edit, Format } from '../core/format'
+import type { Edit } from '../core/format'
 import type { OutlineItem } from '../core/pipeline'
 import type { HighlightSlot } from '../core/nodes'
 import { highlightEdits } from '../core/highlight-edit'
@@ -53,6 +53,7 @@ export type Command =
   | 'narrower' | 'wider' | 'cycleTheme'
   | 'toggleEdit' | 'findReplace' | 'undo' | 'redo'
   | 'bold' | 'italic' | 'underline' | 'strike' | 'code' | 'link'
+  | 'bulletList' | 'numberList' | 'table'
   | 'highlight' | 'removeHighlight'
   | 'highlightYellow' | 'highlightGreen' | 'highlightBlue' | 'highlightPink' | 'highlightOrange'
 
@@ -447,7 +448,8 @@ export class ReaderView {
       case 'highlightYellow': case 'highlightGreen': case 'highlightBlue': case 'highlightPink': case 'highlightOrange':
         return this.highlight(COLOUR_COMMANDS[c], true)
       case 'bold': case 'italic': case 'underline': case 'strike': case 'code': case 'link':
-        if (this.mode === 'edit') this.editor?.format(c as Format | 'link')
+      case 'bulletList': case 'numberList': case 'table':
+        if (this.mode === 'edit') this.editor?.format(c)
         break
       case 'find': this.find.open(); break
       case 'findNext': if (!this.find.isOpen) this.find.open(); this.find.step(1); break

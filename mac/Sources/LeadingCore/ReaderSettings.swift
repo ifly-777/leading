@@ -18,8 +18,8 @@ public struct ReaderSettings: Codable, Equatable {
     public var highlightStyle = "marker"
     public var zebra = false
     public var outlineOpen = false
-    /// Curly quotes, dashes and ellipses as you type in edit mode (off by default)
-    public var smartTyping = false
+    /// Curly quotes, dashes and ellipses as you type in edit mode (on by default)
+    public var smartTyping = true
     /// The colour ⇧⌘H applies: the last one chosen
     public var lastHighlight = "yellow"
     /// The reader's own display colours ("#RRGGBB" per slot); light also serves sepia.

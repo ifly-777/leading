@@ -4,6 +4,12 @@ Short notes on choices that are not obvious from the code, and what testing show
 
 ## Between Stages 4 and 5
 
+### First feedback from real use
+- Smart punctuation while typing is on by default. Earlier builds saved it off, so it is turned on once for existing settings; turning it off afterwards sticks.
+- Format › Bulleted List (⌘L) and Numbered List (⇧⌘L) act on every selected line, and undo the list if all of them already are one. Format › Table (⇧⌘T) starts a two-column table, or makes the selected lines one (tabs split cells, so a paste from a spreadsheet converts). Letters rather than ⇧⌘7/8, because AppKit matches shifted digits by the character they type, which varies by keyboard layout.
+- A wrapped list item in the editor continues under its first letter. The marker's width is measured in the editor's own face and applied as a hanging indent; reading mode already did this.
+- The Outline toolbar button stays pressed while the outline shows.
+
 ### A blank page when Leading opens on its own
 A file opened from Finder still opens to read. Launching Leading with no file, or File › New (⌘N), opens a blank page in edit mode with the cursor ready, since there is nothing to read yet. Closing a new page that has text brings macOS's own save sheet (Delete, Cancel, Save) rather than a warning of our own; quitting keeps new pages for next time, as TextEdit does. New files are Markdown (.md). Once saved, a document shows local images from its new folder.
 

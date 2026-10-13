@@ -69,6 +69,10 @@ enum MainMenu {
             item("Code", #selector(ReaderActions.leadingCode(_:)), "c", [.command, .option]),
             item("Link…", #selector(ReaderActions.leadingLink(_:)), "k"),
             .separator(),
+            item("Bulleted List", #selector(ReaderActions.leadingBulletList(_:)), "l"),
+            item("Numbered List", #selector(ReaderActions.leadingNumberList(_:)), "l", [.command, .shift]),
+            item("Table", #selector(ReaderActions.leadingTable(_:)), "t", [.command, .shift]),
+            .separator(),
             // Highlights work while reading too; they are the one change reading mode makes.
             item("Highlight", #selector(ReaderActions.leadingHighlight(_:)), "h", [.command, .shift]),
             item("Yellow Highlight", #selector(ReaderActions.leadingHighlightYellow(_:)), "1", [.command, .option]),
@@ -158,6 +162,9 @@ private extension NSMenu {
     func leadingStrike(_ sender: Any?)
     func leadingCode(_ sender: Any?)
     func leadingLink(_ sender: Any?)
+    func leadingBulletList(_ sender: Any?)
+    func leadingNumberList(_ sender: Any?)
+    func leadingTable(_ sender: Any?)
     func leadingToggleSmartTyping(_ sender: Any?)
     func leadingHighlight(_ sender: Any?)
     func leadingHighlightYellow(_ sender: Any?)

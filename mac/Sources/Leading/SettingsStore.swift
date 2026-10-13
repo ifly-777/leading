@@ -21,6 +21,15 @@ final class SettingsStore: ObservableObject {
         } else {
             settings = ReaderSettings()
         }
+        // Smart punctuation became the default after early builds had saved it off.
+        // Turn it on once for those settings; a later choice to turn it off stays.
+        let migrated = "smartTypingDefaultOn"
+        if !UserDefaults.standard.bool(forKey: migrated) {
+            settings.smartTyping = true
+            // didSet does not run inside init, so save here.
+            if let data = try? JSONEncoder().encode(settings) { UserDefaults.standard.set(data, forKey: key) }
+            UserDefaults.standard.set(true, forKey: migrated)
+        }
     }
 
     /// A change made inside a page (a shortcut, or Esc closing the outline).

@@ -110,6 +110,8 @@ export function cellStart(line: string, index: number): number {
     if (c === '|' && !code && ++n === index) {
       let j = i + 1
       while (line[j] === ' ') j++
+      // An empty cell: stop after the pipe's space, not on the closing pipe.
+      if (j >= line.length || line[j] === '|') return Math.min(i + 2, j)
       return j
     }
   }

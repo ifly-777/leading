@@ -52,7 +52,7 @@ export const DEFAULTS: Settings = {
   highlightStyle: 'marker',
   zebra: false,
   outlineOpen: false,
-  smartTyping: false,
+  smartTyping: true,
   lastHighlight: 'yellow',
   highlightColors: { light: {}, dark: {} },
 }

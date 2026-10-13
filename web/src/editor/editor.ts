@@ -9,7 +9,8 @@ import { history, historyKeymap, defaultKeymap, indentWithTab, undo, redo, undoD
 import { syntaxHighlighting, HighlightStyle, syntaxTree, ensureSyntaxTree } from '@codemirror/language'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { tags as t } from '@lezer/highlight'
-import { toggleFormat, toggleLink, type Format, type Edit } from '../core/format'
+import { toggleFormat, toggleLink, type Format, type Edit, type FormatResult } from '../core/format'
+import { toggleList, insertTable } from '../core/blocks'
 import { alignTable, cellIndexAt, cellStart, isDelimiterRow } from '../core/table-align'
 import { fingerprint } from '../core/hash'
 import { searchMarks } from './editor-find'
@@ -77,11 +78,18 @@ const theme = EditorView.theme({
 // ---------------------------------------------------------------------------
 // Commands
 
-function runFormat(view: EditorView, f: Format | 'link'): boolean {
+export type BlockFormat = 'bulletList' | 'numberList' | 'table'
+
+function runFormat(view: EditorView, f: Format | 'link' | BlockFormat): boolean {
   const { state } = view
   const doc = state.doc.toString()
   const sel = state.selection.main
-  const r = f === 'link' ? toggleLink(doc, sel.from, sel.to) : toggleFormat(doc, sel.from, sel.to, f)
+  const r: FormatResult =
+    f === 'link' ? toggleLink(doc, sel.from, sel.to)
+    : f === 'bulletList' ? toggleList(doc, sel.from, sel.to, 'bullet')
+    : f === 'numberList' ? toggleList(doc, sel.from, sel.to, 'number')
+    : f === 'table' ? insertTable(doc, sel.from, sel.to)
+    : toggleFormat(doc, sel.from, sel.to, f)
   view.dispatch({
     changes: r.changes as ChangeSpec[],
     selection: EditorSelection.single(r.anchor, r.head),
@@ -171,6 +179,71 @@ const highlightPlugin = ViewPlugin.fromClass(class {
   update(u: ViewUpdate) { if (u.docChanged || u.viewportChanged) this.decorations = highlightMarks(u.view) }
 }, { decorations: (p) => p.decorations })
 
+// ---------------------------------------------------------------------------
+// Hanging indent: a list item that wraps continues under its first letter,
+// not under its bullet, as it does in reading mode. The marker's width is
+// measured in the editor's own face, so it holds for any font and spacing.
+
+const LIST_LINE = /^([ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?)\S/
+const RULE_LINE = /^[ \t]*([-*_])([ \t]*\1){2,}[ \t]*$/
+
+class HangingIndent {
+  decorations: DecorationSet
+  private widths = new Map<string, number>()
+  private probe: HTMLSpanElement
+  constructor(private view: EditorView) {
+    // A hidden twin of a line: it inherits the editor's font, size and spacing.
+    this.probe = document.createElement('span')
+    this.probe.setAttribute('aria-hidden', 'true')
+    this.probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;left:0;top:0;pointer-events:none'
+    view.scrollDOM.appendChild(this.probe)
+    this.decorations = this.build(view)
+    // Widths measured in a fallback face are wrong once the real one arrives.
+    document.fonts.addEventListener('loadingdone', this.refonted)
+  }
+  private refonted = () => { this.widths.clear(); this.stale = true; this.view.dispatch({}) }
+  private stale = false
+  update(u: ViewUpdate) {
+    // A new font or size changes every width; geometryChanged is how CodeMirror reports it.
+    if (u.geometryChanged) this.widths.clear()
+    if (u.docChanged || u.viewportChanged || u.geometryChanged || this.stale) {
+      this.stale = false
+      this.decorations = this.build(u.view)
+    }
+  }
+  destroy() { this.probe.remove(); document.fonts.removeEventListener('loadingdone', this.refonted) }
+  private width(prefix: string): number {
+    let w = this.widths.get(prefix)
+    if (w === undefined) {
+      this.probe.textContent = prefix
+      this.probe.style.tabSize = String(this.view.state.tabSize)
+      w = this.probe.getBoundingClientRect().width
+      this.widths.set(prefix, w)
+    }
+    return w
+  }
+  private build(view: EditorView): DecorationSet {
+    const out = []
+    const tree = syntaxTree(view.state)
+    for (const { from, to } of view.visibleRanges) {
+      for (let pos = from; pos <= to;) {
+        const line = view.state.doc.lineAt(pos)
+        const m = LIST_LINE.exec(line.text)
+        if (m && !RULE_LINE.test(line.text)) {
+          let code = false
+          for (let n: any = tree.resolveInner(line.from, 1); n; n = n.parent) if (CODE.has(n.name)) { code = true; break }
+          const w = code ? 0 : this.width(m[1])
+          if (w > 0) out.push(Decoration.line({ attributes: { style: `padding-left:${w}px;text-indent:-${w}px` } }).range(line.from))
+        }
+        pos = line.to + 1
+      }
+    }
+    return Decoration.set(out)
+  }
+}
+
+const hangingIndent = ViewPlugin.fromClass(HangingIndent, { decorations: (p) => p.decorations })
+
 /** The top-level blocks (paragraphs, lists, tables…) the editor's parser sees in [from, to]. */
 function topBlocks(state: EditorState, from: number, to: number): [number, number][] {
   const tree = ensureSyntaxTree(state, Math.min(state.doc.length, to + 1), 200) ?? syntaxTree(state)
@@ -182,7 +255,7 @@ function topBlocks(state: EditorState, from: number, to: number): [number, numbe
 const WORD = /[\p{L}\p{N}_'’]/u
 
 // ---------------------------------------------------------------------------
-// Smart punctuation while typing (off unless the reader turns it on)
+// Smart punctuation while typing (on unless the reader turns it off)
 
 function inCode(state: EditorState, pos: number): boolean {
   // Code being typed has no closing backtick yet, so the parser cannot see it:
@@ -235,6 +308,9 @@ export class SourceEditor {
       { key: 'Shift-Mod-x', run: (v) => runFormat(v, 'strike') },
       { key: 'Alt-Mod-c', run: (v) => runFormat(v, 'code') },
       { key: 'Mod-k', run: (v) => runFormat(v, 'link') },
+      { key: 'Mod-l', run: (v) => runFormat(v, 'bulletList') }, // replaces CodeMirror's select-line
+      { key: 'Shift-Mod-l', run: (v) => runFormat(v, 'numberList') },
+      { key: 'Shift-Mod-t', run: (v) => runFormat(v, 'table') },
       { key: 'Tab', run: tableTab(1) },
       { key: 'Shift-Tab', run: tableTab(-1) },
     ]
@@ -246,6 +322,7 @@ export class SourceEditor {
       theme,
       searchMarks, // Find's outlines (editor-find.ts)
       highlightPlugin,
+      hangingIndent,
       EditorView.contentAttributes.of({ spellcheck: 'true', autocorrect: 'off', autocapitalize: 'off', 'aria-label': 'Markdown source' }),
       Prec.highest(keymap.of(formatKeys)),
       keymap.of([...historyKeymap, indentWithTab, ...defaultKeymap]),
@@ -288,7 +365,7 @@ export class SourceEditor {
     this.view?.dispatch({ effects: this.smart.reconfigure(on ? EditorView.inputHandler.of(smartInput) : []) })
   }
 
-  format(f: Format | 'link'): void { if (this.view) { runFormat(this.view, f); this.view.focus() } }
+  format(f: Format | 'link' | BlockFormat): void { if (this.view) { runFormat(this.view, f); this.view.focus() } }
   undo(): boolean { return this.view ? undo(this.view) : false }
   redo(): boolean { return this.view ? redo(this.view) : false }
 

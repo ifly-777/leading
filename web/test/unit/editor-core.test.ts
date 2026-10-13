@@ -93,6 +93,8 @@ describe('table alignment', () => {
     expect(cellIndexAt(line, 3)).toBe(0)
     expect(cellIndexAt(line, 9)).toBe(1)
     expect(line.slice(cellStart(line, 2))).toBe('three |')
+    // An empty cell starts just inside it, never on the closing pipe.
+    expect(cellStart('| a   |       |', 1)).toBe(8)
   })
 })
 
