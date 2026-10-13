@@ -30,22 +30,14 @@ The disk image has the same steps, with pictures, as *If macOS blocks Leading.pd
 - **Editing.** ⌘E switches to the Markdown source and back. Changes save as you go, File › Revert To brings back any earlier version, and if another app changes the file Leading shows the new text without losing your place.
 - **Find**, which ignores case, accents and curly quotes, and **Find and Replace** (⌥⌘F) while editing.
 
-<table>
-<tr>
-<td width="50%"><img src="docs/screenshots/outline.png" alt="Dark theme, with the outline of headings beside the text"></td>
-<td width="50%"><img src="docs/screenshots/notes.png" alt="Sepia theme in Charter: an Obsidian-style note with a callout, a green highlight and a table"></td>
-</tr>
-<tr>
-<td align="center">Dark, with the outline of headings</td>
-<td align="center">Sepia, set in Charter: a note with a callout, a highlight and a table</td>
-</tr>
-<tr>
-<td colspan="2"><img src="docs/screenshots/editing.png" alt="The same passage in edit mode, showing the Markdown source in the reading typeface"></td>
-</tr>
-<tr>
-<td colspan="2" align="center">⌘E shows the Markdown itself, in the same typeface, and switches back</td>
-</tr>
-</table>
+<p align="center">
+<img src="docs/screenshots/outline.png" alt="Dark theme, with the outline of headings beside the text" width="49%">
+<img src="docs/screenshots/notes.png" alt="Sepia theme in Charter: an Obsidian-style note with a callout, a green highlight and a table" width="49%">
+</p>
+<p align="center"><sub>Dark, with the outline of headings · Sepia, set in Charter: a note with a callout, a highlight and a table</sub></p>
+
+<p align="center"><img src="docs/screenshots/editing.png" alt="The same passage in edit mode, showing the Markdown source in the reading typeface" width="880"></p>
+<p align="center"><sub>⌘E shows the Markdown itself, in the same typeface, and switches back</sub></p>
 
 The welcome document that opens the first time lists every shortcut. Help › Welcome to Leading opens it again.
 
