@@ -61,6 +61,13 @@ for d in "$ROOT"/web/fonts/*/; do
   for f in "$d"OFL.txt "$d"LICENSE.md; do [ -f "$f" ] && cp "$f" "$APP/Contents/Resources/Licenses/$name-$(basename "$f")"; done
 done
 
+# A test build (the update spike) says so inside itself, so that a copy Sparkle
+# relaunches after updating, which inherits none of the test's environment,
+# still skips the first-launch welcome and questions.
+if [ "${TEST_BUILD:-}" = "1" ]; then
+  /usr/libexec/PlistBuddy -c "Add :LeadingTestBuild bool true" "$APP/Contents/Info.plist"
+fi
+
 echo "› Sign"
 "$ROOT/scripts/sign.sh" "$APP" "$BUNDLE_ID"
 echo "✓ $APP ($(lipo -archs "$APP/Contents/MacOS/$APP_NAME"))"

@@ -19,12 +19,29 @@ SERVER=""
 # Sparkle records its state in the app's preferences, which the real Leading
 # on this Mac shares (same bundle identifier); remove it so the spike never
 # leaves update checks switched on.
+# Only this test's own copies are stopped (by path): a Leading the user has
+# open stays open. Sparkle keeps its state in the preferences the real Leading
+# shares (same bundle identifier), and the copy it relaunches may write there
+# too, so the user's preferences are saved first and put back exactly.
+PREFS="$WORK/prefs-before.plist"
+defaults export io.github.ifly-777.leading "$PREFS" 2>/dev/null || PREFS=""
+stop_test_copies() { pkill -f "$WORK/" 2>/dev/null || true; }
 cleanup() {
   [ -n "$SERVER" ] && kill "$SERVER" 2>/dev/null
-  pkill -x Leading || true
-  for k in SUAutomaticallyUpdate SUEnableAutomaticChecks SUHasLaunchedBefore SULastCheckTime SUUpdateGroupIdentifier SUSkippedVersion; do
-    defaults delete io.github.ifly-777.leading "$k" 2>/dev/null || true
-  done
+  stop_test_copies
+  # Sparkle relaunches the updated app a moment after installing; catch a late one.
+  sleep 2; stop_test_copies
+  if [ -n "$PREFS" ]; then
+    defaults delete io.github.ifly-777.leading 2>/dev/null || true
+    defaults import io.github.ifly-777.leading "$PREFS"
+  else
+    defaults delete io.github.ifly-777.leading 2>/dev/null || true
+  fi
+  # build/Leading.app is now a marked test build; remove it so it is never installed by mistake.
+  if [ "$(/usr/libexec/PlistBuddy -c 'Print :LeadingTestBuild' "$ROOT/build/Leading.app/Contents/Info.plist" 2>/dev/null)" = "true" ]; then
+    rm -rf "$ROOT/build/Leading.app"
+    echo "(build/Leading.app was a test build and has been removed; run scripts/build-app.sh for a real one)"
+  fi
 }
 trap cleanup EXIT
 if lsof -ti tcp:$PORT >/dev/null 2>&1; then echo "port $PORT is busy; stop whatever is using it first" >&2; exit 1; fi
@@ -35,7 +52,7 @@ openssl genpkey -algorithm ed25519 -out "$WORK/key.pem" 2>/dev/null
 PUB="$(openssl pkey -in "$WORK/key.pem" -pubout -outform DER | tail -c 32 | base64)"
 
 build() { # version build-number destination
-  VERSION_OVERRIDE="$1" BUILD_OVERRIDE="$2" SPARKLE_PUBLIC_KEY="$PUB" ARCHS=arm64 "$ROOT/scripts/build-app.sh" >/dev/null
+  TEST_BUILD=1 VERSION_OVERRIDE="$1" BUILD_OVERRIDE="$2" SPARKLE_PUBLIC_KEY="$PUB" ARCHS=arm64 "$ROOT/scripts/build-app.sh" >/dev/null
   rm -rf "$3"; mkdir -p "$(dirname "$3")"; ditto "$ROOT/build/Leading.app" "$3"
 }
 echo "› Build A (0.2.0) and B (0.2.1)"
@@ -86,7 +103,6 @@ sleep 1
 # at Gatekeeper's prompt. What matters is whether B arrives with the flag;
 # Sparkle downloads it itself, and the result below shows.
 echo "› Run A; it should find, verify, install B and relaunch"
-pkill -x Leading || true
 LEADING_SPIKE_UPDATE=1 LEADING_FEED_URL="http://127.0.0.1:$PORT/appcast.xml" \
   "$WORK/install/Leading.app/Contents/MacOS/Leading" -ApplePersistenceIgnoreState YES > "$WORK/a.log" 2>&1 &
 for _ in $(seq 1 ${WAIT:-60}); do

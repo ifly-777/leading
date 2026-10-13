@@ -6,9 +6,13 @@ import UniformTypeIdentifiers
 /// changed later in Settings.
 enum FirstRun {
     private static let doneKey = "firstRunDone"
+    /// Self-tests and the update spike never ask. A spike build is also marked
+    /// in its Info.plist, because the copy Sparkle relaunches after an update
+    /// has none of the test's environment variables.
     private static var testing: Bool {
         let env = ProcessInfo.processInfo.environment
         return SelfTest.enabled || env["LEADING_SPIKE_UPDATE"] == "1"
+            || Bundle.main.object(forInfoDictionaryKey: "LeadingTestBuild") as? Bool == true
     }
 
     /// Nothing has been asked yet on this Mac (for this user).
