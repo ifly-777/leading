@@ -23,6 +23,10 @@ final class MarkdownDocument: NSDocument {
     let openedAt = Date()
 
     var text: String { mirror.text }
+    /// The text as Leading last read or wrote it on disk. macOS reports our own
+    /// saves as changes too, often after more typing; matching this tells them
+    /// apart from another app's edits.
+    private var diskText = ""
 
     override class var autosavesInPlace: Bool { true }
 
@@ -38,11 +42,13 @@ final class MarkdownDocument: NSDocument {
     override func read(from data: Data, ofType typeName: String) throws {
         file = TextFile.decode(data)
         mirror = TextMirror(file.text)
+        diskText = file.text
     }
 
     override func data(ofType typeName: String) throws -> Data {
         var out = file
         out.text = mirror.text
+        diskText = out.text
         if let data = out.encoded() { return data }
         // The original encoding (an old Latin-1 file, say) cannot hold something
         // just typed, such as an emoji. Save as UTF-8 rather than lose it.
@@ -100,7 +106,8 @@ final class MarkdownDocument: NSDocument {
         }
         guard let data = newData else { return }
         let updated = TextFile.decode(data)
-        guard updated.text != mirror.text else { return } // our own save, or nothing new
+        // Our own save (reported late, perhaps after more typing), or nothing new.
+        guard updated.text != diskText, updated.text != mirror.text else { diskText = updated.text; return }
         if isDocumentEdited {
             askAboutConflict(disk: updated)
         } else {
@@ -111,6 +118,7 @@ final class MarkdownDocument: NSDocument {
     private func useDiskVersion(_ updated: TextFile) {
         file = updated
         mirror = TextMirror(updated.text)
+        diskText = updated.text
         NSLog("Leading: %@ changed on disk; showing the new version", displayName)
         fileModificationDate = (try? fileURL?.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
         updateChangeCount(.changeCleared)

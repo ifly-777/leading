@@ -143,7 +143,9 @@ enum SelfTest {
                                                 js("return document.getElementById('editor').hidden && document.getElementById('doc').textContent.includes('Selftest typed here.')") { v in
                                                     check("Back in reading mode, the page shows the edited text", v as? Bool == true)
                                                     highlightChecks(window: window, page: page, doc: doc, check: check) {
-                                                        conflictCheck(window: window, page: page, doc: doc, check: check, done: done)
+                                                        ownSaveCheck(window: window, page: page, doc: doc, check: check) {
+                                                            conflictCheck(window: window, page: page, doc: doc, check: check, done: done)
+                                                        }
                                                     }
                                                 }
                                             }
@@ -183,6 +185,25 @@ enum SelfTest {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     check("Undo while reading takes the highlight off", !doc.text.contains("<mark") && doc.text.contains("Selftest typed here."))
                     done()
+                }
+            }
+        }
+    }
+
+    /// macOS reports Leading's own save as a change, sometimes after more typing.
+    /// That late notice must not raise the "changed by another app" question.
+    private static func ownSaveCheck(window: NSWindow, page: ReaderWebView, doc: MarkdownDocument, check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        doc.save(withDelegate: nil, didSave: nil, contextInfo: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            page.callAsyncJavaScript("const v = window.leading.view.editor.view; v.dispatch({ changes: { from: v.state.doc.length, insert: ' More typing.' }, userEvent: 'input.type' }); return true", arguments: [:], in: nil, in: .page) { _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    doc.presentedItemDidChange() // the late notice of our own save
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        check("Leading's own save, reported late, does not ask about another app", window.attachedSheet == nil)
+                        if let sheet = window.attachedSheet { window.endSheet(sheet) }
+                        doc.save(withDelegate: nil, didSave: nil, contextInfo: nil)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: done)
+                    }
                 }
             }
         }
