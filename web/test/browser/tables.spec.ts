@@ -49,3 +49,26 @@ test('double-click opens the focus view; Esc closes it; CSV is correct', async (
   await page.keyboard.press('Escape')
   await expect(page.locator('.table-focus')).toHaveCount(0)
 })
+
+test('a two-column table that can wrap stays in the reading column; an empty header is not shown', async ({ page }) => {
+  const md = [
+    '# T', '', 'Prose before.', '',
+    '| | |', '|---|---|',
+    '| `Playground/` | Informal working space — exemption in `README.md` §2a |',
+    '| `Outputs/Process/` | Records of how material was processed — ingestion reports, acquisition lists. Same register, not a separate one |',
+    '', 'Prose after.',
+  ].join('\n')
+  await page.evaluate(async (t) => { await (window as any).leading.openText('kosh.md', t, null) }, md)
+  await page.waitForTimeout(200)
+  const geo = await page.evaluate(() => {
+    const t = document.querySelector('.doc table') as HTMLElement
+    const p = document.querySelector('.doc p') as HTMLElement
+    const head = t.querySelector('thead') as HTMLElement
+    return { tLeft: Math.round(t.getBoundingClientRect().left), pLeft: Math.round(p.getBoundingClientRect().left),
+             tRight: Math.round(t.getBoundingClientRect().right), pRight: Math.round(p.getBoundingClientRect().right),
+             headShown: head.getBoundingClientRect().height > 0 }
+  })
+  expect(geo.tLeft).toBe(geo.pLeft) // aligned with the prose
+  expect(geo.tRight).toBeLessThanOrEqual(geo.pRight + 1) // and no wider than the column
+  expect(geo.headShown).toBe(false)
+})

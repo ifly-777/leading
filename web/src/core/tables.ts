@@ -54,5 +54,8 @@ function annotate(table: Table): void {
     else if (!i.numeric) cls.push(i.long ? 'long' : 'wrap') // wrapping text columns get a minimum width
     if (cls.length) cell.data = { ...cell.data, hProperties: { ...(cell.data as any)?.hProperties, className: cls } }
   }))
-  table.data = { ...table.data, hProperties: { className: ['cols-' + info.length] } } as any
+  // An empty first row is the usual way to write a table without a header in
+  // Markdown (GFM requires one); show no header at all rather than an empty one.
+  const headless = rows[0]?.every((c) => !c.trim())
+  table.data = { ...table.data, hProperties: { className: ['cols-' + info.length, ...(headless ? ['headless'] : [])] } } as any
 }

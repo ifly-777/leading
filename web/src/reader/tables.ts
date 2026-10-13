@@ -64,9 +64,18 @@ export class TableWatcher {
     this.schedule()
   }
 
+  /**
+   * A table stays in the reading column, wrapping its long cells, if it can;
+   * it steps out into the margins only when it cannot fit (many columns, or
+   * cells that must not wrap); it scrolls sideways only as a last resort.
+   */
   private check(el: HTMLElement): void {
-    el.classList.remove('scrolls')
+    const bleed = el.parentElement as HTMLElement
     const table = el.firstElementChild as HTMLElement
+    el.classList.remove('scrolls')
+    bleed.classList.add('in-column')
+    // Laid out at the column's width, a table that cannot shrink that far overflows it.
+    if (table.offsetWidth > bleed.clientWidth + 1) bleed.classList.remove('in-column')
     el.classList.toggle('scrolls', table.scrollWidth > el.clientWidth + 1)
     this.fade(el)
   }
