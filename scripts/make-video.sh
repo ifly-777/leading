@@ -1,6 +1,6 @@
 #!/bin/bash
-# Makes docs/video/leading.mp4, a 28-second film for social media, and its
-# poster frame. Every picture of the app is drawn by build/Leading.app itself
+# Makes the 28-second film of Leading: docs/video/leading.mp4 (wide),
+# leading-square.mp4 (for X) and film.webp (for the README). Every picture of the app is drawn by build/Leading.app itself
 # (see lib/snapshot.sh); the film around them is docs/video/film.html, a page
 # that draws any moment on request, captured frame by frame in WebKit and
 # encoded with ffmpeg. The text is public domain: Marcus Aurelius, in George
