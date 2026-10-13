@@ -15,6 +15,9 @@ BUILD="${BUILD_OVERRIDE:-$BUILD}"
 if [ -z "${DEVELOPER_DIR:-}" ] && [ -d /Applications/Xcode.app ]; then export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer; fi
 
 OUT="$ROOT/build"
+# Build into build.noindex, behind a "build" link: Spotlight and Launchpad skip
+# folders named .noindex, so they never offer this copy instead of the one in Applications.
+if [ ! -e "$OUT" ]; then mkdir -p "$ROOT/build.noindex" && ln -s build.noindex "$OUT"; fi
 APP="$OUT/$APP_NAME.app"
 ARCHS="${ARCHS:-arm64 x86_64}"
 
