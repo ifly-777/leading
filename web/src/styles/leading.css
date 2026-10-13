@@ -133,13 +133,16 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .doc mark.hl[data-c="blue"]   { --c: var(--hl-blue);   --cl: var(--hl-blue-line); }
 .doc mark.hl[data-c="pink"]   { --c: var(--hl-pink);   --cl: var(--hl-pink-line); }
 .doc mark.hl[data-c="orange"] { --c: var(--hl-orange); --cl: var(--hl-orange-line); }
-/* Marker: soft fill with rounded ends; padding is cancelled by margin so text never moves. */
+/* Marker: soft fill with rounded ends; padding is cancelled by margin so text never moves.
+ * No box-decoration-break: clone. WebKit drops text-wrap: pretty for any paragraph
+ * holding a cloned inline box, so the whole paragraph reflowed when a highlight was
+ * added (docs/decisions.md). Without it, the rounded overhang shows at the two ends
+ * of the highlight and the fill is square where it wraps. */
 :root[data-hl-style="marker"] .doc mark.hl {
   background: var(--c);
   border-radius: 0.3em 0.22em 0.3em 0.22em;
   padding: 0.02em 0.14em;
   margin: 0 -0.14em;
-  -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
 /* Code inside a highlight takes the highlight, not its own grey box. */
 .doc mark.hl code { background: transparent; }
