@@ -81,8 +81,9 @@ const fonts = [['font-literata', 'Literata'], ['font-newyork', 'New York'], ['fo
                ['font-atkinson', 'Atkinson Hyperlegible Next'], ['font-quattro', 'iA Writer Quattro']]
 const FONT0 = 8.0, FONT_STEP = 0.75                                          // one face every 0.75 s
 
-let sweeps = []
+let sweeps = [], columns = {}
 async function setup() {
+  columns = await (await fetch('../../build/video/stills/columns.json')).json()
   // One box per line of the highlight, each showing the highlighted picture
   // through a window that widens left to right.
   const lines = await (await fetch('../../build/video/stills/highlight.json')).json()
@@ -111,9 +112,16 @@ const cams = {
   // Back far enough to see the outline beside the text (to about x 2300).
   outline: { s: square ? 0.6 : 0.78, x: square ? 1500 : 1300, y: 760 },
 }
-function camera(t) {
+// Close on a given picture: centred on its text column, and pulled back if
+// that column (Quattro's is wider) would not fit with a margin.
+function closeOn(id) {
+  const col = columns[id] || columns['font-literata']
+  const s = Math.min(cams.close.s, (W - 2 * 64) / (col.x1 - col.x0))
+  return { s, x: (col.x0 + col.x1) / 2, y: cams.close.y }
+}
+function camera(t, id) {
   const mixCam = (a, b, k) => ({ s: a.s + (b.s - a.s) * k, x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k })
-  let c = mixCam(cams.wide, cams.close, ramp(t, 3.9, 5.1))
+  let c = mixCam(cams.wide, closeOn(id), ramp(t, 3.9, 5.1))
   c = mixCam(c, cams.outline, ramp(t, 19.0, 19.8))
   c.s *= 1 + 0.025 * ramp(t, 5.1, 22.6)   // a slow drift closer throughout
   return c
@@ -126,7 +134,10 @@ function render(t) {
 
   // The app, from 3 s to 23 s, drifting slowly closer the whole time.
   const app = window_(t, 2.8, 23.2, 0.6)
-  const c = camera(t)
+  // Each typeface is framed on its own column; everything else on Literata's.
+  const fiNow = Math.floor((t - FONT0) / FONT_STEP)
+  const framed = t >= FONT0 && fiNow >= 0 && fiNow < fonts.length ? fonts[fiNow][0] : 'font-literata'
+  const c = camera(t, framed)
   const cy = (H - BAND) / 2 + 12
   $('stage').style.transform = `translate(${W / 2 - c.x * c.s}px, ${cy - c.y * c.s}px) scale(${c.s})`
   $('stage').style.opacity = app

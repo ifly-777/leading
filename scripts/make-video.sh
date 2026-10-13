@@ -32,6 +32,7 @@ snapshot "$STILLS/sepia.png"   "$BOOK" '{"theme":"sepia"}' $SIZE
 snapshot "$STILLS/dark.png"    "$BOOK" '{"theme":"dark"}' $SIZE
 snapshot "$STILLS/edit.png"    "$BOOK" '{"theme":"dark"}' $SIZE 1
 snapshot "$STILLS/outline.png" "$SRC/Meditations.md" '{"theme":"dark","outlineOpen":true}' $SIZE
+python3 "$ROOT/scripts/lib/columns.py" "$STILLS"/font-*.png > "$STILLS/columns.json"
 python3 "$ROOT/scripts/lib/highlight_lines.py" "$STILLS/plain.png" "$STILLS/font-literata.png" > "$STILLS/highlight.json"
 
 SECONDS_LONG=28
