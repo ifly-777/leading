@@ -11,7 +11,7 @@ enum FirstRun {
     /// has none of the test's environment variables.
     private static var testing: Bool {
         let env = ProcessInfo.processInfo.environment
-        return SelfTest.enabled || env["LEADING_SPIKE_UPDATE"] == "1"
+        return SelfTest.enabled || Snapshot.enabled || env["LEADING_SPIKE_UPDATE"] == "1"
             || Bundle.main.object(forInfoDictionaryKey: "LeadingTestBuild") as? Bool == true
     }
 

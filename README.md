@@ -2,6 +2,8 @@
 
 A small, free Mac app for reading Markdown as a well-set page. Open a note and you get a calm column of text in a good typeface, and nothing else on screen. It also edits, and it highlights while you read, in the same syntax Obsidian uses.
 
+<p align="center"><img src="docs/screenshots/reading.png" alt="Leading showing a passage from Thoreau's Walden in Literata on warm light paper, with one sentence highlighted in yellow" width="880"></p>
+
 Leading is intentionally minimal: no file manager, no sync, no AI, no account. It reads the files you already have, wherever they live.
 
 ## Install
@@ -28,6 +30,23 @@ The disk image has the same steps, with pictures, as *If macOS blocks Leading.pd
 - **Editing.** ⌘E switches to the Markdown source and back. Changes save as you go, File › Revert To brings back any earlier version, and if another app changes the file Leading shows the new text without losing your place.
 - **Find**, which ignores case, accents and curly quotes, and **Find and Replace** (⌥⌘F) while editing.
 
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/outline.png" alt="Dark theme, with the outline of headings beside the text"></td>
+<td width="50%"><img src="docs/screenshots/notes.png" alt="Sepia theme in Charter: an Obsidian-style note with a callout, a green highlight and a table"></td>
+</tr>
+<tr>
+<td align="center">Dark, with the outline of headings</td>
+<td align="center">Sepia, set in Charter: a note with a callout, a highlight and a table</td>
+</tr>
+<tr>
+<td colspan="2"><img src="docs/screenshots/editing.png" alt="The same passage in edit mode, showing the Markdown source in the reading typeface"></td>
+</tr>
+<tr>
+<td colspan="2" align="center">⌘E shows the Markdown itself, in the same typeface, and switches back</td>
+</tr>
+</table>
+
 The welcome document that opens the first time lists every shortcut. Help › Welcome to Leading opens it again.
 
 ## Privacy
@@ -53,7 +72,7 @@ cd ../mac && swift test
 cd .. && scripts/selftest-app.sh   # the built app checks its own menus, editing, saving
 ```
 
-`web/` also holds the typography prototype used to choose the defaults (`npm run proto`). [docs/decisions.md](docs/decisions.md) records the choices that are not obvious from the code, and what testing showed.
+`scripts/screenshots.sh` remakes the pictures above from the public-domain texts in `docs/screenshots/sources/`. `web/` also holds the typography prototype used to choose the defaults (`npm run proto`). [docs/decisions.md](docs/decisions.md) records the choices that are not obvious from the code, and what testing showed.
 
 ### Releasing
 

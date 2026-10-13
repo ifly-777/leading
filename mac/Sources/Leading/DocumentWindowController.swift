@@ -119,6 +119,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if let doc { OpenTiming.shared.painted(file: doc.fileURL, openedAt: doc.openedAt, pageMs: ms) }
         // Text is on screen; now is a good moment to warm the next page.
         DispatchQueue.main.async { WebViewPool.shared.prepare() }
+        if Snapshot.enabled, let window { Snapshot.take(window: window, page: web, controller: self) }
         // The self-test waits until a second window is open, so it can check settings reach both.
         if SelfTest.enabled, let window {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
@@ -294,6 +295,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     // MARK: Window size: new windows open at the size the reader last chose
 
     private static var lastSize: NSSize {
+        if let size = Snapshot.windowSize { return size }
         let s = NSSizeFromString(UserDefaults.standard.string(forKey: "windowSize") ?? "")
         return s.width >= 420 ? s : NSSize(width: 920, height: 900)
     }

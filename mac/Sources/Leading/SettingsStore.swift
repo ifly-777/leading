@@ -8,14 +8,21 @@ final class SettingsStore: ObservableObject {
     static let shared = SettingsStore()
     private let key = "readerSettings"
 
+    /// False while taking README pictures: their settings never reach the reader's preferences.
+    private let persists = !Snapshot.enabled
+
     @Published var settings: ReaderSettings {
         didSet {
-            guard settings != oldValue else { return }
+            guard persists, settings != oldValue else { return }
             if let data = try? JSONEncoder().encode(settings) { UserDefaults.standard.set(data, forKey: key) }
         }
     }
 
     private init() {
+        if let s = Snapshot.settings {
+            settings = s
+            return
+        }
         if let data = UserDefaults.standard.data(forKey: key), let s = try? JSONDecoder().decode(ReaderSettings.self, from: data) {
             settings = s
         } else {
