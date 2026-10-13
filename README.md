@@ -1,10 +1,14 @@
 # Leading
 
+*Said “ledding”, to rhyme with heading.* Leading is the typesetter’s word for the space between lines of type, named after the strips of lead that once held them apart.
+
 A small, free Mac app for reading Markdown as a well-set page. Open a note and you get a calm column of text in a good typeface, and nothing else on screen. It also edits, and it highlights while you read, in the same syntax Obsidian uses.
 
 <p align="center"><img src="docs/screenshots/reading.png" alt="Leading showing a passage from Thoreau's Walden in Literata on warm light paper, with one sentence highlighted in yellow" width="880"></p>
 
 Leading is intentionally minimal: no file manager, no sync, no AI, no account. It reads the files you already have, wherever they live.
+
+<p align="center"><a href="docs/video/leading.mp4"><img src="docs/video/poster.jpg" alt="A 28-second film of Leading: Marcus Aurelius set in Literata, a sentence highlighted, five typefaces, light, sepia and dark, editing and the outline" width="880"></a><br><sub>Leading in 28 seconds (<a href="docs/video/leading.mp4">wide</a> · <a href="docs/video/leading-square.mp4">square</a>)</sub></p>
 
 ## Install
 
@@ -64,7 +68,7 @@ cd ../mac && swift test
 cd .. && scripts/selftest-app.sh   # the built app checks its own menus, editing, saving
 ```
 
-`scripts/screenshots.sh` remakes the pictures above from the public-domain texts in `docs/screenshots/sources/`. `web/` also holds the typography prototype used to choose the defaults (`npm run proto`). [docs/decisions.md](docs/decisions.md) records the choices that are not obvious from the code, and what testing showed.
+`scripts/screenshots.sh` remakes the pictures above, and `scripts/make-video.sh` the film, from the public-domain texts in `docs/screenshots/sources/` and `docs/video/sources/`. `web/` also holds the typography prototype used to choose the defaults (`npm run proto`). [docs/decisions.md](docs/decisions.md) records the choices that are not obvious from the code, and what testing showed.
 
 ### Releasing
 

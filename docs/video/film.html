@@ -1,0 +1,171 @@
+<!doctype html>
+<!-- The promotional film, 28 s, at whatever size the page is opened (1920 × 1080
+     for the README, 1080 × 1080 for X, where a square fills a phone's width). Nothing here moves by itself:
+     scripts/make-video.sh calls render(t) for each frame and photographs the
+     page, so every frame is exact. The app pictures come from the app itself
+     (build/video/stills). Served from the repository root. -->
+<html lang="en">
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Literata"; src: url("../../web/fonts/literata/Literata-VF.ttf"); font-weight: 200 900; }
+  @font-face { font-family: "Literata"; src: url("../../web/fonts/literata/Literata-Italic-VF.ttf"); font-weight: 200 900; font-style: italic; }
+  * { margin: 0; box-sizing: border-box; }
+  html, body { width: 100vw; height: 100vh; overflow: hidden; background: #EFE8DC; }
+  .layer { position: absolute; inset: 0; }
+  #dark { background: #121110; opacity: 0; }
+  /* The window pictures: 2520 × 1640 px including their shadow margin; render() moves the camera. */
+  #stage { position: absolute; left: 0; top: 0; width: 2520px; height: 1640px; transform-origin: 0 0; }
+  /* The captions sit on a band of the background colour, over the picture. */
+  #band { position: absolute; left: 0; right: 0; bottom: 0; height: 230px; }
+  #stage img, #stage .sweep { position: absolute; left: 0; top: 0; }
+  #stage img { width: 2520px; height: 1640px; opacity: 0; }
+  .sweep { overflow: hidden; }
+  .sweep img { opacity: 1 !important; }
+  .caption { position: absolute; left: 60px; right: 60px; bottom: 58px; text-align: center; font: 400 44px/1.25 "Literata", serif; letter-spacing: -0.005em; opacity: 0; }
+  .caption small { display: block; margin-top: 10px; font-size: 26px; font-style: italic; opacity: .7; }
+  .card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; color: #2B2824; font-family: "Literata", serif; }
+  .card img { width: 168px; height: 168px; margin-bottom: 34px; }
+  .card h1 { font-size: 118px; font-weight: 560; letter-spacing: -0.02em; line-height: 1; }
+  .card p { margin-top: 22px; font-size: 40px; font-style: italic; color: #5E5850; }
+  .card .say { margin-top: 18px; font-size: 26px; letter-spacing: .02em; color: #8A847C; }
+  .card .facts { margin-top: 46px; font-size: 30px; font-style: normal; color: #2B2824; }
+  .card .url { margin-top: 14px; font-size: 30px; font-style: normal; color: #8A6A1E; letter-spacing: .01em; }
+</style>
+
+<div class="layer"></div>
+<div id="dark" class="layer"></div>
+<div id="stage">
+  <img id="plain" src="../../build/video/stills/plain.png">
+  <img id="font-literata" src="../../build/video/stills/font-literata.png">
+  <img id="font-newyork" src="../../build/video/stills/font-newyork.png">
+  <img id="font-charter" src="../../build/video/stills/font-charter.png">
+  <img id="font-atkinson" src="../../build/video/stills/font-atkinson.png">
+  <img id="font-quattro" src="../../build/video/stills/font-quattro.png">
+  <img id="sepia" src="../../build/video/stills/sepia.png">
+  <img id="dark-page" src="../../build/video/stills/dark.png">
+  <img id="edit" src="../../build/video/stills/edit.png">
+  <img id="outline" src="../../build/video/stills/outline.png">
+</div>
+
+<div id="band"></div>
+<div id="c1" class="caption">Your notes, set like a book.</div>
+<div id="c2" class="caption">Highlight as you read.<small>Saved in the file, the way Obsidian writes it</small></div>
+<div id="c3" class="caption">Five typefaces, made for long reading.<small id="fontname">Literata</small></div>
+<div id="c4" class="caption">Light, sepia or dark.</div>
+<div id="c5" class="caption">⌘E, and you are editing the Markdown itself.</div>
+<div id="c6" class="caption">An outline for long texts.</div>
+
+<div id="title" class="card">
+  <img src="../icon/icon.png" alt="">
+  <h1>Leading</h1>
+  <div class="say">said “ledding”, like the space between lines</div>
+  <p>A quiet reader for Markdown</p>
+</div>
+<div id="end" class="card">
+  <img src="../icon/icon.png" alt="">
+  <h1>Leading</h1>
+  <p>Read your notes as you would a book.</p>
+  <div class="facts">Free and open source · for Mac · no account, nothing sent</div>
+  <div class="url">github.com/ifly-777/leading</div>
+</div>
+
+<script>
+// Seconds; every scene is a window of time, and opacity ramps in and out.
+const ease = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x)          // smoothstep
+const ramp = (t, a, b) => ease((t - a) / (b - a))                           // 0 → 1 between a and b
+const window_ = (t, a, b, f = 0.5) => Math.min(ramp(t, a, a + f), 1 - ramp(t, b - f, b))
+const $ = id => document.getElementById(id)
+const op = (id, v) => { $(id).style.opacity = v }
+
+const fonts = [['font-literata', 'Literata'], ['font-newyork', 'New York'], ['font-charter', 'Charter'],
+               ['font-atkinson', 'Atkinson Hyperlegible Next'], ['font-quattro', 'iA Writer Quattro']]
+const FONT0 = 8.0, FONT_STEP = 0.75                                          // one face every 0.75 s
+
+let sweeps = []
+async function setup() {
+  // One box per line of the highlight, each showing the highlighted picture
+  // through a window that widens left to right.
+  const lines = await (await fetch('../../build/video/stills/highlight.json')).json()
+  sweeps = lines.map(r => {
+    const d = document.createElement('div')
+    d.className = 'sweep'
+    Object.assign(d.style, { left: r.x - 6 + 'px', top: r.y + 'px', height: r.h + 'px', width: '0px' })
+    const img = document.createElement('img')
+    img.src = '../../build/video/stills/font-literata.png'
+    Object.assign(img.style, { left: -(r.x - 6) + 'px', top: -r.y + 'px' })
+    d.appendChild(img)
+    $('stage').appendChild(d)
+    return { el: d, w: r.w + 12 }
+  })
+  await Promise.all([...document.images].map(i => i.decode()))
+  await document.fonts.ready
+}
+
+// The camera: which point of the pictures (in their pixels) sits where, and how large.
+const W = innerWidth, H = innerHeight, square = W / H < 1.3
+const BAND = 200
+const cams = {
+  wide:    { s: Math.min(W * 0.96 / 2520, (H - BAND) / 1640), x: 1260, y: 820 },
+  // Close on the text column, which runs from about x 690 to 1790.
+  close:   { s: square ? 0.82 : 0.8, x: 1240, y: square ? 700 : 760 },
+  // Back far enough to see the outline beside the text (to about x 2300).
+  outline: { s: square ? 0.6 : 0.78, x: square ? 1500 : 1300, y: 760 },
+}
+function camera(t) {
+  const mixCam = (a, b, k) => ({ s: a.s + (b.s - a.s) * k, x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k })
+  let c = mixCam(cams.wide, cams.close, ramp(t, 3.9, 5.1))
+  c = mixCam(c, cams.outline, ramp(t, 19.0, 19.8))
+  c.s *= 1 + 0.025 * ramp(t, 5.1, 22.6)   // a slow drift closer throughout
+  return c
+}
+
+function render(t) {
+  // Title card, then the end card.
+  op('title', window_(t, 0.2, 3.0, 0.7))
+  op('end', ramp(t, 22.6, 23.4))
+
+  // The app, from 3 s to 23 s, drifting slowly closer the whole time.
+  const app = window_(t, 2.8, 23.2, 0.6)
+  const c = camera(t)
+  const cy = (H - BAND) / 2 + 12
+  $('stage').style.transform = `translate(${W / 2 - c.x * c.s}px, ${cy - c.y * c.s}px) scale(${c.s})`
+  $('stage').style.opacity = app
+
+  // Which picture shows: each fades over the one before.
+  const show = {}
+  show.plain = 1
+  // The highlight sweeps on line by line, 5.4 s to 6.9 s.
+  const total = sweeps.reduce((s, l) => s + l.w, 0)
+  let done = ramp(t, 5.4, 6.9) * total
+  for (const s of sweeps) { const w = Math.max(0, Math.min(s.w, done)); s.el.style.width = w + 'px'; s.el.style.opacity = t < 8 ? 1 : 0; done -= s.w }
+  // Typefaces: hard cuts, like turning pages.
+  const fi = Math.floor((t - FONT0) / FONT_STEP)
+  fonts.forEach(([id], i) => { show[id] = (t >= FONT0 && fi === i && t < FONT0 + fonts.length * FONT_STEP) ? 1 : 0 })
+  if (t >= FONT0 && fi >= 0 && fi < fonts.length) $('fontname').textContent = fonts[fi][1]
+  // Themes: back to Literata at 11.75 s, then sepia, then dark.
+  show['font-literata'] = Math.max(show['font-literata'], t >= 11.75 && t < 15.6 ? 1 : 0)
+  show.sepia = t < 15.6 ? ramp(t, 12.4, 12.9) : 0
+  show['dark-page'] = t < 19 ? ramp(t, 13.6, 14.1) : 0
+  // ⌘E: the page becomes its source, and back is the same key.
+  show.edit = t < 19.5 ? ramp(t, 16.0, 16.35) : 0
+  // The outline, on the longer text.
+  show.outline = ramp(t, 19.0, 19.5)
+  for (const [id, v] of Object.entries(show)) op(id, v)
+  const dk = ramp(t, 13.6, 14.1) * (1 - ramp(t, 22.6, 23.4))
+  op('dark', dk)
+  // The caption band: the background colour, fading up from the picture.
+  const bg = `rgb(${Math.round(0xEF + (0x12 - 0xEF) * dk)}, ${Math.round(0xE8 + (0x11 - 0xE8) * dk)}, ${Math.round(0xDC + (0x10 - 0xDC) * dk)})`
+  $('band').style.background = `linear-gradient(to bottom, transparent, ${bg} 70px)`
+  $('band').style.opacity = app
+
+  // Captions, each in the colour of what lies behind it.
+  const caps = [['c1', 3.2, 5.3], ['c2', 5.4, 7.9], ['c3', 8.0, 11.7], ['c4', 11.8, 15.4], ['c5', 15.6, 18.9], ['c6', 19.0, 22.6]]
+  for (const [id, a, b] of caps) op(id, window_(t, a, b, 0.35))
+  // The ink turns light as the background turns dark.
+  const d = ramp(t, 13.6, 14.1) * (1 - ramp(t, 22.6, 23.4))
+  const mix = (a, b) => Math.round(a + (b - a) * d)
+  const ink = `rgb(${mix(0x2B, 0xE6)}, ${mix(0x28, 0xDF)}, ${mix(0x24, 0xD3)})`
+  document.querySelectorAll('.caption').forEach(c => c.style.color = ink)
+}
+</script>
+</html>
