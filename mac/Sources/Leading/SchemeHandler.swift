@@ -27,6 +27,18 @@ final class SchemeHandler: NSObject, WKURLSchemeHandler {
         return "\(Self.scheme)://doc/\(id)/"
     }
 
+    /// An address for a new, unsaved document: unique, but with no folder yet
+    /// (it has no neighbours whose images it could show).
+    func untitledBase() -> String {
+        "\(Self.scheme)://doc/\(UUID().uuidString.lowercased())/"
+    }
+
+    /// The document was saved for the first time, renamed or moved: its images now come from here.
+    func setFolder(base: String, document: URL) {
+        guard let id = base.split(separator: "/").last.map(String.init) else { return }
+        folders[id] = document.deletingLastPathComponent()
+    }
+
     /// Hold a document's current text for its page to fetch; returns the URL to fetch it from.
     func setText(_ text: String, base: String) -> String {
         let id = base.split(separator: "/").last.map(String.init) ?? ""

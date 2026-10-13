@@ -34,7 +34,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // No zoom-in animation: the window appears at once, and WebKit does not
         // paint into a window until its opening animation has finished.
         window.animationBehavior = .none
-        imageBase = document.fileURL.map { SchemeHandler.shared.imageBase(for: $0) } ?? ""
+        imageBase = document.fileURL.map { SchemeHandler.shared.imageBase(for: $0) } ?? SchemeHandler.shared.untitledBase()
         super.init(window: window)
         shouldCascadeWindows = true
         window.delegate = self
@@ -56,7 +56,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             self?.sendSettings(s)
         }
         // AppKit attaches `document` only after this initialiser returns, so pass it in directly.
-        sendDocument(document, keepPlace: false)
+        // A new, unsaved document starts in edit mode: there is nothing to read yet.
+        sendDocument(document, keepPlace: false, startEditing: document.fileURL == nil)
+    }
+
+    func documentMoved(to url: URL) {
+        SchemeHandler.shared.setFolder(base: imageBase, document: url)
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -69,8 +74,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if let doc { sendDocument(doc, keepPlace: keepPlace, fromDisk: fromDisk) }
     }
 
-    private func sendDocument(_ doc: MarkdownDocument, keepPlace: Bool, fromDisk: Bool = false) {
-        var args: [String: Any] = ["imageBase": imageBase, "plain": doc.showsPlainText, "keepPlace": keepPlace, "fromDisk": fromDisk]
+    private func sendDocument(_ doc: MarkdownDocument, keepPlace: Bool, fromDisk: Bool = false, startEditing: Bool = false) {
+        var args: [String: Any] = ["imageBase": imageBase, "plain": doc.showsPlainText, "keepPlace": keepPlace, "fromDisk": fromDisk, "edit": startEditing]
         let text = doc.text
         // Small files travel inline with the call (quickest). Large ones are
         // fetched by the page instead: passing megabytes as a script argument

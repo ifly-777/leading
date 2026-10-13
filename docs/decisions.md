@@ -2,6 +2,11 @@
 
 Short notes on choices that are not obvious from the code, and what testing showed. Newest first.
 
+## Between Stages 4 and 5
+
+### A blank page when Leading opens on its own
+A file opened from Finder still opens to read. Launching Leading with no file, or File › New (⌘N), opens a blank page in edit mode with the cursor ready, since there is nothing to read yet. Closing a new page that has text brings macOS's own save sheet (Delete, Cancel, Save) rather than a warning of our own; quitting keeps new pages for next time, as TextEdit does. New files are Markdown (.md). Once saved, a document shows local images from its new folder.
+
 ## Stage 4
 
 ### How a selection becomes a highlight in the file

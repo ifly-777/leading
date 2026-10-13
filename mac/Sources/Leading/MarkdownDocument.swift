@@ -25,6 +25,14 @@ final class MarkdownDocument: NSDocument {
     var text: String { mirror.text }
 
     override class var autosavesInPlace: Bool { true }
+
+    /// Saved for the first time, renamed or moved: local images are found next to the new place.
+    override var fileURL: URL? {
+        didSet {
+            guard let url = fileURL, url != oldValue else { return }
+            for wc in windowControllers { (wc as? DocumentWindowController)?.documentMoved(to: url) }
+        }
+    }
     override class func canConcurrentlyReadDocuments(ofType typeName: String) -> Bool { true }
 
     override func read(from data: Data, ofType typeName: String) throws {

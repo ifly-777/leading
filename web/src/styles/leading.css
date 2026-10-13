@@ -401,3 +401,9 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
   box-shadow: 0 2px 10px rgba(0,0,0,0.15); font: 13px/1.35 system-ui, -apple-system, sans-serif;
 }
 .notice[hidden] { display: none; }
+
+/* An empty document in reading mode says so, quietly, rather than showing blank paper. */
+:root:not([data-mode="edit"]) .doc:empty::before {
+  content: "Nothing written yet. Press ⌘E to write.";
+  color: var(--muted); font-style: italic;
+}

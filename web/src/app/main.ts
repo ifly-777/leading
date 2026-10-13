@@ -65,9 +65,12 @@ document.addEventListener('click', (e) => {
 
 ;(window as any).leading = {
   /** Show a document (called by Swift when a file opens or changes on disk). */
-  async load(args: { text?: string; textURL?: string; imageBase: string | null; plain?: boolean; keepPlace?: boolean; fromDisk?: boolean }) {
+  async load(args: { text?: string; textURL?: string; imageBase: string | null; plain?: boolean; keepPlace?: boolean; fromDisk?: boolean; edit?: boolean }) {
     // Small files arrive inline; large ones are fetched from the app's private address.
     const text = args.text ?? (await (await fetch(args.textURL!)).text())
+    // A new document opens straight into the editor; marking the page now
+    // keeps the empty reading view from flashing up first.
+    if (args.edit) document.documentElement.dataset.mode = 'edit'
     let r
     try {
       r = await view.open(text, { imageBase: args.imageBase, plain: args.plain, keepPlace: args.keepPlace, fromDisk: args.fromDisk })
@@ -75,6 +78,7 @@ document.addEventListener('click', (e) => {
       post({ type: 'log', text: `open failed: ${(e as Error)?.stack ?? e}` })
       throw e
     }
+    if (args.edit && view.mode === 'read') await view.toggleEdit()
     if (r) {
       // Report how many local images loaded, once they have had a moment (used by tests).
       // Lazy images further down would otherwise wait until scrolled to; never wait more than 3 s.

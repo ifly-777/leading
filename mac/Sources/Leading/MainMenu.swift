@@ -22,6 +22,7 @@ enum MainMenu {
 
         bar.addSubmenu("File", [
             // macOS adds Open Recent (and Close All, Share) to a document app's File menu itself.
+            item("New", #selector(NSDocumentController.newDocument(_:)), "n"),
             item("Open…", #selector(NSDocumentController.openDocument(_:)), "o"),
             .separator(),
             item("Close", #selector(NSWindow.performClose(_:)), "w"),

@@ -175,3 +175,26 @@ test('the formatting bar appears over a mouse selection and its buttons format',
   await bar.locator('.hl-dot[data-c="blue"]').dispatchEvent('mousedown')
   expect(await editorText(page)).toContain('<mark style="background: #ADCCFFA6;">')
 })
+
+test('a new document opens ready to write, and an empty one says so when read', async ({ page }) => {
+  await page.addInitScript(() => {
+    ;(window as any).__msgs = []
+    ;(window as any).webkit = { messageHandlers: { leading: { postMessage: (m: unknown) => (window as any).__msgs.push(JSON.parse(JSON.stringify(m))) } } }
+  })
+  await page.goto('/app.html')
+  await page.waitForFunction(() => (window as any).__msgs.some((m: any) => m.type === 'ready'))
+  await page.evaluate(async () => { await (window as any).leading.load({ text: '', imageBase: null, edit: true }) })
+  // Straight into the editor, with the cursor in it: typing just works.
+  await expect(page.locator('#editor .cm-content')).toBeVisible()
+  expect(await page.evaluate(() => !!document.activeElement?.closest('.cm-content'))).toBe(true)
+  expect(await page.evaluate(() => (window as any).__msgs.some((m: any) => m.type === 'mode' && m.editing))).toBe(true)
+  // Reading an empty page shows a quiet note instead of blank paper.
+  await cmd(page, 'toggleEdit')
+  const note = await page.evaluate(() => getComputedStyle(document.getElementById('doc')!, '::before').content)
+  expect(note).toContain('Nothing written yet')
+  // Something written: the note goes.
+  await cmd(page, 'toggleEdit')
+  await page.keyboard.type('# A first line')
+  await cmd(page, 'toggleEdit')
+  await expect(page.locator('#doc h1')).toHaveText('A first line')
+})

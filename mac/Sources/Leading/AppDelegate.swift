@@ -11,17 +11,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Updates.shared.startIfEnabled()
-        // Launched without a file (from the Dock or Launchpad): offer to open one.
-        // Stage 5 replaces this with the welcome document on first launch.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            let spike = ProcessInfo.processInfo.environment["LEADING_SPIKE_UPDATE"] == "1"
-            if NSDocumentController.shared.documents.isEmpty && !spike {
-                NSDocumentController.shared.openDocument(nil)
-            }
-        }
     }
 
-    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
+    // Launched without a file (from the Dock or Launchpad), or the Dock icon
+    // clicked with no windows open: a blank page, ready to write in. Closing
+    // it with text in it brings macOS's own "keep this new document?" question;
+    // quitting keeps it for next time. (Stage 5 shows the welcome document on
+    // the very first launch instead.)
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        ProcessInfo.processInfo.environment["LEADING_SPIKE_UPDATE"] != "1"
+    }
 
     // Document apps stay running with no windows, as on every Mac.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

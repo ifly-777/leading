@@ -210,7 +210,45 @@ enum SelfTest {
                         let versions = NSFileVersion.otherVersionsOfItem(at: url) ?? []
                         let saved = versions.contains { v in ((try? String(contentsOf: v.url, encoding: .utf8)) ?? "").contains(theirs) }
                         check("…and their text is kept in the version history (\(before) → \(versions.count) versions)", saved)
-                        done()
+                        newDocumentCheck(check: check, done: done)
+                    }
+                }
+            }
+        }
+    }
+
+    /// File › New: a blank page in edit mode with the cursor in it; closing it
+    /// with text in it brings macOS's "keep this new document?" question.
+    private static func newDocumentCheck(check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        let before = Set(NSDocumentController.shared.documents.map { ObjectIdentifier($0) })
+        NSDocumentController.shared.newDocument(nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            guard let doc = NSDocumentController.shared.documents.first(where: { !before.contains(ObjectIdentifier($0)) }) as? MarkdownDocument,
+                  let wc = doc.windowControllers.first as? DocumentWindowController, let window = wc.window else {
+                check("File › New opens a window", false); return done()
+            }
+            let page = wc.pageForTests
+            page.callAsyncJavaScript("return document.documentElement.dataset.mode === 'edit' && !!document.activeElement?.closest('.cm-content')", arguments: [:], in: nil, in: .page) { r in
+                let firstResponder = (window.firstResponder as? NSView)?.isDescendant(of: page) == true
+                check("File › New opens a blank page in edit mode, ready to type", (try? r.get()) as? Bool == true && firstResponder && doc.fileURL == nil)
+                page.callAsyncJavaScript("const v = window.leading.view.editor.view; v.dispatch({ changes: { from: 0, insert: 'A new thought.' }, userEvent: 'input.type' }); return true", arguments: [:], in: nil, in: .page) { _ in
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        window.performClose(nil)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            // macOS's own sheet: name and place, with Delete, Cancel and Save.
+                            // Its buttons live in a system process, so the test cancels it and
+                            // then discards the document itself.
+                            let panel = window.attachedSheet as? NSSavePanel
+                            check("Closing it with text in it asks whether to keep it (Save / Delete)", panel != nil && doc.fileURL == nil)
+                            if let panel { window.endSheet(panel, returnCode: .cancel) }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                let stillOpen = NSDocumentController.shared.documents.contains(doc)
+                                check("Cancel keeps the new document open, text intact", stillOpen && doc.text == "A new thought.")
+                                doc.updateChangeCount(.changeCleared)
+                                doc.close()
+                                done()
+                            }
+                        }
                     }
                 }
             }
