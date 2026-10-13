@@ -54,17 +54,15 @@ film() { # name WxH
 }
 film leading 1920x1080          # for the README and anywhere wide
 film leading-square 1080x1080   # for X: a square fills a phone's width
-# The poster for the README: the moment the highlight is made, which says what
-# Leading is, with a quiet play mark so it reads as a film.
-python3 - "$WORK/frames-leading/0225.png" "$ROOT/docs/video/poster.jpg" <<'PY'
-import sys
-from PIL import Image, ImageDraw
-im = Image.open(sys.argv[1]).convert("RGBA")
-mark = Image.new("RGBA", im.size, (0, 0, 0, 0))
-d = ImageDraw.Draw(mark)
-cx, cy, r = im.width // 2, (im.height - 200) // 2 + 12, 70   # the middle of the picture, above the caption band
-d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(43, 40, 36, 150))
-d.polygon([(cx - 22, cy - 34), (cx - 22, cy + 34), (cx + 38, cy)], fill=(251, 248, 242, 235))
-Image.alpha_composite(im, mark).convert("RGB").save(sys.argv[2], quality=88)
+
+# For the README: GitHub will not play a video kept in the repository, but it
+# shows an animated WebP like any picture, playing silently on a loop. Half
+# size and 15 frames a second keep it near 7 MB.
+python3 - "$WORK/frames-leading" "$ROOT/docs/video/film.webp" <<'PY'
+import glob, sys
+from PIL import Image
+frames = sorted(glob.glob(sys.argv[1] + "/*.png"))[::2]
+pictures = [Image.open(f).convert("RGB").resize((960, 540), Image.LANCZOS) for f in frames]
+pictures[0].save(sys.argv[2], save_all=True, append_images=pictures[1:], duration=1000 // 15, loop=0, quality=78, method=4)
 PY
-echo "✓ docs/video/poster.jpg"
+echo "✓ docs/video/film.webp ($(du -h "$ROOT/docs/video/film.webp" | cut -f1))"

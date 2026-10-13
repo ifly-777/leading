@@ -8,7 +8,7 @@ A small, free Mac app for reading Markdown as a well-set page. Open a note and y
 
 Leading is intentionally minimal: no file manager, no sync, no AI, no account. It reads the files you already have, wherever they live.
 
-<p align="center"><a href="docs/video/leading.mp4"><img src="docs/video/poster.jpg" alt="A 28-second film of Leading: Marcus Aurelius set in Literata, a sentence highlighted, five typefaces, light, sepia and dark, editing and the outline" width="880"></a><br><sub>Leading in 28 seconds (<a href="docs/video/leading.mp4">wide</a> · <a href="docs/video/leading-square.mp4">square</a>)</sub></p>
+<p align="center"><img src="docs/video/film.webp" alt="A 28-second film of Leading: Marcus Aurelius set in Literata, a sentence highlighted, five typefaces, light, sepia and dark, editing and the outline" width="880"><br><sub>Leading in 28 seconds. Download the film: <a href="https://github.com/ifly-777/leading/raw/main/docs/video/leading.mp4">wide</a> · <a href="https://github.com/ifly-777/leading/raw/main/docs/video/leading-square.mp4">square</a></sub></p>
 
 ## Install
 
