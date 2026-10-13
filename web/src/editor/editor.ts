@@ -49,7 +49,10 @@ const theme = EditorView.theme({
   },
   // The same column as reading mode: width and position come from the layout.
   '.cm-content': {
-    width: 'var(--col-w)', marginLeft: 'var(--col-left)', boxSizing: 'border-box',
+    // CodeMirror's own styles let the content grow to fill the window; pin it
+    // to the reading column instead, so both modes share one measure.
+    flexGrow: '0', flexShrink: '0', width: 'var(--col-w)', maxWidth: 'var(--col-w)',
+    marginLeft: 'var(--col-left)', boxSizing: 'border-box',
     padding: 'calc(4.5em + 12px) 0 40vh', caretColor: 'var(--fg)',
   },
   '.cm-line': { padding: '0' },

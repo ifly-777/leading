@@ -31,6 +31,15 @@ test('edit, format, undo, and the mirror stays exact', async ({ page }) => {
   await openApp(page, original)
   await cmd(page, 'toggleEdit')
   await expect(page.locator('#editor .cm-content')).toBeVisible()
+  // The editor's column is exactly the reading column: same left edge, same width.
+  for (const width of [1100, 1600, 800]) {
+    await page.setViewportSize({ width, height: 850 })
+    await page.waitForTimeout(150)
+    const [doc, cm] = await page.evaluate(() => [document.getElementById('doc')!, document.querySelector('#editor .cm-content')!]
+      .map((e) => { const r = e.getBoundingClientRect(); return { left: Math.round(r.left), width: Math.round(r.width) } }))
+    expect(cm, `at ${width}px`).toEqual(doc)
+  }
+  await page.setViewportSize({ width: 1100, height: 850 })
   // Coming from the top of the page, the first line is visible, not scrolled away.
   await expect(page.locator('#editor .cm-line').first()).toBeInViewport()
   // Type at the very start, then bold a word with ⌘B.
@@ -84,8 +93,9 @@ test('Find and Replace in edit mode; the query carries across ⌘E; reading show
   await expect(page.locator('.findbar .find-q')).toHaveValue('reader')
   await cmd(page, 'findReplace')
   await expect(page.locator('.findbar .replace-row')).toBeVisible()
-  // The matches are outlined in the editor, not just counted.
-  await expect(page.locator('#editor .cm-search-match, #editor .cm-search-current').first()).toBeVisible()
+  // Go to a match (it may be below the first screen): it is outlined, not just counted.
+  await cmd(page, 'findNext')
+  await expect(page.locator('#editor .cm-search-current').first()).toBeVisible()
   await page.locator('.findbar .find-r').fill('READER')
   await page.locator('.findbar .do-replace-all').click()
   let text = await editorText(page)
