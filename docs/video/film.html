@@ -55,15 +55,10 @@
 <div id="c5" class="caption">⌘E, and you are editing the Markdown itself.</div>
 <div id="c6" class="caption">An outline for long texts.</div>
 
-<div id="title" class="card">
-  <img src="../icon/icon.png" alt="">
-  <h1>Leading</h1>
-  <div class="say">said “ledding”, like the space between lines</div>
-  <p>A quiet reader for Markdown</p>
-</div>
 <div id="end" class="card">
   <img src="../icon/icon.png" alt="">
   <h1>Leading</h1>
+  <div class="say">said “ledding”, like the space between lines</div>
   <p>Read your notes as you would a book.</p>
   <div class="facts">Free and open source · for Mac · no account, nothing sent</div>
   <div class="url">github.com/ifly-777/leading</div>
@@ -121,19 +116,30 @@ function closeOn(id) {
 }
 function camera(t, id) {
   const mixCam = (a, b, k) => ({ s: a.s + (b.s - a.s) * k, x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k })
-  let c = mixCam(cams.wide, closeOn(id), ramp(t, 3.9, 5.1))
+  // Open between the whole window and the close-up, so the text is readable
+  // from the first frame, then push in.
+  const open = mixCam(cams.wide, closeOn(id), 0.45)
+  // A square crops the window's sides, so its title bar would show cut off;
+  // start below it instead.
+  if (square) open.y = Math.max(open.y, 200 + (H - BAND) / 2 / open.s)
+  // Wide shows the whole window: keep its top edge (at y 80) clear of the frame.
+  else open.y = Math.min(open.y, 40 + ((H - BAND) / 2 + 12) / open.s)
+  let c = mixCam(open, closeOn(id), ramp(t, 3.0, 4.8))
   c = mixCam(c, cams.outline, ramp(t, 19.0, 19.8))
   c.s *= 1 + 0.025 * ramp(t, 5.1, 22.6)   // a slow drift closer throughout
   return c
 }
 
+// The film opens straight on the page (the first second decides whether a
+// viewer on a feed keeps watching); the scenes below are timed from an
+// earlier cut that began with a 3 s title card, so film time is shifted on.
+const LEAD = 3
 function render(t) {
-  // Title card, then the end card.
-  op('title', window_(t, 0.2, 3.0, 0.7))
+  t += LEAD
   op('end', ramp(t, 22.6, 23.4))
 
   // The app, from 3 s to 23 s, drifting slowly closer the whole time.
-  const app = window_(t, 2.8, 23.2, 0.6)
+  const app = 1 - ramp(t, 22.6, 23.2)
   // Each typeface is framed on its own column; everything else on Literata's.
   const fiNow = Math.floor((t - FONT0) / FONT_STEP)
   const framed = t >= FONT0 && fiNow >= 0 && fiNow < fonts.length ? fonts[fiNow][0] : 'font-literata'
@@ -170,7 +176,7 @@ function render(t) {
   $('band').style.opacity = app
 
   // Captions, each in the colour of what lies behind it.
-  const caps = [['c1', 3.2, 5.3], ['c2', 5.4, 7.9], ['c3', 8.0, 11.7], ['c4', 11.8, 15.4], ['c5', 15.6, 18.9], ['c6', 19.0, 22.6]]
+  const caps = [['c1', 3.15, 5.3], ['c2', 5.4, 7.9], ['c3', 8.0, 11.7], ['c4', 11.8, 15.4], ['c5', 15.6, 18.9], ['c6', 19.0, 22.6]]
   for (const [id, a, b] of caps) op(id, window_(t, a, b, 0.35))
   // The ink turns light as the background turns dark.
   const d = ramp(t, 13.6, 14.1) * (1 - ramp(t, 22.6, 23.4))

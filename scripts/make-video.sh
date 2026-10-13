@@ -1,5 +1,5 @@
 #!/bin/bash
-# Makes the 28-second film of Leading: docs/video/leading.mp4 (wide),
+# Makes the 25-second film of Leading: docs/video/leading.mp4 (wide),
 # leading-square.mp4 (for X) and film.webp (for the README). Every picture of the app is drawn by build/Leading.app itself
 # (see lib/snapshot.sh); the film around them is docs/video/film.html, a page
 # that draws any moment on request, captured frame by frame in WebKit and
@@ -35,7 +35,7 @@ snapshot "$STILLS/outline.png" "$SRC/Meditations.md" '{"theme":"dark","outlineOp
 python3 "$ROOT/scripts/lib/columns.py" "$STILLS"/font-*.png > "$STILLS/columns.json"
 python3 "$ROOT/scripts/lib/highlight_lines.py" "$STILLS/plain.png" "$STILLS/font-literata.png" > "$STILLS/highlight.json"
 
-SECONDS_LONG=28
+SECONDS_LONG=25
 FPS=30
 PORT=8766
 python3 -m http.server $PORT --bind 127.0.0.1 --directory "$ROOT" >/dev/null 2>&1 &
