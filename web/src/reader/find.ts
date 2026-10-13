@@ -123,7 +123,7 @@ export class FindBar {
 
   private updateCount(): void {
     const n = this.matches.length
-    const label = !this.input.value ? '' : n ? `${this.current + 1} of ${n.toLocaleString()}` : 'No matches'
+    const label = !this.input.value ? '' : n ? `${(this.current + 1).toLocaleString()} of ${n.toLocaleString()}` : 'No matches'
     this.count.textContent = label
     this.status.textContent = label
   }

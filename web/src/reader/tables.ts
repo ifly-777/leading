@@ -87,7 +87,9 @@ export class TableWatcher {
     // Measured through the empty frame overlay, never the window element itself
     // (a rect query on an ancestor of the document is slow on long pages).
     const box = this.frame.getBoundingClientRect()
-    const top = box.top
+    // Below anything covering the page's top edge (the app's title bar).
+    const inset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sticky-top')) || 0
+    const top = box.top + inset
     let target: HTMLElement | null = null
     for (const el of this.visible) {
       if (!el.classList.contains('scrolls')) continue
@@ -121,7 +123,7 @@ export class TableWatcher {
     this.float.hidden = false
     this.float.style.left = r.left - box.left + 'px'
     this.float.style.width = r.width + 'px'
-    this.float.style.top = '0px'
+    this.float.style.top = inset + 'px'
     const inner = this.float.firstElementChild as HTMLElement
     inner.scrollLeft = target.scrollLeft
     inner.classList.toggle('scrolled', target.scrollLeft > 2)

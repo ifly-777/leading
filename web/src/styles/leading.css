@@ -205,7 +205,8 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
   font-weight: calc(var(--weight) + 200);
   border-bottom: 1.5px solid color-mix(in srgb, var(--fg) 55%, var(--bg));
   vertical-align: bottom;
-  position: sticky; top: 0; z-index: 2; background: var(--bg);
+  /* --sticky-top: the height of anything over the page's top edge (the app's title bar). */
+  position: sticky; top: var(--sticky-top, 0px); z-index: 2; background: var(--bg);
 }
 .doc tbody tr:last-child > * { border-bottom: 0; }
 .doc :is(th, td)[align="right"], .doc :is(th, td).num { text-align: right; }

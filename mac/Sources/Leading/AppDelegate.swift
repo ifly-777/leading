@@ -27,4 +27,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
+
+    // MARK: Reading commands with no window on the usual route
+    //
+    // Menu commands normally reach the active document window through the
+    // responder chain. When nothing is active (the app is in the background,
+    // or a panel holds focus) they arrive here; send them to the front
+    // document window instead of dropping them.
+
+    private func forward(_ sel: Selector) {
+        let target = (NSApp.mainWindow ?? NSApp.orderedWindows.first { $0.windowController is DocumentWindowController })?.windowController
+        _ = (target as? NSResponder)?.tryToPerform(sel, with: nil)
+    }
+
+    @objc func leadingFind(_ sender: Any?) { forward(#selector(ReaderActions.leadingFind(_:))) }
+    @objc func leadingFindNext(_ sender: Any?) { forward(#selector(ReaderActions.leadingFindNext(_:))) }
+    @objc func leadingFindPrevious(_ sender: Any?) { forward(#selector(ReaderActions.leadingFindPrevious(_:))) }
+    @objc func leadingToggleOutline(_ sender: Any?) { forward(#selector(ReaderActions.leadingToggleOutline(_:))) }
+    @objc func leadingBigger(_ sender: Any?) { forward(#selector(ReaderActions.leadingBigger(_:))) }
+    @objc func leadingSmaller(_ sender: Any?) { forward(#selector(ReaderActions.leadingSmaller(_:))) }
+    @objc func leadingActualSize(_ sender: Any?) { forward(#selector(ReaderActions.leadingActualSize(_:))) }
+    @objc func leadingNarrower(_ sender: Any?) { forward(#selector(ReaderActions.leadingNarrower(_:))) }
+    @objc func leadingWider(_ sender: Any?) { forward(#selector(ReaderActions.leadingWider(_:))) }
+    @objc func leadingCycleTheme(_ sender: Any?) { forward(#selector(ReaderActions.leadingCycleTheme(_:))) }
+    @objc func leadingTogglePlainText(_ sender: Any?) { forward(#selector(ReaderActions.leadingTogglePlainText(_:))) }
 }

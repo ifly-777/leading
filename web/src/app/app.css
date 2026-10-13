@@ -3,7 +3,15 @@ html, body { height: 100%; overflow: hidden; }
 #window { position: relative; height: 100vh; }
 /* A layout boundary: changes elsewhere never re-lay out the document. */
 #scroller { position: relative; height: 100%; overflow-y: auto; overflow-x: hidden; outline: none; contain: strict; }
-/* Leave room under the window's title bar, which the page extends beneath. */
+/* Leave room under the window's title bar, which the page extends beneath;
+   pinned table headers stop below it too. */
+:root { --sticky-top: 38px; }
 .doc { padding-top: calc(4.5em + 12px); }
 .findbar { top: 40px; }
 .outline { top: calc(4.5rem + 12px); }
+/* A band of paper behind the title bar, so text scrolling up never runs
+   through the window title. Pinned table headers stop just below it. */
+#window::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: var(--sticky-top);
+  background: var(--bg); z-index: 9; pointer-events: none;
+}

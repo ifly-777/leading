@@ -166,7 +166,13 @@ export class Reader {
         const r = results[flushed]!
         const base = this.pending.length
         for (const item of r.outline) outline.push({ ...item, b: item.b + base })
-        for (const b of r.blocks) this.pending.push(b)
+        // Workers number blocks within their own piece; relabel with the
+        // document-wide number, which Find and the outline rely on.
+        for (let i = 0; i < r.blocks.length; i++) {
+          const b = r.blocks[i]
+          if (base) b.html = b.html.replace(/ data-b="\d+"/, ` data-b="${base + i}"`)
+          this.pending.push(b)
+        }
         this.index.add({ texts: r.blocks.map((b) => b.text), folded: r.folded })
         results[flushed++] = undefined // free the memory
         if (!previewChecked) { previewChecked = true; this.reconcilePreview() }
@@ -242,13 +248,15 @@ export class Reader {
     let keep = 0
     while (keep < kids.length - 1 && keep < this.pending.length && kids[keep].outerHTML === this.pending[keep].html) keep++
     while (kids.length > keep) kids[kids.length - 1].remove()
-    this.nextIndex = keep
     if (this.sectioned) {
-      // The kept preview becomes the first section.
+      // The kept preview becomes the first section, which starts at block 0
+      // (newSection records the current block number, so it must run first).
+      this.nextIndex = 0
       const sec = this.newSection()
       sec.append(...Array.from(kids).filter((k) => k !== sec))
       this.sectionCount = keep
     }
+    this.nextIndex = keep
   }
 
   static SECTION_MIN = 40 // blocks before a section may close at a heading
