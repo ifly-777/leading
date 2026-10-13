@@ -18,8 +18,13 @@ final class Updates: NSObject, SPUUpdaterDelegate {
 
     private func note(_ s: String) { if spike { NSLog("Leading spike: %@", s) } }
 
+    /// Leading's own record of the reader's answer. Deliberately not Sparkle's
+    /// SUEnableAutomaticChecks, which Sparkle writes itself: only the reader's
+    /// explicit yes (asked in Stage 5) may turn checks on.
+    static let optInKey = "updateChecksOptedIn"
+
     func startIfEnabled() {
-        let enabled = UserDefaults.standard.bool(forKey: "SUEnableAutomaticChecks")
+        let enabled = UserDefaults.standard.bool(forKey: Updates.optInKey)
         guard enabled || spike else { return }
         let bundle = Bundle.main
         let driver = SPUStandardUserDriver(hostBundle: bundle, delegate: nil)

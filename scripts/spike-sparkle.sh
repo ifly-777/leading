@@ -16,7 +16,17 @@ PORT=8765
 SERVER=""
 # Stop the feed server and the app however the script ends (a server left
 # running would serve a stale feed to the next run).
-trap '[ -n "$SERVER" ] && kill "$SERVER" 2>/dev/null; pkill -x Leading || true' EXIT
+# Sparkle records its state in the app's preferences, which the real Leading
+# on this Mac shares (same bundle identifier); remove it so the spike never
+# leaves update checks switched on.
+cleanup() {
+  [ -n "$SERVER" ] && kill "$SERVER" 2>/dev/null
+  pkill -x Leading || true
+  for k in SUAutomaticallyUpdate SUEnableAutomaticChecks SUHasLaunchedBefore SULastCheckTime SUUpdateGroupIdentifier SUSkippedVersion; do
+    defaults delete io.github.ifly-777.leading "$k" 2>/dev/null || true
+  done
+}
+trap cleanup EXIT
 if lsof -ti tcp:$PORT >/dev/null 2>&1; then echo "port $PORT is busy; stop whatever is using it first" >&2; exit 1; fi
 
 echo "› Throwaway signing key"
