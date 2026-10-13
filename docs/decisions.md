@@ -13,6 +13,8 @@ The marker is now a single uncloned box. It keeps its soft fill, rounded corners
 
 A boundary inside a word is a separate, smaller effect. WebKit shapes the text on each side of an inline element apart, so kerning and ligatures across the cut are lost: "AV|ATAR" grows 2.4 px, "of|fice" loses its ligature. The rest of the line shifts by that much, and now and then a break moves (12 of 2,016 mid-word cases per style in an earlier run of the same test, identical for every style and for a bare `<span>`). A boundary at a space changes no glyph's position. Reader highlights are not snapped to words, so a sloppy drag still causes this. The cures are to snap highlights to word edges or to draw them without an element (an overlay from the range's rectangles, or the CSS Custom Highlight API); both are larger changes and neither was made here.
 
+## Stage 5
+
 ### Releases are made on the release Mac, not on CI
 The update-signing key (EdDSA) was generated with Sparkle's `generate_keys` and lives only in this Mac's login Keychain, under the account `io.github.ifly-777.leading`. Putting it in a GitHub secret would let anyone who gained write access to the repository's workflows sign updates. So `scripts/release.sh` builds, packs and signs here, checks that the key compiled into the app is the Keychain's, verifies the signature, and only publishes with `--publish`. The Release workflow on CI still builds the DMG on a clean Mac, as a check that the repository alone is enough.
 
