@@ -15,6 +15,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private let aaPopover = NSPopover()
 
     private var doc: MarkdownDocument? { document as? MarkdownDocument }
+    /// The window's page, for the self-test only.
+    var pageForTests: ReaderWebView { web }
 
     init(document: MarkdownDocument) {
         let size = DocumentWindowController.lastSize
@@ -103,7 +105,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if let doc { OpenTiming.shared.painted(file: doc.fileURL, openedAt: doc.openedAt, pageMs: ms) }
         // Text is on screen; now is a good moment to warm the next page.
         DispatchQueue.main.async { WebViewPool.shared.prepare() }
-        if SelfTest.enabled, let window { DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { SelfTest.run(in: window, page: self.web) } }
+        // The self-test waits until a second window is open, so it can check settings reach both.
+        if SelfTest.enabled, let window {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                if NSApp.windows.filter({ $0.windowController is DocumentWindowController }).count >= 2 { SelfTest.run(in: window, page: self.web) }
+            }
+        }
     }
 
     func pageDidLoad(_ timings: [String: Any]) {

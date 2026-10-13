@@ -60,13 +60,50 @@ enum SelfTest {
                 } else {
                     check("Page answered", false)
                 }
-                // Leave the reader's settings as they were.
-                store.settings = before
-                print("Leading self-test\n" + results.joined(separator: "\n"))
-                fflush(stdout)
-                NSApp.terminate(nil)
+                extraChecks(window: window, page: page, check: check) {
+                    // Leave the reader's settings as they were.
+                    store.settings = before
+                    print("Leading self-test\n" + results.joined(separator: "\n"))
+                    fflush(stdout)
+                    NSApp.terminate(nil)
+                }
             }
         }
         step(0)
+    }
+
+    /// Settings reach every window; the file reloads when changed on disk;
+    /// the plain-text toggle shows the file as written.
+    private static func extraChecks(window: NSWindow, page: ReaderWebView, check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        let pages = NSApp.windows.compactMap { ($0.windowController as? DocumentWindowController)?.pageForTests }
+        let size = "\(Int(SettingsStore.shared.settings.size))px"
+        let group = DispatchGroup()
+        var sizes: [String] = []
+        for p in pages {
+            group.enter()
+            p.callAsyncJavaScript("return getComputedStyle(document.getElementById('doc')).fontSize", arguments: [:], in: nil, in: .page) { r in
+                if case .success(let v) = r, let v = v as? String { sizes.append(v) }
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) {
+            check("All \(pages.count) open windows use the new size (\(sizes.joined(separator: ", ")))", pages.count >= 2 && sizes.count == pages.count && sizes.allSatisfy { $0 == size })
+            // Reload: another app appends a marked line to the file.
+            guard let doc = window.windowController?.document as? MarkdownDocument, let url = doc.fileURL else { check("Reload test has a file", false); return done() }
+            let marker = "Selftest marker \(Int.random(in: 1000...9999))"
+            if let h = try? FileHandle(forWritingTo: url) { h.seekToEndOfFile(); h.write(Data("\n\n\(marker)\n".utf8)); try? h.close() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                page.callAsyncJavaScript("return document.getElementById('doc').textContent.includes(m)", arguments: ["m": marker], in: nil, in: .page) { r in
+                    check("The page shows text another app added to the file", (try? r.get()) as? Bool == true)
+                    NSApp.sendAction(#selector(ReaderActions.leadingTogglePlainText(_:)), to: window.windowController, from: nil)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                        page.callAsyncJavaScript("const p = document.querySelector('#doc pre.plain'); return !!p && p.textContent.startsWith('# ') && !document.querySelector('#doc h1')", arguments: [:], in: nil, in: .page) { r in
+                            check("Show as Plain Text shows the raw Markdown, unrendered", (try? r.get()) as? Bool == true)
+                            done()
+                        }
+                    }
+                }
+            }
+        }
     }
 }

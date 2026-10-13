@@ -7,8 +7,13 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$(mktemp)"
 pkill -x Leading; sleep 0.5
+# Work on copies: the test appends to its file to check reloading.
+TMP="$(mktemp -d)"
+cp "$ROOT/web/test/fixtures/prose.md" "$ROOT/web/test/fixtures/tables.md" "$TMP/"
 open --env LEADING_SELFTEST=1 --stdout "$OUT" --stderr /dev/null -a "$ROOT/build/Leading.app" \
-  "$ROOT/web/test/fixtures/prose.md" --args -ApplePersistenceIgnoreState YES
+  "$TMP/tables.md" --args -ApplePersistenceIgnoreState YES
+sleep 1.5
+open -a "$ROOT/build/Leading.app" "$TMP/prose.md"
 sleep 2
 for _ in $(seq 1 60); do pgrep -x Leading >/dev/null || break; sleep 0.5; done
 cat "$OUT"
