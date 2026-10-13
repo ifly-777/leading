@@ -49,7 +49,10 @@ enum SelfTest {
             page.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { result in
                 if case .success(let value) = result, let v = value as? [String: Any] {
                     check("⌘F opens the page's find bar", v["findOpen"] as? Bool == true)
-                    check("The outline is visible with headings (\(v["outlineItems"] ?? 0))", v["outlineShown"] as? Bool == true && (v["outlineItems"] as? Int ?? 0) > 3)
+                    // Whichever way the toggle went, the page must match the saved setting.
+                    let shown = v["outlineShown"] as? Bool == true
+                    check("The outline is \(store.settings.outlineOpen ? "shown" : "hidden"), as saved (\(v["outlineItems"] ?? 0) headings)",
+                          shown == store.settings.outlineOpen && (v["outlineItems"] as? Int ?? 0) > 3)
                     check("The page uses the new size (\(v["fontSize"] ?? "?"))", v["fontSize"] as? String == "\(Int(store.settings.size))px")
                     // "system" resolves to light or dark; otherwise the page must show exactly the chosen theme.
                     let t = store.settings.theme
