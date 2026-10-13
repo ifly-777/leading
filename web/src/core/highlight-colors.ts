@@ -3,8 +3,8 @@
 // Each slot always writes the same fixed hex (Highlightr's defaults), so files
 // stay stable when a reader re-tunes how a colour looks on screen. Yellow is
 // written as ==text==, which Obsidian renders natively.
-// NOTE: the green/blue/pink values match Highlightr's published defaults; the
-// orange value must be re-checked against Highlightr before Stage 4 ships.
+// All five are Highlightr's defaults (src/settings/settingsData.ts), checked
+// in Stage 4; Highlightr writes them as <mark style="background: #…;">.
 
 import type { HighlightSlot } from './nodes'
 

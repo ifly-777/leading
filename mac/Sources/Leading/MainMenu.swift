@@ -11,6 +11,8 @@ enum MainMenu {
         bar.addSubmenu(name, [
             item("About \(name)", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
             .separator(),
+            item("Settings…", #selector(AppDelegate.showSettings(_:)), ","),
+            .separator(),
             item("Hide \(name)", #selector(NSApplication.hide(_:)), "h"),
             item("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
             item("Show All", #selector(NSApplication.unhideAllApplications(_:))),
@@ -65,6 +67,15 @@ enum MainMenu {
             item("Strikethrough", #selector(ReaderActions.leadingStrike(_:)), "x", [.command, .shift]),
             item("Code", #selector(ReaderActions.leadingCode(_:)), "c", [.command, .option]),
             item("Link…", #selector(ReaderActions.leadingLink(_:)), "k"),
+            .separator(),
+            // Highlights work while reading too; they are the one change reading mode makes.
+            item("Highlight", #selector(ReaderActions.leadingHighlight(_:)), "h", [.command, .shift]),
+            item("Yellow Highlight", #selector(ReaderActions.leadingHighlightYellow(_:)), "1", [.command, .option]),
+            item("Green Highlight", #selector(ReaderActions.leadingHighlightGreen(_:)), "2", [.command, .option]),
+            item("Blue Highlight", #selector(ReaderActions.leadingHighlightBlue(_:)), "3", [.command, .option]),
+            item("Pink Highlight", #selector(ReaderActions.leadingHighlightPink(_:)), "4", [.command, .option]),
+            item("Orange Highlight", #selector(ReaderActions.leadingHighlightOrange(_:)), "5", [.command, .option]),
+            item("Remove Highlight", #selector(ReaderActions.leadingRemoveHighlight(_:)), "0", [.command, .option]),
             .separator(),
             item("Smart Punctuation While Typing", #selector(ReaderActions.leadingToggleSmartTyping(_:))),
         ])
@@ -147,4 +158,11 @@ private extension NSMenu {
     func leadingCode(_ sender: Any?)
     func leadingLink(_ sender: Any?)
     func leadingToggleSmartTyping(_ sender: Any?)
+    func leadingHighlight(_ sender: Any?)
+    func leadingHighlightYellow(_ sender: Any?)
+    func leadingHighlightGreen(_ sender: Any?)
+    func leadingHighlightBlue(_ sender: Any?)
+    func leadingHighlightPink(_ sender: Any?)
+    func leadingHighlightOrange(_ sender: Any?)
+    func leadingRemoveHighlight(_ sender: Any?)
 }

@@ -373,3 +373,29 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .format-popover .fp-italic { font-style: italic; font-family: ui-serif, serif; }
 .format-popover .fp-underline { text-decoration: underline; }
 .format-popover .fp-strike { text-decoration: line-through; }
+.format-popover .fp-divider { width: 0.5px; margin: 3px 4px; background: color-mix(in srgb, var(--fg) 25%, transparent); }
+
+/* ---- Highlight colours (reading palette, and the end of the format bar) --- */
+.format-popover .hl-dot { min-width: 24px; display: grid; place-items: center; }
+.format-popover .hl-dot::before {
+  content: ''; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--dot); box-shadow: inset 0 0 0 1px var(--dot-line);
+}
+.format-popover .hl-dot[aria-pressed="true"]::before { box-shadow: inset 0 0 0 1px var(--dot-line), 0 0 0 2px var(--bg), 0 0 0 3.5px var(--dot-line); }
+.format-popover .hl-dot[data-c="yellow"] { --dot: var(--hl-yellow); --dot-line: var(--hl-yellow-line); }
+.format-popover .hl-dot[data-c="green"]  { --dot: var(--hl-green);  --dot-line: var(--hl-green-line); }
+.format-popover .hl-dot[data-c="blue"]   { --dot: var(--hl-blue);   --dot-line: var(--hl-blue-line); }
+.format-popover .hl-dot[data-c="pink"]   { --dot: var(--hl-pink);   --dot-line: var(--hl-pink-line); }
+.format-popover .hl-dot[data-c="orange"] { --dot: var(--hl-orange); --dot-line: var(--hl-orange-line); }
+.format-popover .hl-remove { color: var(--muted); font-size: 12px; }
+.format-popover .hl-remove[hidden] { display: none; }
+.format-popover button:focus-visible { outline: 2px solid var(--link); outline-offset: -2px; }
+
+/* A quiet message (a highlight that could not be placed safely). */
+.notice {
+  position: absolute; z-index: 30; left: 50%; bottom: 24px; transform: translateX(-50%);
+  max-width: min(460px, calc(100% - 32px)); padding: 8px 14px; border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 88%, var(--fg)); color: var(--fg);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15); font: 13px/1.35 system-ui, -apple-system, sans-serif;
+}
+.notice[hidden] { display: none; }

@@ -64,6 +64,9 @@ export class EditorFind implements FindEngine {
     return this.matches.length
   }
 
+  /** Source range of match i. */
+  span(i: number): [number, number] | null { return this.matches[i] ?? null }
+
   firstVisible(): number {
     const v = this.view
     if (!v || !this.matches.length) return -1

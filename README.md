@@ -2,7 +2,7 @@
 
 A small, free, open-source Mac app for reading Markdown with beautiful typography. Intentionally minimal: no file manager, no sync, no AI, no account.
 
-**Status: Stage 3 of 5.** The Mac app reads Markdown (Stage 2) and edits it (Stage 3: ⌘E, autosave and versions, Find and Replace). Highlighting while reading comes in Stage 4; the friendly installer in Stage 5. The typography prototype from Stage 1 is still here for tuning defaults.
+**Status: Stage 4 of 5.** The Mac app reads Markdown (Stage 2), edits it (Stage 3: ⌘E, autosave and versions, Find and Replace) and highlights while you read (Stage 4: select text and pick a colour; ⇧⌘H, ⌥⌘1–5, ⌥⌘0; stored the way Obsidian and Highlightr store them). The friendly installer comes in Stage 5. The typography prototype from Stage 1 is still here for tuning defaults.
 
 ## Run the prototype
 

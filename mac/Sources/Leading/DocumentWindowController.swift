@@ -197,6 +197,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingCode(_ sender: Any?) { command("code") }
     @objc func leadingLink(_ sender: Any?) { command("link") }
     @objc func leadingToggleSmartTyping(_ sender: Any?) { SettingsStore.shared.settings.smartTyping.toggle() }
+    @objc func leadingHighlight(_ sender: Any?) { command("highlight") }
+    @objc func leadingHighlightYellow(_ sender: Any?) { command("highlightYellow") }
+    @objc func leadingHighlightGreen(_ sender: Any?) { command("highlightGreen") }
+    @objc func leadingHighlightBlue(_ sender: Any?) { command("highlightBlue") }
+    @objc func leadingHighlightPink(_ sender: Any?) { command("highlightPink") }
+    @objc func leadingHighlightOrange(_ sender: Any?) { command("highlightOrange") }
+    @objc func leadingRemoveHighlight(_ sender: Any?) { command("removeHighlight") }
     @objc func leadingTogglePlainText(_ sender: Any?) {
         guard let doc else { return }
         doc.showsPlainText.toggle()
@@ -219,6 +226,14 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
              #selector(leadingStrike(_:)), #selector(leadingCode(_:)), #selector(leadingLink(_:)),
              #selector(leadingFindReplace(_:)):
             return editing
+        // Highlights need the rendered Markdown (or its source); not plain text.
+        case #selector(leadingHighlight(_:)):
+            let last = SettingsStore.shared.settings.lastHighlight
+            item.title = "Highlight (\(HighlightColors.names[last] ?? "Yellow"))"
+            return doc?.showsPlainText != true || editing
+        case #selector(leadingHighlightYellow(_:)), #selector(leadingHighlightGreen(_:)), #selector(leadingHighlightBlue(_:)),
+             #selector(leadingHighlightPink(_:)), #selector(leadingHighlightOrange(_:)), #selector(leadingRemoveHighlight(_:)):
+            return doc?.showsPlainText != true || editing
         case #selector(leadingToggleSmartTyping(_:)):
             item.state = SettingsStore.shared.settings.smartTyping ? .on : .off
         default: break

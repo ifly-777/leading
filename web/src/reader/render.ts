@@ -6,7 +6,8 @@
 // order as they arrive, a slice at a time between frames, so scrolling and
 // typing never stall.
 
-import { renderMarkdown, type Block, type OutlineItem, type RenderOptions, type RenderResult } from '../core/pipeline'
+import { renderMarkdown, renderPiece, type Block, type OutlineItem, type RenderOptions, type RenderResult } from '../core/pipeline'
+import type { Edit } from '../core/format'
 import { splitForParallel, referenceDefinitions } from '../core/chunks'
 import { topIn } from './geometry'
 import { SearchIndex } from '../core/search-index'
@@ -117,6 +118,8 @@ export class Reader {
   async load(src: string, opts: RenderOptions = {}): Promise<LoadResult | null> {
     const gen = ++this.gen
     const t0 = performance.now()
+    this.shifts = []
+    this.plain = false
     this.index = new SearchIndex()
     this.sectioned = src.length > LARGE_DOC
     document.documentElement.dataset.large = String(this.sectioned)
@@ -221,6 +224,8 @@ export class Reader {
   /** Show text as-is, without Markdown (for .txt files the reader wants plain). */
   showPlain(src: string): LoadResult {
     ++this.gen
+    this.shifts = []
+    this.plain = true
     const t0 = performance.now()
     this.sectioned = false
     document.documentElement.dataset.large = 'false'
@@ -363,4 +368,101 @@ export class Reader {
   }
 
   get complete(): boolean { return this.nextIndex >= this.pending.length }
+
+  // -------------------------------------------------------------------------
+  // Small changes in place (a highlight, or undoing one)
+  //
+  // Re-rendering a whole 5 MB page for one highlight would take a second and
+  // flash. Instead only the blocks that changed are rendered again. The
+  // source offsets written into later blocks (data-s, data-e) are then out by
+  // the change in length; rather than rewrite thousands of attributes, the
+  // shift is recorded here and added whenever an offset is read from the page.
+
+  private shifts: { b: number; d: number }[] = []
+  private plain = false
+
+  /** Add to offsets read from block b's elements to get offsets in the current text. */
+  correction(b: number): number {
+    let d = 0
+    for (const sh of this.shifts) if (sh.b < b) d += sh.d
+    return d
+  }
+
+  /** Source range of block b in the current text ([-1, -1] for blocks with none). */
+  blockRange(b: number): [number, number] {
+    const blk = this.pending[b]
+    return blk ? [blk.s, blk.e] : [-1, -1]
+  }
+
+  /** The block whose source contains [from, to], or -1. */
+  blockAt(from: number, to = from): number {
+    // A plain scan: 12,000 blocks take well under a millisecond, and HTML-only
+    // blocks (with no range) would complicate a binary search.
+    const bs = this.pending
+    for (let i = 0; i < bs.length; i++) {
+      if (bs[i].s < 0) continue
+      if (bs[i].s > from) break
+      if (to <= bs[i].e) return i
+    }
+    return -1
+  }
+
+  /**
+   * Apply `edits` (in the coordinates of the text before them) by rendering
+   * only the blocks they fall in. `text` is the text after them. Returns
+   * false when that is not safe (an edit between blocks, a change in what a
+   * block reads, footnotes); the caller then renders the whole page again.
+   */
+  patch(text: string, edits: Edit[], opts: RenderOptions, defs: () => string): boolean {
+    if (this.plain || !this.complete || !edits.length) return false
+    const sorted = [...edits].sort((a, b) => a.from - b.from)
+    const groups = new Map<number, Edit[]>()
+    for (const ed of sorted) {
+      const b = this.blockAt(ed.from, ed.to)
+      if (b < 0) return false
+      groups.set(b, [...(groups.get(b) ?? []), ed])
+    }
+    // Render every changed block first, so nothing on the page changes if one fails.
+    const plans: { b: number; html: string; s: number; e: number; d: number; text: string }[] = []
+    let delta = 0
+    for (const b of [...groups.keys()].sort((x, y) => x - y)) {
+      const blk = this.pending[b]
+      const d = groups.get(b)!.reduce((n, ed) => n + ed.insert.length - (ed.to - ed.from), 0)
+      const s = blk.s + delta, e = blk.e + delta + d
+      const s0 = text.lastIndexOf('\n', s - 1) + 1
+      const piece = text.slice(s0, e)
+      if (piece.includes('[^')) return false // footnote numbers run across the whole document
+      // Offsets in this block are written as the page's other offsets are read: minus the correction.
+      const r = renderPiece(piece.includes('[') ? piece + '\n\n' + defs() : piece, s0 - this.correction(b), opts)
+      if (r.blocks.length !== 1 || r.blocks[0].text !== blk.text) return false
+      const html = r.blocks[0].html.replace(/ data-b="\d+"/, ` data-b="${b}"`)
+      plans.push({ b, html, s, e, d, text: r.blocks[0].text })
+      delta += d
+    }
+    const tpl = document.createElement('template')
+    for (const p of plans) {
+      const el = this.blockEl(p.b, false)
+      if (!el) return false
+      tpl.innerHTML = p.html
+      el.replaceWith(tpl.content.firstElementChild!)
+    }
+    // Move every later block's range along by the changes before it.
+    let at = 0
+    let shift = 0
+    for (let b = 0; b < this.pending.length; b++) {
+      const blk = this.pending[b]
+      const p = plans[at]
+      if (p && p.b === b) {
+        this.pending[b] = { html: p.html, s: p.s, e: p.e, text: p.text }
+        shift += p.d
+        this.shifts.push({ b, d: p.d })
+        at++
+      } else if (shift && blk.s >= 0) {
+        blk.s += shift
+        blk.e += shift
+      }
+    }
+    this.invalidateGeometry()
+    return true
+  }
 }

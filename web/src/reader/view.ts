@@ -17,6 +17,10 @@ import type { EditorSession } from '../editor/session'
 import { scanHeadings } from '../core/headings'
 import type { Edit, Format } from '../core/format'
 import type { OutlineItem } from '../core/pipeline'
+import type { HighlightSlot } from '../core/nodes'
+import { highlightEdits } from '../core/highlight-edit'
+import { referenceDefinitions } from '../core/chunks'
+import { ReaderPalette, pointToSource, notice, type PaletteTarget } from './highlights'
 
 export interface ViewElements {
   win: HTMLElement; scroller: HTMLElement; doc: HTMLElement; layer: HTMLElement
@@ -49,6 +53,12 @@ export type Command =
   | 'narrower' | 'wider' | 'cycleTheme'
   | 'toggleEdit' | 'findReplace' | 'undo' | 'redo'
   | 'bold' | 'italic' | 'underline' | 'strike' | 'code' | 'link'
+  | 'highlight' | 'removeHighlight'
+  | 'highlightYellow' | 'highlightGreen' | 'highlightBlue' | 'highlightPink' | 'highlightOrange'
+
+const COLOUR_COMMANDS: Record<string, HighlightSlot> = {
+  highlightYellow: 'yellow', highlightGreen: 'green', highlightBlue: 'blue', highlightPink: 'pink', highlightOrange: 'orange',
+}
 
 const MEASURES: Measure[] = ['narrow', 'medium', 'wide']
 const THEMES: Exclude<Theme, 'system'>[] = ['light', 'sepia', 'dark']
@@ -61,6 +71,8 @@ export class ReaderView {
   readonly find: FindBar
   readonly readerFind: ReaderFind
   readonly tables: TableWatcher
+  /** The colour dots over a selection while reading. */
+  readonly palette: ReaderPalette
   /** The source editor, once edit mode has been used (its code loads on demand). */
   editor: SourceEditor | null = null
   private session: EditorSession | null = null
@@ -94,6 +106,10 @@ export class ReaderView {
     this.readerFind = new ReaderFind(scroller, doc, layer, frame)
     this.find = new FindBar(win, scroller, ticks, this.readerFind)
     this.tables = new TableWatcher(scroller, win, frame)
+    this.palette = new ReaderPalette(win, frame, scroller, doc)
+    // Plain text shows the file unrendered: there is no Markdown to place a highlight in.
+    this.palette.active = () => this.mode === 'read' && !this.lastOpen.plain
+    this.palette.onPick = (slot, target) => { void this.highlightInReader(slot, false, target) }
     this.outline.locate = (item, force) => {
       const blk = this.reader.blockEl(item.b, force)
       if (!blk) return null
@@ -121,15 +137,15 @@ export class ReaderView {
   /** Load edit mode's code (CodeMirror) and set it up; once only. */
   private loadEditor(): Promise<EditorSession> {
     this.sessionLoading ??= import('../editor/session').then(({ createEditorSession }) => {
-      const s = createEditorSession(this.els.editor, this.els.win, this.els.frame, {
+      const s = createEditorSession(this.els.editor, this.els.win, this.els.frame, (slot) => { void this.highlightInEditor(slot, false) }, {
         onChange: (edits) => {
           this.editHost.onEdit(edits)
           this.find.invalidate()
           // Keep the outline in step with headings as they are typed.
           clearTimeout(this.headingTimer)
           this.headingTimer = window.setTimeout(() => { if (this.mode === 'edit' && this.editor) this.outline.setItems(scanHeadings(this.editor.text)) }, 300)
-          // Changes made while reading (undo, or a highlight in Stage 4) show at once.
-          if (this.mode === 'read') this.rerender()
+          // Changes made while reading (a highlight, or undo) show at once.
+          if (this.mode === 'read') this.readingChanged(edits)
         },
         onSettled: (len, hash) => this.editHost.onSettled(len, hash),
         onHistory: (u, r) => this.editHost.onHistory(u, r),
@@ -141,9 +157,17 @@ export class ReaderView {
     return this.sessionLoading
   }
 
+  private appliedKey = ''
+
   /** Apply the current settings: CSS variables, line-length calibration, layout. */
   async apply(): Promise<void> {
     const s = this.effective()
+    // Settings that do not change the page's look (the last highlight colour)
+    // must not re-measure it: on a 5 MB page that takes seconds.
+    const { lastHighlight: _ignored, ...look } = s
+    const lookKey = JSON.stringify([look, this.wcag, this.tuning, this.dark.matches])
+    if (lookKey === this.appliedKey) return
+    this.appliedKey = lookKey
     const opts = () => ({ prefersDark: this.dark.matches, avgCharEm: this.avg })
     applySettings(this.root, s, this.tuning, opts())
     // Recalibrate the measure only when something that changes character widths changed.
@@ -234,7 +258,7 @@ export class ReaderView {
     const x = box.left + (parseFloat(getComputedStyle(this.root).getPropertyValue('--col-left')) || box.width / 3) + 40
     const el = (document.elementFromPoint(x, box.top + 8) as HTMLElement | null)?.closest('[data-b]') as HTMLElement | null
     if (!el?.dataset.s) return null
-    return { s: Number(el.dataset.s), dy: this.els.scroller.scrollTop - topIn(el, this.els.scroller) }
+    return { s: Number(el.dataset.s) + this.reader.correction(Number(el.dataset.b)), dy: this.els.scroller.scrollTop - topIn(el, this.els.scroller) }
   }
 
   private restorePlace(place: { s: number; dy: number }, result: LoadResult): void {
@@ -306,6 +330,110 @@ export class ReaderView {
     this.editHost.onMode(this.mode === 'edit')
   }
 
+  // -------------------------------------------------------------------------
+  // Highlights
+
+  /** The document's text now: the editor's, once it exists. */
+  get text(): string { return this.editor?.exists ? this.editor.text : this.source }
+
+  private defsOf(text: string): string { return text.includes(']:') ? referenceDefinitions(text) : '' }
+
+  /** A shortcut or menu command: the selection, else the current search match. */
+  highlight(slot: HighlightSlot | null, toggle: boolean): Promise<void> {
+    return this.mode === 'edit' ? this.highlightInEditor(slot, toggle) : this.highlightInReader(slot, toggle)
+  }
+
+  /** Remember the colour last chosen, for ⇧⌘H. */
+  private rememberColour(slot: HighlightSlot | null): void {
+    if (slot && slot !== this.settings.lastHighlight) void this.change({ lastHighlight: slot })
+  }
+
+  /** Source range and blocks of something on the page. */
+  private spanOf(t: PaletteTarget): { from: number; to: number; blocks: [number, number][] } | null {
+    const corr = (b: number) => this.reader.correction(b)
+    if (t.kind === 'mark') {
+      const blk = t.mark.closest<HTMLElement>('[data-b]')
+      if (!blk || !t.mark.dataset.s) return null
+      const b = Number(blk.dataset.b)
+      const d = corr(b)
+      return { from: Number(t.mark.dataset.s) + d, to: Number(t.mark.dataset.e) + d, blocks: [this.reader.blockRange(b)] }
+    }
+    const r = t.range
+    const text = this.text
+    const a = pointToSource(r.startContainer, r.startOffset, false, text, corr)
+    const z = pointToSource(r.endContainer, r.endOffset, true, text, corr)
+    if (!a || !z || z.offset <= a.offset) return null
+    const blocks: [number, number][] = []
+    for (let b = a.b; b <= z.b; b++) blocks.push(this.reader.blockRange(b))
+    return { from: a.offset, to: z.offset, blocks }
+  }
+
+  async highlightInReader(slot: HighlightSlot | null, toggle: boolean, target?: PaletteTarget): Promise<void> {
+    if (this.lastOpen.plain) return
+    let t = target ?? null
+    let match = false
+    if (!t) {
+      const sel = window.getSelection()
+      if (sel && !sel.isCollapsed && sel.rangeCount && this.els.doc.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+        t = { kind: 'selection', range: sel.getRangeAt(0) }
+      } else if (this.palette.target) {
+        t = this.palette.target
+      } else if (this.find.isOpen && this.find.currentIndex >= 0) {
+        // "Find every mention and highlight it": ⇧⌘H on the current match, then on to the next.
+        const r = this.find.currentRange()
+        if (r) { t = { kind: 'selection', range: r }; match = true }
+      }
+    }
+    if (!t) return
+    const span = this.spanOf(t)
+    this.palette.hide()
+    if (!span) return
+    const text = this.text
+    const r = highlightEdits(text, span.blocks, span.from, span.to, slot, { toggle, defs: this.defsOf(text) })
+    if (!r.ok) { notice(this.els.win, r.reason); return }
+    this.rememberColour(slot)
+    if (!r.edits.length) return
+    window.getSelection()?.removeAllRanges()
+    await this.applyFromReader(r.edits)
+    if (match) this.find.step(1)
+  }
+
+  private async highlightInEditor(slot: HighlightSlot | null, toggle: boolean): Promise<void> {
+    const session = await this.loadEditor()
+    // With Find open on a match and nothing selected, the match is the target.
+    let span: [number, number] | undefined
+    const i = this.find.currentIndex
+    const ed = session.editor
+    if (this.find.isOpen && i >= 0 && ed.selectionEmpty) span = session.find.span(i) ?? undefined
+    const err = ed.highlight(slot, toggle, span, this.defsOf(ed.text))
+    if (err) { notice(this.els.win, err); return }
+    this.rememberColour(slot)
+    if (span) this.find.step(1)
+  }
+
+  /** Apply edits made while reading: they go through the editor, so ⌘Z undoes them. */
+  private async applyFromReader(edits: Edit[]): Promise<void> {
+    const session = await this.loadEditor()
+    session.editor.ensure(this.source)
+    session.editor.apply(edits)
+  }
+
+  /** The text changed while reading: show it, re-rendering only the blocks that changed if possible. */
+  private readingChanged(edits: Edit[]): void {
+    const text = this.text
+    if (this.reader.patch(text, edits, this.lastOpen, () => this.defsOf(text))) {
+      this.source = text
+      this.renderedText = text
+      // New tables are watched and measured as they come into view; measuring
+      // every table now would lay out the whole page (seconds at 5 MB).
+      this.tables.scan(this.els.doc)
+      this.readerFind.invalidate()
+      this.find.invalidate()
+    } else {
+      void this.rerender()
+    }
+  }
+
   /** Run a command. Switching modes returns a promise that settles once the switch is done. */
   command(c: Command): Promise<void> | void {
     const s = this.settings
@@ -314,6 +442,10 @@ export class ReaderView {
       case 'findReplace': if (this.mode === 'edit') this.find.open(true); else this.find.open(); break
       case 'undo': this.editor?.undo(); break
       case 'redo': this.editor?.redo(); break
+      case 'highlight': return this.highlight(this.settings.lastHighlight, true)
+      case 'removeHighlight': return this.highlight(null, false)
+      case 'highlightYellow': case 'highlightGreen': case 'highlightBlue': case 'highlightPink': case 'highlightOrange':
+        return this.highlight(COLOUR_COMMANDS[c], true)
       case 'bold': case 'italic': case 'underline': case 'strike': case 'code': case 'link':
         if (this.mode === 'edit') this.editor?.format(c as Format | 'link')
         break

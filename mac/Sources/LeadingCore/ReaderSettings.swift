@@ -20,6 +20,11 @@ public struct ReaderSettings: Codable, Equatable {
     public var outlineOpen = false
     /// Curly quotes, dashes and ellipses as you type in edit mode (off by default)
     public var smartTyping = false
+    /// The colour ⇧⌘H applies: the last one chosen
+    public var lastHighlight = "yellow"
+    /// The reader's own display colours ("#RRGGBB" per slot); light also serves sepia.
+    /// Files always keep the standard colours; only how Leading shows them changes.
+    public var highlightColors = HighlightColors()
 
     public init() {}
 
@@ -34,6 +39,8 @@ public struct ReaderSettings: Codable, Equatable {
         take(.letterSpacing, &letterSpacing); take(.wordSpacing, &wordSpacing)
         take(.paragraphStyle, &paragraphStyle); take(.paragraphSpacing, &paragraphSpacing)
         take(.align, &align); take(.highlightStyle, &highlightStyle); take(.zebra, &zebra); take(.outlineOpen, &outlineOpen); take(.smartTyping, &smartTyping)
+        take(.lastHighlight, &lastHighlight); take(.highlightColors, &highlightColors)
+        if !HighlightColors.slots.contains(lastHighlight) { lastHighlight = "yellow" }
         clamp()
     }
 
@@ -51,4 +58,26 @@ public struct ReaderSettings: Codable, Equatable {
         let data = (try? JSONEncoder().encode(self)) ?? Data("{}".utf8)
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
     }
+}
+
+/// Display colours the reader has chosen for the five highlight slots.
+public struct HighlightColors: Codable, Equatable {
+    public static let slots = ["yellow", "green", "blue", "pink", "orange"]
+    public static let names = ["yellow": "Yellow", "green": "Green", "blue": "Blue", "pink": "Pink", "orange": "Orange"]
+    /// Leading's own tuned fills, as in web/src/core/settings.ts (TUNING).
+    public static let defaultLight = ["yellow": "#FBE59B", "green": "#CFEBC3", "blue": "#CFE0F7", "pink": "#F7D0E2", "orange": "#F9D6AE"]
+    public static let defaultDark = ["yellow": "#5B4C1C", "green": "#2D4A2E", "blue": "#263E5C", "pink": "#5A2E45", "orange": "#5E3E1F"]
+
+    public var light: [String: String] = [:]
+    public var dark: [String: String] = [:]
+
+    public init() {}
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        light = (try? c.decode([String: String].self, forKey: .light)) ?? [:]
+        dark = (try? c.decode([String: String].self, forKey: .dark)) ?? [:]
+    }
+
+    public var isDefault: Bool { light.isEmpty && dark.isEmpty }
 }

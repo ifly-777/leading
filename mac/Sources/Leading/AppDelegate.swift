@@ -53,4 +53,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func leadingTogglePlainText(_ sender: Any?) { forward(#selector(ReaderActions.leadingTogglePlainText(_:))) }
     @objc func leadingToggleEdit(_ sender: Any?) { forward(#selector(ReaderActions.leadingToggleEdit(_:))) }
     @objc func leadingFindReplace(_ sender: Any?) { forward(#selector(ReaderActions.leadingFindReplace(_:))) }
+
+    // MARK: Settings (⌘,): the highlight colours
+
+    private var settingsWindow: NSWindowController?
+
+    @objc func showSettings(_ sender: Any?) {
+        if settingsWindow == nil { settingsWindow = SettingsWindow.make() }
+        settingsWindow?.showWindow(sender)
+        settingsWindow?.window?.makeKeyAndOrderFront(sender)
+    }
 }

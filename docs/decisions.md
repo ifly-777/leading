@@ -2,6 +2,27 @@
 
 Short notes on choices that are not obvious from the code, and what testing showed. Newest first.
 
+## Stage 4
+
+### How a selection becomes a highlight in the file
+Every run of text on the page carries its source range. The aligner (`sourcemap.ts`) maps a selection's two ends to exact source offsets, through curly quotes, entities, escapes and quote prefixes. `highlight-edit.ts` then parses each touched block on its own and places markers where Markdown allows them:
+
+- one highlight per paragraph, heading, list item or table cell;
+- markers outside formatting that is wholly selected (`==**bold** idea==`), inside formatting that is partly selected (`**bo==ld==**`);
+- code, wikilinks and images taken whole;
+- highlights the selection touches are taken out and their remainders put back in the old colour and syntax; highlights it does not touch stay byte for byte.
+
+Every result is parsed again before anything is written. The text must read the same, the structure must be the same, and exactly the selected characters must carry the new colour. `==` is used only where CommonMark's spacing rules let it open and close (so Obsidian reads it the same way); elsewhere `<mark>` is used, since it has no such rules. If neither passes, nothing is written and a short message says so. In about 6,000 random documents and selections (bold, links, code, quotes, tables, callouts, existing highlights in five colours), none was refused and none went wrong.
+
+### Storage
+Yellow is `==text==`; other colours are Highlightr's `<mark style="background: #RRGGBBAA;">` with its default hex values, checked against Highlightr's source (orange is `#FFB86CA6`). Changing a colour in Settings changes only how Leading shows it.
+
+### One history
+A highlight made while reading goes through the editor, so ⌘Z undoes it in either mode. The editor's code loads at the first highlight if it has not already loaded in the background.
+
+### Only the changed block is redrawn
+Redrawing a whole 5 MB page for one highlight took about a second and flashed. Now only the blocks that changed are rendered again, and the shift in source offsets for everything after them is recorded rather than written into thousands of elements. A highlight anywhere in the 5 MB stress file takes about 10 ms (60 ms for the first, which also sets up the editor). One trap found on the way: re-measuring every table after a change laid out the whole page and took 3 s.
+
 ## Stage 3
 
 ### One text, one history

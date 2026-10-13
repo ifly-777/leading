@@ -84,4 +84,20 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(s.theme, "dark")
         XCTAssertEqual(s.font, "literata")
     }
+
+    func testHighlightSettingsRoundTripAndRejectUnknownColours() throws {
+        var s = ReaderSettings()
+        XCTAssertEqual(s.lastHighlight, "yellow")
+        XCTAssertTrue(s.highlightColors.isDefault)
+        s.lastHighlight = "green"
+        s.highlightColors.dark["pink"] = "#AA3366"
+        let back = try JSONDecoder().decode(ReaderSettings.self, from: JSONEncoder().encode(s))
+        XCTAssertEqual(back, s)
+        // The page receives the colours as plain JSON objects.
+        let colors = s.dictionary["highlightColors"] as? [String: [String: String]]
+        XCTAssertEqual(colors?["dark"]?["pink"], "#AA3366")
+        // A colour name the app does not know falls back to yellow.
+        let odd = try JSONDecoder().decode(ReaderSettings.self, from: Data(#"{"lastHighlight": "purple"}"#.utf8))
+        XCTAssertEqual(odd.lastHighlight, "yellow")
+    }
 }

@@ -27,6 +27,13 @@ export interface Settings {
   outlineOpen: boolean
   /** Curly quotes, dashes and ellipses as you type in edit mode */
   smartTyping: boolean
+  /** The colour ⇧⌘H applies */
+  lastHighlight: HighlightSlot
+  /**
+   * The reader's own display colours for each slot (light also serves sepia).
+   * Only how Leading shows a colour changes; files keep the standard hex.
+   */
+  highlightColors: { light: Partial<Record<HighlightSlot, string>>; dark: Partial<Record<HighlightSlot, string>> }
 }
 
 export const DEFAULTS: Settings = {
@@ -46,6 +53,8 @@ export const DEFAULTS: Settings = {
   zebra: false,
   outlineOpen: false,
   smartTyping: false,
+  lastHighlight: 'yellow',
+  highlightColors: { light: {}, dark: {} },
 }
 
 export const RANGES = {
@@ -123,6 +132,25 @@ export const TUNING: Tuning = {
   },
 }
 
+/**
+ * The underline colour for a reader's own fill colour (Lowlight and Underline
+ * styles): the same hue, deeper on light paper and brighter on dark.
+ */
+export function lineFor(fill: string, dark: boolean): string {
+  const m = /^#?([0-9a-f]{6})/i.exec(fill.trim())
+  if (!m) return fill
+  const n = parseInt(m[1], 16)
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((x) => x / 255)
+  const max = Math.max(r, g, b), min = Math.min(r, g, b)
+  const d = max - min
+  let h = 0
+  if (d) h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+  h = (h * 60 + 360) % 360
+  // A clear hue at a readable lightness; greys stay grey.
+  const sat = d < 0.08 ? 0 : 65
+  return `hsl(${h.toFixed(0)} ${sat}% ${dark ? 68 : 42}%)`
+}
+
 export function resolveTheme(t: Theme, prefersDark: boolean): 'light' | 'sepia' | 'dark' {
   return t === 'system' ? (prefersDark ? 'dark' : 'light') : t
 }
@@ -151,8 +179,12 @@ export function applySettings(root: HTMLElement, s: Settings, tuning: Tuning, op
   for (const [k, val] of Object.entries(c)) {
     if (typeof val === 'string') v('--' + k.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase()), val)
   }
-  for (const [slot, val] of Object.entries(c.hlFill)) v(`--hl-${slot}`, val)
-  for (const [slot, val] of Object.entries(c.hlLine)) v(`--hl-${slot}-line`, val)
+  const own = (theme === 'dark' ? s.highlightColors?.dark : s.highlightColors?.light) ?? {}
+  for (const [slot, val] of Object.entries(c.hlFill)) {
+    const mine = own[slot as HighlightSlot]
+    v(`--hl-${slot}`, mine ?? val)
+    v(`--hl-${slot}-line`, mine ? lineFor(mine, theme === 'dark') : c.hlLine[slot as HighlightSlot])
+  }
   root.dataset.theme = theme
   root.dataset.align = s.align
   root.dataset.para = s.paragraphStyle

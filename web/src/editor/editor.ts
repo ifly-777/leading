@@ -4,15 +4,18 @@
 // undo history is the one history, so ⌘Z works the same in both modes.
 
 import { EditorState, EditorSelection, Prec, Compartment, type Extension, type ChangeSpec } from '@codemirror/state'
-import { EditorView, keymap, type KeyBinding } from '@codemirror/view'
-import { history, historyKeymap, defaultKeymap, indentWithTab, undo, redo, undoDepth, redoDepth } from '@codemirror/commands'
-import { syntaxHighlighting, HighlightStyle, syntaxTree } from '@codemirror/language'
+import { EditorView, keymap, ViewPlugin, Decoration, type DecorationSet, type ViewUpdate, type KeyBinding } from '@codemirror/view'
+import { history, historyKeymap, defaultKeymap, indentWithTab, undo, redo, undoDepth, redoDepth, isolateHistory } from '@codemirror/commands'
+import { syntaxHighlighting, HighlightStyle, syntaxTree, ensureSyntaxTree } from '@codemirror/language'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { tags as t } from '@lezer/highlight'
 import { toggleFormat, toggleLink, type Format, type Edit } from '../core/format'
 import { alignTable, cellIndexAt, cellStart, isDelimiterRow } from '../core/table-align'
 import { fingerprint } from '../core/hash'
 import { searchMarks } from './editor-find'
+import { highlightEdits, highlightAt } from '../core/highlight-edit'
+import { colorFromMarkTag, slotForColor } from '../core/highlight-colors'
+import type { HighlightSlot } from '../core/nodes'
 
 export interface EditorHost {
   /** The text changed: edits in the coordinates of the text before them. */
@@ -60,6 +63,13 @@ const theme = EditorView.theme({
   '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': {
     background: 'color-mix(in srgb, var(--link) 22%, transparent)',
   },
+  // Highlights in the source take their colour, in the reader's chosen style.
+  '.cm-hl': { background: 'color-mix(in srgb, var(--c) 70%, transparent)', borderRadius: '2px' },
+  '.cm-hl[data-c="yellow"]': { '--c': 'var(--hl-yellow)' },
+  '.cm-hl[data-c="green"]': { '--c': 'var(--hl-green)' },
+  '.cm-hl[data-c="blue"]': { '--c': 'var(--hl-blue)' },
+  '.cm-hl[data-c="pink"]': { '--c': 'var(--hl-pink)' },
+  '.cm-hl[data-c="orange"]': { '--c': 'var(--hl-orange)' },
   '.cm-search-match': { outline: '1.5px solid color-mix(in srgb, var(--search) 70%, transparent)', borderRadius: '2px' },
   '.cm-search-current': { outline: '2.5px solid var(--search)', borderRadius: '2px' },
 })
@@ -133,6 +143,45 @@ function tableTab(dir: 1 | -1) {
 }
 
 // ---------------------------------------------------------------------------
+// Highlights drawn in the source, so colours show while editing too
+
+const HL = /==(?=[^\s=])(?:[^=\n]|=(?!=))*?[^\s=]==|<mark\b[^>\n]*>[\s\S]*?<\/mark\s*>/gi
+const CODE = new Set(['InlineCode', 'FencedCode', 'CodeBlock', 'CodeText', 'HTMLBlock'])
+
+function highlightMarks(view: EditorView): DecorationSet {
+  const marks = []
+  const tree = syntaxTree(view.state)
+  for (const { from, to } of view.visibleRanges) {
+    const text = view.state.sliceDoc(from, to)
+    for (const m of text.matchAll(HL)) {
+      const at = from + m.index!
+      let inCode = false
+      for (let n: any = tree.resolveInner(at, 1); n; n = n.parent) if (CODE.has(n.name)) { inCode = true; break }
+      if (inCode) continue
+      const slot = m[0].startsWith('==') ? 'yellow' : slotForColor(colorFromMarkTag(m[0]))
+      marks.push(Decoration.mark({ class: 'cm-hl', attributes: { 'data-c': slot } }).range(at, at + m[0].length))
+    }
+  }
+  return Decoration.set(marks, true)
+}
+
+const highlightPlugin = ViewPlugin.fromClass(class {
+  decorations: DecorationSet
+  constructor(view: EditorView) { this.decorations = highlightMarks(view) }
+  update(u: ViewUpdate) { if (u.docChanged || u.viewportChanged) this.decorations = highlightMarks(u.view) }
+}, { decorations: (p) => p.decorations })
+
+/** The top-level blocks (paragraphs, lists, tables…) the editor's parser sees in [from, to]. */
+function topBlocks(state: EditorState, from: number, to: number): [number, number][] {
+  const tree = ensureSyntaxTree(state, Math.min(state.doc.length, to + 1), 200) ?? syntaxTree(state)
+  const out: [number, number][] = []
+  for (let c = tree.topNode.firstChild; c; c = c.nextSibling) if (c.to >= from && c.from <= to) out.push([c.from, c.to])
+  return out
+}
+
+const WORD = /[\p{L}\p{N}_'’]/u
+
+// ---------------------------------------------------------------------------
 // Smart punctuation while typing (off unless the reader turns it on)
 
 function inCode(state: EditorState, pos: number): boolean {
@@ -196,6 +245,7 @@ export class SourceEditor {
       EditorView.lineWrapping,
       theme,
       searchMarks, // Find's outlines (editor-find.ts)
+      highlightPlugin,
       EditorView.contentAttributes.of({ spellcheck: 'true', autocorrect: 'off', autocapitalize: 'off', 'aria-label': 'Markdown source' }),
       Prec.highest(keymap.of(formatKeys)),
       keymap.of([...historyKeymap, indentWithTab, ...defaultKeymap]),
@@ -242,9 +292,40 @@ export class SourceEditor {
   undo(): boolean { return this.view ? undo(this.view) : false }
   redo(): boolean { return this.view ? redo(this.view) : false }
 
-  /** Apply edits made outside the editor (a highlight from reading mode, Stage 4) through the history. */
+  /** Apply edits made outside the editor (a highlight while reading) through the history, as one undoable step. */
   apply(edits: Edit[]): void {
-    this.view?.dispatch({ changes: edits as ChangeSpec[], userEvent: 'input.external' })
+    this.view?.dispatch({ changes: edits as ChangeSpec[], userEvent: 'input.highlight', annotations: isolateHistory.of('full') })
+  }
+
+  get selectionEmpty(): boolean { return !this.view || this.view.state.selection.main.empty }
+
+  /**
+   * Highlight the selection (or `span`) in `slot`, or remove highlights there.
+   * With nothing selected: the highlight around the cursor, else the word.
+   * Returns a message if it could not be done safely.
+   */
+  highlight(slot: HighlightSlot | null, toggle: boolean, span?: [number, number], defs = ''): string | null {
+    const v = this.view
+    if (!v) return null
+    const { state } = v
+    const doc = state.doc.toString()
+    let [from, to] = span ?? [state.selection.main.from, state.selection.main.to]
+    if (from === to) {
+      const around = topBlocks(state, from, from).map((b) => highlightAt(doc, b, from, defs)).find(Boolean)
+      if (around) [from, to] = around
+      else {
+        while (from > 0 && WORD.test(doc[from - 1])) from--
+        while (to < doc.length && WORD.test(doc[to])) to++
+        if (from === to) return null
+      }
+    }
+    const r = highlightEdits(doc, topBlocks(state, from, to), from, to, slot, { toggle, defs })
+    if (!r.ok) return r.reason
+    if (r.edits.length) {
+      v.dispatch({ changes: r.edits as ChangeSpec[], userEvent: 'input.highlight', annotations: isolateHistory.of('full'), scrollIntoView: true })
+    }
+    v.focus()
+    return null
   }
 
   focus(): void { this.view?.focus() }

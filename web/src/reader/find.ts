@@ -234,6 +234,8 @@ export class FindBar {
   driftNow(): number { return (this.engine as any).driftNow?.() ?? 0 }
   currentRange(): Range | null { return (this.engine as any).rangeOf?.(this.current, true) ?? null }
   get matchCount(): number { return this.total }
+  /** The current match's number, or -1. */
+  get currentIndex(): number { return this.total ? this.current : -1 }
 }
 
 // ---------------------------------------------------------------------------

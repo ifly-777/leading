@@ -142,7 +142,9 @@ enum SelfTest {
                                             later(1.2) {
                                                 js("return document.getElementById('editor').hidden && document.getElementById('doc').textContent.includes('Selftest typed here.')") { v in
                                                     check("Back in reading mode, the page shows the edited text", v as? Bool == true)
-                                                    conflictCheck(window: window, page: page, doc: doc, check: check, done: done)
+                                                    highlightChecks(window: window, page: page, doc: doc, check: check) {
+                                                        conflictCheck(window: window, page: page, doc: doc, check: check, done: done)
+                                                    }
                                                 }
                                             }
                                         }
@@ -151,6 +153,36 @@ enum SelfTest {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    /// Reading mode: select a word, Format › Green Highlight writes Highlightr's
+    /// mark into Swift's copy, and Undo takes it off again.
+    private static func highlightChecks(window: NSWindow, page: ReaderWebView, doc: MarkdownDocument, check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        let wc = window.windowController
+        let green = "<mark style=\"background: #BBFABBA6;\">typed</mark>"
+        // Select the word "typed" on the page, as a drag with the mouse would.
+        let select = """
+        const w = document.createTreeWalker(document.getElementById('doc'), NodeFilter.SHOW_TEXT);
+        while (w.nextNode()) { const t = w.currentNode; const i = t.data.indexOf('typed');
+          if (i >= 0) { const r = document.createRange(); r.setStart(t, i); r.setEnd(t, i + 5);
+            const s = getSelection(); s.removeAllRanges(); s.addRange(r); return true } }
+        return false
+        """
+        page.callAsyncJavaScript(select, arguments: [:], in: nil, in: .page) { r in
+            check("The page selects a word to highlight", (try? r.get()) as? Bool == true)
+            NSApp.sendAction(#selector(ReaderActions.leadingHighlightGreen(_:)), to: wc, from: nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                check("Green Highlight (⌥⌘2) while reading writes Highlightr's mark", doc.text.contains(green))
+                let item = NSMenuItem(title: "", action: #selector(ReaderActions.leadingHighlight(_:)), keyEquivalent: "")
+                _ = (wc as? NSMenuItemValidation)?.validateMenuItem(item)
+                check("Highlight (⇧⌘H) now names the last colour (\(item.title))", item.title == "Highlight (Green)")
+                NSApp.sendAction(#selector(ReaderActions.leadingUndo(_:)), to: wc, from: nil)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    check("Undo while reading takes the highlight off", !doc.text.contains("<mark") && doc.text.contains("Selftest typed here."))
+                    done()
                 }
             }
         }
