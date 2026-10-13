@@ -37,6 +37,6 @@ shot() { # name document settings-json size [edit]
 
 shot reading   "Where I Lived.md"    '{"theme":"light"}'                      1100x780
 shot outline   "Walden.md"           '{"theme":"dark","outlineOpen":true}'    1100x780
-shot notes     "Notes on Walden.md"  '{"theme":"sepia","font":"charter"}'     1100x900
+shot notes     "Notes on Walden.md"  '{"theme":"sepia","font":"charter"}'     1100x780
 shot editing   "Where I Lived.md"    '{"theme":"light"}'                      1100x780 1
 echo "✓ $(ls "$OUT"/*.png | wc -l | tr -d ' ') pictures in docs/screenshots"
