@@ -8,13 +8,29 @@ import { Reader, type LoadResult } from './render'
 import { computeLayout, applyLayout, type LayoutResult } from './layout'
 import { avgCharEm } from './measure'
 import { OutlinePanel } from './outline'
-import { FindBar } from './find'
+import { FindBar, ReaderFind } from './find'
 import { TableWatcher } from './tables'
 import { topIn } from './geometry'
+// Type-only: the editor's code (CodeMirror) is loaded on first use; see loadEditor().
+import type { SourceEditor } from '../editor/editor'
+import type { EditorSession } from '../editor/session'
+import { scanHeadings } from '../core/headings'
+import type { Edit, Format } from '../core/format'
+import type { OutlineItem } from '../core/pipeline'
 
 export interface ViewElements {
   win: HTMLElement; scroller: HTMLElement; doc: HTMLElement; layer: HTMLElement
   ticks: HTMLElement; frame: HTMLElement; outline: HTMLElement
+  /** Where the source editor lives (edit mode) */
+  editor: HTMLElement
+}
+
+/** What the view tells its host about editing (the app forwards these to Swift). */
+export interface EditHost {
+  onEdit(edits: Edit[]): void
+  onSettled(length: number, hash: number): void
+  onHistory(canUndo: boolean, canRedo: boolean): void
+  onMode(editing: boolean): void
 }
 
 export interface OpenOptions extends RenderOptions {
@@ -22,11 +38,17 @@ export interface OpenOptions extends RenderOptions {
   plain?: boolean
   /** Keep the reader's place (reload after the file changed on disk) */
   keepPlace?: boolean
+  /** Scroll to this source offset after rendering (coming back from edit mode) */
+  placeAt?: number
+  /** The text came from disk, not from the editor: replace the editor's text and history too */
+  fromDisk?: boolean
 }
 
 export type Command =
   | 'find' | 'findNext' | 'findPrevious' | 'toggleOutline' | 'bigger' | 'smaller' | 'actualSize'
   | 'narrower' | 'wider' | 'cycleTheme'
+  | 'toggleEdit' | 'findReplace' | 'undo' | 'redo'
+  | 'bold' | 'italic' | 'underline' | 'strike' | 'code' | 'link'
 
 const MEASURES: Measure[] = ['narrow', 'medium', 'wide']
 const THEMES: Exclude<Theme, 'system'>[] = ['light', 'sepia', 'dark']
@@ -37,7 +59,22 @@ export class ReaderView {
   readonly reader: Reader
   readonly outline: OutlinePanel
   readonly find: FindBar
+  readonly readerFind: ReaderFind
   readonly tables: TableWatcher
+  /** The source editor, once edit mode has been used (its code loads on demand). */
+  editor: SourceEditor | null = null
+  private session: EditorSession | null = null
+  private sessionLoading: Promise<EditorSession> | null = null
+  /** Reading or editing */
+  mode: 'read' | 'edit' = 'read'
+  /** The document's current text (the editor's, once editing has begun) */
+  private source = ''
+  /** The text the reader last rendered */
+  private renderedText = ''
+  private lastOpen: OpenOptions = {}
+  private readerOutline: OutlineItem[] = []
+  private headingTimer = 0
+  editHost: EditHost = { onEdit() {}, onSettled() {}, onHistory() {}, onMode() {} }
   settings: Settings = clone(DEFAULTS)
   tuning: Tuning = clone(TUNING)
   /** WCAG 1.4.12 check: override spacing with the criterion's own values */
@@ -54,9 +91,9 @@ export class ReaderView {
     const { win, scroller, doc, layer, ticks, frame, outline } = els
     this.reader = new Reader(doc)
     this.outline = new OutlinePanel(outline, scroller)
-    this.find = new FindBar(win, scroller, doc, layer, ticks, frame)
+    this.readerFind = new ReaderFind(scroller, doc, layer, frame)
+    this.find = new FindBar(win, scroller, ticks, this.readerFind)
     this.tables = new TableWatcher(scroller, win, frame)
-
     this.outline.locate = (item, force) => {
       const blk = this.reader.blockEl(item.b, force)
       if (!blk) return null
@@ -64,11 +101,12 @@ export class ReaderView {
       return blk.matches('h1,h2,h3,h4,h5,h6') ? blk : blk.querySelector<HTMLElement>(`:is(h1,h2,h3,h4,h5,h6)[data-s="${item.s}"]`)
     }
     this.outline.onClose = () => this.change({ outlineOpen: false })
-    this.find.blockY = (b) => this.reader.blockY(b, scroller)
-    this.find.index = () => this.reader.index
-    this.find.getBlock = (b, force) => this.reader.blockEl(b, force)
-    this.find.onLayoutShift = () => this.reader.invalidateGeometry()
-    this.reader.onIndexGrew = () => this.find.invalidate()
+    this.readerFind.blockY = (b) => this.reader.blockY(b, scroller)
+    this.readerFind.index = () => this.reader.index
+    this.readerFind.getBlock = (b, force) => this.reader.blockEl(b, force)
+    this.readerFind.onLayoutShift = () => this.reader.invalidateGeometry()
+    this.readerFind.onRedraw = () => this.find.draw()
+    this.reader.onIndexGrew = () => { this.readerFind.invalidate(); if (this.mode === 'read') this.find.invalidate() }
     this.reader.onBlocksAdded = () => this.reader.invalidateGeometry()
 
     new ResizeObserver(() => this.relayout()).observe(scroller)
@@ -78,6 +116,29 @@ export class ReaderView {
   private effective(): Settings {
     const s = this.settings
     return this.wcag ? { ...s, lineHeight: Math.max(1.5, s.lineHeight), letterSpacing: 0.12, wordSpacing: 0.16, paragraphStyle: 'space', paragraphSpacing: 2 } : s
+  }
+
+  /** Load edit mode's code (CodeMirror) and set it up; once only. */
+  private loadEditor(): Promise<EditorSession> {
+    this.sessionLoading ??= import('../editor/session').then(({ createEditorSession }) => {
+      const s = createEditorSession(this.els.editor, this.els.win, this.els.frame, {
+        onChange: (edits) => {
+          this.editHost.onEdit(edits)
+          this.find.invalidate()
+          // Keep the outline in step with headings as they are typed.
+          clearTimeout(this.headingTimer)
+          this.headingTimer = window.setTimeout(() => { if (this.mode === 'edit' && this.editor) this.outline.setItems(scanHeadings(this.editor.text)) }, 300)
+          // Changes made while reading (undo, or a highlight in Stage 4) show at once.
+          if (this.mode === 'read') this.rerender()
+        },
+        onSettled: (len, hash) => this.editHost.onSettled(len, hash),
+        onHistory: (u, r) => this.editHost.onHistory(u, r),
+      })
+      this.session = s
+      this.editor = s.editor
+      return s
+    })
+    return this.sessionLoading
   }
 
   /** Apply the current settings: CSS variables, line-length calibration, layout. */
@@ -92,6 +153,7 @@ export class ReaderView {
       this.avg = await avgCharEm(this.els.doc)
       applySettings(this.root, s, this.tuning, opts())
     }
+    if (this.editor?.exists) this.editor.setSmartTyping(s.smartTyping)
     this.relayout()
   }
 
@@ -126,8 +188,21 @@ export class ReaderView {
   /** Show a document. Returns null if a newer open replaced this one. */
   async open(src: string, opts: OpenOptions = {}): Promise<LoadResult | null> {
     const { scroller, doc } = this.els
+    this.source = src
+    this.lastOpen = { ...opts, keepPlace: false, placeAt: undefined, fromDisk: false }
+    if (opts.fromDisk && this.editor?.exists) {
+      // The file changed on disk or a version was restored: the editor starts again from it.
+      const top = this.editor.topPos()
+      this.editor.reset(src)
+      if (this.mode === 'edit') {
+        this.editor.scrollToPos(top)
+        this.outline.setItems(scanHeadings(src))
+        this.find.invalidate()
+        return null // the reader re-renders when reading resumes
+      }
+    }
     const place = opts.keepPlace ? this.placeMark() : null
-    if (!opts.keepPlace) scroller.scrollTop = 0
+    if (!opts.keepPlace && opts.placeAt === undefined) scroller.scrollTop = 0
     let result: LoadResult | null
     if (opts.plain) {
       result = this.reader.showPlain(src)
@@ -135,14 +210,21 @@ export class ReaderView {
       result = await this.reader.load(src, opts)
       if (!result) return null
     }
-    this.outline.setItems(result.outline)
+    this.renderedText = src
+    this.lastResult = result
+    this.readerOutline = result.outline
+    if (this.mode === 'read') this.outline.setItems(result.outline)
     this.tables.scan(doc)
     this.tables.recheckAll(doc)
-    this.find.invalidate()
+    this.readerFind.invalidate()
+    if (this.mode === 'read') this.find.invalidate()
     if (place) this.restorePlace(place, result)
+    if (opts.placeAt !== undefined) this.placeAt(opts.placeAt, result)
     this.outline.updateCurrent()
-    // Warm block geometry once the page settles, so the first Find keystroke is quick.
+    // Warm block geometry once the page settles, so the first Find keystroke is quick,
+    // and fetch edit mode's code in the background so ⌘E is instant when it comes.
     setTimeout(() => this.reader.blockY(0, scroller), 300)
+    setTimeout(() => import('../editor/session'), 2000)
     return result
   }
 
@@ -163,9 +245,78 @@ export class ReaderView {
     if (el) this.els.scroller.scrollTop = topIn(el, this.els.scroller) + (result.blocks[b].s === place.s ? place.dy : 0)
   }
 
-  command(c: Command): void {
+  /** Scroll the reader to the block holding source offset `pos`. */
+  private placeAt(pos: number, result: LoadResult): void {
+    let b = 0
+    for (let i = 0; i < result.blocks.length; i++) { if (result.blocks[i].s >= 0 && result.blocks[i].s <= pos) b = i; else if (result.blocks[i].s > pos) break }
+    const el = this.reader.blockEl(b, true)
+    if (el) this.els.scroller.scrollTop = Math.max(0, topIn(el, this.els.scroller) - 8)
+  }
+
+  private lastResult: LoadResult | null = null
+
+  /** Re-render the reader from the current text, keeping the reader's place. */
+  private async rerender(placeAt?: number): Promise<void> {
+    const text = this.editor?.exists ? this.editor.text : this.source
+    this.source = text
+    await this.open(text, { ...this.lastOpen, keepPlace: placeAt === undefined, placeAt })
+  }
+
+  /** ⌘E: between reading and the source. The reader's place carries across. */
+  async toggleEdit(): Promise<void> {
+    const { scroller, editor } = this.els
+    if (this.mode === 'read') {
+      const pos = this.placeMark()?.s ?? 0
+      const session = await this.loadEditor()
+      const ed = session.editor
+      const view = ed.ensure(this.source)
+      ed.setSmartTyping(this.settings.smartTyping)
+      this.mode = 'edit'
+      document.documentElement.dataset.mode = 'edit'
+      editor.hidden = false
+      this.outline.setItems(scanHeadings(ed.text))
+      this.outline.jumpTo = (item) => ed.scrollToPos(item.s)
+      this.outline.currentIndex = (items) => {
+        const top = ed.topPos() + 1
+        let found = -1
+        for (let i = 0; i < items.length && items[i].s <= top; i++) found = i
+        return found
+      }
+      this.outline.watch(view.scrollDOM)
+      this.find.setEngine(session.find, view.scrollDOM)
+      ed.focus()
+      ed.scrollToPos(pos)
+    } else {
+      const ed = this.editor!
+      const pos = ed.topPos()
+      this.session?.popover.hide()
+      this.mode = 'read'
+      document.documentElement.dataset.mode = 'read'
+      editor.hidden = true
+      this.outline.useReadingMode()
+      this.find.setEngine(this.readerFind, scroller)
+      if (ed.text !== this.renderedText) {
+        await this.rerender(pos)
+      } else {
+        this.outline.setItems(this.readerOutline)
+        if (this.lastResult) this.placeAt(pos, this.lastResult)
+      }
+      scroller.focus({ preventScroll: true })
+    }
+    this.editHost.onMode(this.mode === 'edit')
+  }
+
+  /** Run a command. Switching modes returns a promise that settles once the switch is done. */
+  command(c: Command): Promise<void> | void {
     const s = this.settings
     switch (c) {
+      case 'toggleEdit': return this.toggleEdit()
+      case 'findReplace': if (this.mode === 'edit') this.find.open(true); else this.find.open(); break
+      case 'undo': this.editor?.undo(); break
+      case 'redo': this.editor?.redo(); break
+      case 'bold': case 'italic': case 'underline': case 'strike': case 'code': case 'link':
+        if (this.mode === 'edit') this.editor?.format(c as Format | 'link')
+        break
       case 'find': this.find.open(); break
       case 'findNext': if (!this.find.isOpen) this.find.open(); this.find.step(1); break
       case 'findPrevious': if (!this.find.isOpen) this.find.open(); this.find.step(-1); break

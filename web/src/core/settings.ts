@@ -25,6 +25,8 @@ export interface Settings {
   highlightStyle: HighlightStyle
   zebra: boolean
   outlineOpen: boolean
+  /** Curly quotes, dashes and ellipses as you type in edit mode */
+  smartTyping: boolean
 }
 
 export const DEFAULTS: Settings = {
@@ -43,6 +45,7 @@ export const DEFAULTS: Settings = {
   highlightStyle: 'marker',
   zebra: false,
   outlineOpen: false,
+  smartTyping: false,
 }
 
 export const RANGES = {

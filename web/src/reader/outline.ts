@@ -146,12 +146,42 @@ export class OutlinePanel {
     this.scroller.focus({ preventScroll: true })
   }
 
-  private jump(item: OutlineItem): void {
+  /** Go to a heading. Reading mode scrolls to its element; edit mode replaces this with a jump in the source. */
+  jumpTo: (item: OutlineItem) => void = (item) => {
     const h = this.locate(item, true)
     if (!h) return
     // Land the heading a little below the top; no animation, so it stays calm.
     // offsetTop (relative to the scroller) avoids rect queries, which are slow on long pages.
     this.scroller.scrollTo({ top: Math.max(0, topIn(h, this.scroller) - this.scroller.clientHeight * 0.12) })
+  }
+
+  /** Index of the heading of the section being read. Edit mode replaces this too. */
+  currentIndex: (items: OutlineItem[]) => number = (items) => {
+    const line = this.scroller.scrollTop + this.scroller.clientHeight * 0.3
+    // Headings are in document order, so their tops increase: binary search.
+    let lo = 0, hi = items.length - 1, found = -1
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1
+      const h = this.locate(items[mid], false)
+      if (!h) { hi = mid - 1; continue } // not rendered yet: it is further down
+      if (topIn(h, this.scroller) <= line) { found = mid; lo = mid + 1 } else hi = mid - 1
+    }
+    return found
+  }
+
+  private jump(item: OutlineItem): void { this.jumpTo(item) }
+
+  // The reading-mode behaviour, kept so edit mode can hand it back.
+  private readonly readingJump = this.jumpTo
+  private readonly readingCurrent = this.currentIndex
+  useReadingMode(): void { this.jumpTo = this.readingJump; this.currentIndex = this.readingCurrent }
+
+  private watched = new WeakSet<HTMLElement>()
+  /** Follow scrolling in another element too (the editor's scroller). */
+  watch(scroller: HTMLElement): void {
+    if (this.watched.has(scroller)) return
+    this.watched.add(scroller)
+    scroller.addEventListener('scroll', () => this.schedule(), { passive: true })
   }
 
   private schedule(): void {
@@ -161,15 +191,7 @@ export class OutlinePanel {
 
   /** The current section is the last heading above a line ~30% down the window. */
   updateCurrent(): void {
-    const line = this.scroller.scrollTop + this.scroller.clientHeight * 0.3
-    // Headings are in document order, so their tops increase: binary search.
-    let lo = 0, hi = this.flat.length - 1, found = -1
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1
-      const h = this.locate(this.flat[mid].item, false)
-      if (!h) { hi = mid - 1; continue } // not rendered yet: it is further down
-      if (topIn(h, this.scroller) <= line) { found = mid; lo = mid + 1 } else hi = mid - 1
-    }
+    const found = this.flat.length ? this.currentIndex(this.flat.map((n) => n.item)) : -1
     const next = this.flat[found] ?? null
     if (next === this.current) return
     this.current?.a.classList.remove('current')

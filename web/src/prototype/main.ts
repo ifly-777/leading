@@ -12,7 +12,7 @@ const rail = $('rail')
 const scroller = $('scroller')
 
 const view = new ReaderView({
-  win: $('window'), scroller, doc: $('doc'), layer: $('layer'), ticks: $('ticks'), frame: $('frame'), outline: $('outline'),
+  win: $('window'), scroller, doc: $('doc'), layer: $('layer'), ticks: $('ticks'), frame: $('frame'), outline: $('outline'), editor: $('editor'),
 })
 const { find } = view
 
@@ -280,7 +280,9 @@ document.addEventListener('keydown', (e) => {
   if (e.key === '\\' && !typing) { document.body.classList.toggle('rail-hidden'); view.relayout(); return }
   if (!e.metaKey) return
   const k = e.key.toLowerCase()
+  if (k === 'e' && !e.altKey) { e.preventDefault(); view.command('toggleEdit'); return }
   if (k === 'f' && !e.altKey) { e.preventDefault(); view.command('find'); return }
+  if (e.code === 'KeyF' && e.altKey) { e.preventDefault(); view.command('findReplace'); return }
   if (k === 'g') { e.preventDefault(); view.command(e.shiftKey ? 'findPrevious' : 'findNext'); return }
   if (!e.altKey) return
   // With ⌥ held, e.key is a special character, so match on the physical key.

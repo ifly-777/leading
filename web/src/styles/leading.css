@@ -340,3 +340,32 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
   font: inherit; letter-spacing: var(--ls); word-spacing: var(--ws); font-variant-ligatures: common-ligatures;
   background: none; padding: 0; margin: 0; border-radius: 0; tab-size: 4;
 }
+
+/* ---- Edit mode: the source editor takes the reader's place ---------------- */
+#editor { position: absolute; inset: 0; z-index: 4; background: var(--bg); }
+#editor[hidden] { display: none; }
+/* The reader stays laid out underneath (so its place is kept), just unseen. */
+:root[data-mode="edit"] #scroller, :root[data-mode="edit"] .search-layer { visibility: hidden; }
+
+/* ---- Find bar: replace row (edit mode only) ------------------------------- */
+.findbar { flex-direction: column; align-items: stretch; }
+.findbar .find-row, .findbar .replace-row { display: flex; align-items: center; gap: 2px; }
+.findbar .replace-row { margin-top: 4px; padding-top: 4px; border-top: 0.5px solid color-mix(in srgb, var(--fg) 18%, transparent); }
+.findbar .replace-row[hidden] { display: none; }
+.findbar .find-r { all: unset; flex: 1; padding: 4px 2px; font: inherit; color: var(--fg); }
+.findbar:not(.can-replace) .regex { display: none; }
+
+/* ---- Formatting popover over a selection ---------------------------------- */
+.format-popover {
+  position: absolute; z-index: 25; display: flex; gap: 1px; padding: 3px;
+  background: color-mix(in srgb, var(--bg) 90%, var(--fg)); border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15), 0 0 0 0.5px color-mix(in srgb, var(--fg) 25%, transparent);
+  font: 13px/1 system-ui, -apple-system, sans-serif;
+}
+.format-popover[hidden] { display: none; }
+.format-popover button { all: unset; min-width: 26px; height: 24px; text-align: center; border-radius: 5px; color: var(--fg); cursor: default; }
+.format-popover button:hover { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.format-popover .fp-bold { font-weight: 700; }
+.format-popover .fp-italic { font-style: italic; font-family: ui-serif, serif; }
+.format-popover .fp-underline { text-decoration: underline; }
+.format-popover .fp-strike { text-decoration: line-through; }

@@ -18,6 +18,8 @@ public struct ReaderSettings: Codable, Equatable {
     public var highlightStyle = "marker"
     public var zebra = false
     public var outlineOpen = false
+    /// Curly quotes, dashes and ellipses as you type in edit mode (off by default)
+    public var smartTyping = false
 
     public init() {}
 
@@ -31,7 +33,7 @@ public struct ReaderSettings: Codable, Equatable {
         take(.size, &size); take(.lineHeight, &lineHeight); take(.measure, &measure); take(.theme, &theme)
         take(.letterSpacing, &letterSpacing); take(.wordSpacing, &wordSpacing)
         take(.paragraphStyle, &paragraphStyle); take(.paragraphSpacing, &paragraphSpacing)
-        take(.align, &align); take(.highlightStyle, &highlightStyle); take(.zebra, &zebra); take(.outlineOpen, &outlineOpen)
+        take(.align, &align); take(.highlightStyle, &highlightStyle); take(.zebra, &zebra); take(.outlineOpen, &outlineOpen); take(.smartTyping, &smartTyping)
         clamp()
     }
 

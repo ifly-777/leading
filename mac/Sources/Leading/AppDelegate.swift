@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func forward(_ sel: Selector) {
         let target = (NSApp.mainWindow ?? NSApp.orderedWindows.first { $0.windowController is DocumentWindowController })?.windowController
-        _ = (target as? NSResponder)?.tryToPerform(sel, with: nil)
+        _ = target?.tryToPerform(sel, with: nil)
     }
 
     @objc func leadingFind(_ sender: Any?) { forward(#selector(ReaderActions.leadingFind(_:))) }
@@ -51,4 +51,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func leadingWider(_ sender: Any?) { forward(#selector(ReaderActions.leadingWider(_:))) }
     @objc func leadingCycleTheme(_ sender: Any?) { forward(#selector(ReaderActions.leadingCycleTheme(_:))) }
     @objc func leadingTogglePlainText(_ sender: Any?) { forward(#selector(ReaderActions.leadingTogglePlainText(_:))) }
+    @objc func leadingToggleEdit(_ sender: Any?) { forward(#selector(ReaderActions.leadingToggleEdit(_:))) }
+    @objc func leadingFindReplace(_ sender: Any?) { forward(#selector(ReaderActions.leadingFindReplace(_:))) }
 }

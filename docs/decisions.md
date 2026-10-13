@@ -2,6 +2,25 @@
 
 Short notes on choices that are not obvious from the code, and what testing showed. Newest first.
 
+## Stage 3
+
+### One text, one history
+While editing, the page's CodeMirror editor holds the text and the only undo history. Swift keeps a mirror, updated from each change set (UTF-16 offsets, the unit both sides use), and saves from it, so saving never waits on the page. A moment after typing stops, the page sends a fingerprint (FNV-1a over UTF-16 units, implemented identically in `hash.ts` and `TextMirror.swift`); if the mirror disagrees, Swift takes the page's text. Tests: 10,000 random change sets with emoji and accents in Swift, plus WebKit tests that replay the page's messages and compare.
+
+Undo lives in the page for both modes (⌘Z while reading re-renders the page), which is also where Stage 4's highlights will go, so they undo the same way.
+
+### Saving and conflicts
+Autosave in place gives File › Revert To and the version browser. The file's encoding, line endings and byte-order mark are written back as found; if an old Latin-1 file gains a character it cannot hold, it is saved as UTF-8 rather than lose it. If another app changes the file while edits are unsaved, Leading asks which to keep and puts the other version into the version history first, so neither is lost.
+
+### Find in edit mode
+The same bar as reading mode, so the query carries across ⌘E. Plain searches match the raw source with reading mode's rules (case, accents and typography ignored); the .* toggle switches to regular expressions with `$1` groups in replacements. Replace All is one undoable change.
+
+### The editor loads on demand
+CodeMirror doubled the page's script (487 KB → 984 KB). It now loads on the first ⌘E, and in the background two seconds after a document opens, so reading starts with the lighter page and ⌘E is still immediate.
+
+### Formatting toggles
+Applying a format twice restores the text exactly (500 random cases in the tests). Italic and bold read asterisk runs carefully, so italic never removes bold. Spaces at the edges of a selection stay outside the markers; a selection of only spaces acts as a cursor.
+
 ## Stage 2
 
 ### Ad-hoc signatures keep macOS's default identity (security)

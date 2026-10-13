@@ -7,6 +7,10 @@ protocol ReaderWebViewHost: AnyObject {
     func pageDidLoad(_ timings: [String: Any])
     func pageOpenLink(_ href: String)
     func pageChangedSettings(_ settings: [String: Any])
+    func pageEdited(_ edits: [[String: Any]])
+    func pageSettled(length: Int, hash: UInt32)
+    func pageHistory(canUndo: Bool, canRedo: Bool)
+    func pageMode(editing: Bool)
 }
 
 /// The web view showing one document. Holds calls until its page reports it is
@@ -38,6 +42,13 @@ final class ReaderWebView: WKWebView, WKNavigationDelegate {
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
+    /// Ask the page for its whole text (used to resync the mirror).
+    func fetchText(_ done: @escaping (String?) -> Void) {
+        callAsyncJavaScript("return window.leading.text()", arguments: [:], in: nil, in: .page) { r in
+            done((try? r.get()) as? String)
+        }
+    }
+
     /// Call `window.leading.<fn>(args)` in the page, now or once it is ready.
     /// Arguments travel as native values, so even a 5 MB document needs no escaping.
     func call(_ fn: String, _ args: [String: Any] = [:]) {
@@ -60,6 +71,11 @@ final class ReaderWebView: WKWebView, WKNavigationDelegate {
         case "loaded": host?.pageDidLoad(message["timings"] as? [String: Any] ?? [:])
         case "openLink": if let href = message["href"] as? String { host?.pageOpenLink(href) }
         case "settings": if let s = message["settings"] as? [String: Any] { host?.pageChangedSettings(s) }
+        case "edit": host?.pageEdited(message["edits"] as? [[String: Any]] ?? [])
+        case "settled":
+            host?.pageSettled(length: (message["length"] as? NSNumber)?.intValue ?? -1, hash: (message["hash"] as? NSNumber)?.uint32Value ?? 0)
+        case "history": host?.pageHistory(canUndo: message["undo"] as? Bool ?? false, canRedo: message["redo"] as? Bool ?? false)
+        case "mode": host?.pageMode(editing: message["editing"] as? Bool ?? false)
         case "log": NSLog("Leading page: %@", message["text"] as? String ?? "")
         case "overTable": overTable = message["over"] as? Bool ?? false
         case "copy":

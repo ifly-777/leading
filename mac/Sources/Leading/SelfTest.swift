@@ -99,11 +99,96 @@ enum SelfTest {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                         page.callAsyncJavaScript("const p = document.querySelector('#doc pre.plain'); return !!p && p.textContent.startsWith('# ') && !document.querySelector('#doc h1')", arguments: [:], in: nil, in: .page) { r in
                             check("Show as Plain Text shows the raw Markdown, unrendered", (try? r.get()) as? Bool == true)
-                            done()
+                            NSApp.sendAction(#selector(ReaderActions.leadingTogglePlainText(_:)), to: window.windowController, from: nil)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { editingChecks(window: window, page: page, doc: doc, check: check, done: done) }
                         }
                     }
                 }
             }
         }
+    }
+
+    /// Edit mode end to end: type, format, save, undo, back to reading.
+    private static func editingChecks(window: NSWindow, page: ReaderWebView, doc: MarkdownDocument, check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        let wc = window.windowController
+        func js(_ code: String, _ then: @escaping (Any?) -> Void) {
+            page.callAsyncJavaScript(code, arguments: [:], in: nil, in: .page) { r in then(try? r.get()) }
+        }
+        func later(_ s: Double, _ f: @escaping () -> Void) { DispatchQueue.main.asyncAfter(deadline: .now() + s, execute: f) }
+        NSApp.sendAction(#selector(ReaderActions.leadingToggleEdit(_:)), to: wc, from: nil)
+        later(0.8) {
+            js("return !document.getElementById('editor').hidden && !!document.querySelector('#editor .cm-content')") { v in
+                check("Edit Source (⌘E) shows the source editor", v as? Bool == true)
+                // Type at the start, as a person would, through the editor.
+                js("const v = window.leading.view.editor.view; v.dispatch({ changes: { from: 0, insert: 'Selftest typed here. ' }, userEvent: 'input.type' }); return true") { _ in
+                    later(1.4) { // past the 0.8 s pause that triggers the fingerprint check
+                        js("return window.leading.text()") { t in
+                            let pageText = t as? String ?? ""
+                            check("Swift's copy matches the editor after typing", doc.text == pageText && pageText.hasPrefix("Selftest typed here. "))
+                            // Bold the word "Selftest" with the Format menu command.
+                            js("window.leading.view.editor.view.dispatch({ selection: { anchor: 0, head: 8 } }); return true") { _ in
+                                NSApp.sendAction(#selector(ReaderActions.leadingBold(_:)), to: wc, from: nil)
+                                later(0.4) {
+                                    check("Format › Bold wraps the selection in **", doc.text.hasPrefix("**Selftest** typed here. "))
+                                    // Save, then read the file back from disk.
+                                    doc.save(withDelegate: nil, didSave: nil, contextInfo: nil)
+                                    later(1.0) {
+                                        let onDisk = (try? String(contentsOf: doc.fileURL!, encoding: .utf8)) ?? ""
+                                        check("Saving writes exactly the edited text to the file", onDisk == doc.text)
+                                        NSApp.sendAction(#selector(ReaderActions.leadingUndo(_:)), to: wc, from: nil)
+                                        later(0.5) {
+                                            check("Undo removes the bold, in the editor and Swift's copy", doc.text.hasPrefix("Selftest typed here. "))
+                                            NSApp.sendAction(#selector(ReaderActions.leadingToggleEdit(_:)), to: wc, from: nil)
+                                            later(1.2) {
+                                                js("return document.getElementById('editor').hidden && document.getElementById('doc').textContent.includes('Selftest typed here.')") { v in
+                                                    check("Back in reading mode, the page shows the edited text", v as? Bool == true)
+                                                    conflictCheck(window: window, page: page, doc: doc, check: check, done: done)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Another app changes the file while there are unsaved edits: Leading asks,
+    /// "Keep My Edits" saves ours, and theirs goes into the version history.
+    private static func conflictCheck(window: NSWindow, page: ReaderWebView, doc: MarkdownDocument, check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        guard let url = doc.fileURL else { return done() }
+        let theirs = "Written by another app \(Int.random(in: 1000...9999))"
+        let before = NSFileVersion.otherVersionsOfItem(at: url)?.count ?? 0
+        // An edit of ours that is not saved yet…
+        page.callAsyncJavaScript("const v = window.leading.view.editor.view; v.dispatch({ changes: { from: v.state.doc.length, insert: '\\nMy unsaved line.\\n' } }); return true", arguments: [:], in: nil, in: .page) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                // …and at the same moment another app rewrites the file.
+                try? (theirs + "\n").write(to: url, atomically: true, encoding: .utf8)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    let sheet = window.attachedSheet
+                    check("Leading asks which version to keep", sheet != nil)
+                    let keep = sheet.flatMap { s in Self.button(in: s.contentView, titled: "Keep My Edits") }
+                    keep?.performClick(nil)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        let onDisk = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+                        check("Keep My Edits saves our text over theirs", onDisk.contains("My unsaved line.") && !onDisk.contains(theirs))
+                        let versions = NSFileVersion.otherVersionsOfItem(at: url) ?? []
+                        let saved = versions.contains { v in ((try? String(contentsOf: v.url, encoding: .utf8)) ?? "").contains(theirs) }
+                        check("…and their text is kept in the version history (\(before) → \(versions.count) versions)", saved)
+                        done()
+                    }
+                }
+            }
+        }
+    }
+
+    private static func button(in view: NSView?, titled title: String) -> NSButton? {
+        guard let view else { return nil }
+        if let b = view as? NSButton, b.title == title { return b }
+        for v in view.subviews { if let b = button(in: v, titled: title) { return b } }
+        return nil
     }
 }

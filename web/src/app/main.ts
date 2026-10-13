@@ -16,6 +16,10 @@ type ToSwift =
   | { type: 'openLink'; href: string }
   | { type: 'overTable'; over: boolean }
   | { type: 'copy'; text: string }
+  | { type: 'edit'; edits: { from: number; to: number; insert: string }[] }
+  | { type: 'settled'; length: number; hash: number }
+  | { type: 'history'; undo: boolean; redo: boolean }
+  | { type: 'mode'; editing: boolean }
 
 const post = (m: ToSwift | { type: 'log'; text: string }) => (window as any).webkit?.messageHandlers?.leading?.postMessage(m)
 
@@ -26,13 +30,20 @@ window.addEventListener('unhandledrejection', (e) => post({ type: 'log', text: `
 const $ = (id: string) => document.getElementById(id)!
 
 const view = new ReaderView({
-  win: $('window'), scroller: $('scroller'), doc: $('doc'), layer: $('layer'), ticks: $('ticks'), frame: $('frame'), outline: $('outline'),
+  win: $('window'), scroller: $('scroller'), doc: $('doc'), layer: $('layer'), ticks: $('ticks'), frame: $('frame'), outline: $('outline'), editor: $('editor'),
 })
 
 // Start the parsing workers now, before any file arrives, so they are warm.
 warmPool()
 
 view.onSettingsChanged = (settings) => post({ type: 'settings', settings })
+// Editing: Swift keeps a mirror of the text and saves from it.
+view.editHost = {
+  onEdit: (edits) => post({ type: 'edit', edits }),
+  onSettled: (length, hash) => post({ type: 'settled', length, hash }),
+  onHistory: (undo, redo) => post({ type: 'history', undo, redo }),
+  onMode: (editing) => post({ type: 'mode', editing }),
+}
 view.reader.onFirstPaint = (ms) => post({ type: 'painted', ms })
 view.tables.onHoverChange = (over) => post({ type: 'overTable', over })
 view.tables.onCopyCSV = (text) => post({ type: 'copy', text })
@@ -54,12 +65,12 @@ document.addEventListener('click', (e) => {
 
 ;(window as any).leading = {
   /** Show a document (called by Swift when a file opens or changes on disk). */
-  async load(args: { text?: string; textURL?: string; imageBase: string | null; plain?: boolean; keepPlace?: boolean }) {
+  async load(args: { text?: string; textURL?: string; imageBase: string | null; plain?: boolean; keepPlace?: boolean; fromDisk?: boolean }) {
     // Small files arrive inline; large ones are fetched from the app's private address.
     const text = args.text ?? (await (await fetch(args.textURL!)).text())
     let r
     try {
-      r = await view.open(text, { imageBase: args.imageBase, plain: args.plain, keepPlace: args.keepPlace })
+      r = await view.open(text, { imageBase: args.imageBase, plain: args.plain, keepPlace: args.keepPlace, fromDisk: args.fromDisk })
     } catch (e) {
       post({ type: 'log', text: `open failed: ${(e as Error)?.stack ?? e}` })
       throw e
@@ -83,7 +94,9 @@ document.addEventListener('click', (e) => {
     if (args.tuning) view.tuning = args.tuning
     await view.apply()
   },
-  command(args: { name: Command }) { view.command(args.name) },
+  command(args: { name: Command }) { return view.command(args.name) },
+  /** The whole current text: Swift asks for it if its copy ever disagrees. */
+  text() { return view.editor?.exists ? view.editor.text : null },
   /** Right-click "Copy Table as CSV": the table under the pointer. */
   copyTableAsCSV() { if (view.tables.hovered) post({ type: 'copy', text: tableToCSV(view.tables.hovered) }) },
   /** For the measuring script and tests. */

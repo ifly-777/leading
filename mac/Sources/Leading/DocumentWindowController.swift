@@ -12,6 +12,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     // before showing it would backfire: WebKit pauses rendering in a window
     // that is not on screen, so the page could not paint until it appeared.
     private var painted = false
+    private var editing = false
+    private var canUndo = false
+    private var canRedo = false
     private let aaPopover = NSPopover()
 
     private var doc: MarkdownDocument? { document as? MarkdownDocument }
@@ -60,19 +63,22 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     // MARK: Talking to the page
 
-    func sendDocument(keepPlace: Bool) {
-        if let doc { sendDocument(doc, keepPlace: keepPlace) }
+    /// Show the document's text. `fromDisk`: it came from the file (changed
+    /// elsewhere, or a version restored), so the editor starts again from it.
+    func sendDocument(keepPlace: Bool, fromDisk: Bool = false) {
+        if let doc { sendDocument(doc, keepPlace: keepPlace, fromDisk: fromDisk) }
     }
 
-    private func sendDocument(_ doc: MarkdownDocument, keepPlace: Bool) {
-        var args: [String: Any] = ["imageBase": imageBase, "plain": doc.showsPlainText, "keepPlace": keepPlace]
+    private func sendDocument(_ doc: MarkdownDocument, keepPlace: Bool, fromDisk: Bool = false) {
+        var args: [String: Any] = ["imageBase": imageBase, "plain": doc.showsPlainText, "keepPlace": keepPlace, "fromDisk": fromDisk]
+        let text = doc.text
         // Small files travel inline with the call (quickest). Large ones are
         // fetched by the page instead: passing megabytes as a script argument
         // costs a quarter of a second, a fetch a few milliseconds.
-        if doc.file.text.utf8.count < 200_000 {
-            args["text"] = doc.file.text
+        if text.utf8.count < 200_000 {
+            args["text"] = text
         } else {
-            args["textURL"] = SchemeHandler.shared.setText(doc.file.text, base: imageBase)
+            args["textURL"] = SchemeHandler.shared.setText(text, base: imageBase)
         }
         web.call("load", args)
     }
@@ -121,6 +127,41 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         SettingsStore.shared.update(fromPage: settings)
     }
 
+    // MARK: Editing
+
+    func pageEdited(_ edits: [[String: Any]]) {
+        guard let doc else { return }
+        let changes = edits.compactMap { e -> TextMirror.Change? in
+            guard let from = (e["from"] as? NSNumber)?.intValue, let to = (e["to"] as? NSNumber)?.intValue else { return nil }
+            return TextMirror.Change(from: from, to: to, insert: e["insert"] as? String ?? "")
+        }
+        if changes.count != edits.count || !doc.applyEdits(changes) { resync() }
+    }
+
+    /// Typing paused: confirm Swift's copy matches the editor's, or take the editor's.
+    func pageSettled(length: Int, hash: UInt32) {
+        guard let doc else { return }
+        if doc.mirror.utf16Count != length || doc.mirror.fingerprint != hash {
+            NSLog("Leading: the saved copy of %@ disagreed with the editor; taking the editor's text", doc.displayName)
+            resync()
+        }
+    }
+
+    private func resync() {
+        web.fetchText { [weak self] text in
+            if let text, let doc = self?.doc { doc.resync(text) }
+        }
+    }
+
+    func pageHistory(canUndo: Bool, canRedo: Bool) {
+        self.canUndo = canUndo
+        self.canRedo = canRedo
+    }
+
+    func pageMode(editing: Bool) {
+        self.editing = editing
+    }
+
     func pageOpenLink(_ href: String) {
         switch Paths.linkTarget(href, document: doc?.fileURL) {
         case .external(let url): NSWorkspace.shared.open(url)
@@ -145,6 +186,17 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingNarrower(_ sender: Any?) { command("narrower") }
     @objc func leadingWider(_ sender: Any?) { command("wider") }
     @objc func leadingCycleTheme(_ sender: Any?) { command("cycleTheme") }
+    @objc func leadingToggleEdit(_ sender: Any?) { command("toggleEdit") }
+    @objc func leadingFindReplace(_ sender: Any?) { command("findReplace") }
+    @objc func leadingUndo(_ sender: Any?) { command("undo") }
+    @objc func leadingRedo(_ sender: Any?) { command("redo") }
+    @objc func leadingBold(_ sender: Any?) { command("bold") }
+    @objc func leadingItalic(_ sender: Any?) { command("italic") }
+    @objc func leadingUnderline(_ sender: Any?) { command("underline") }
+    @objc func leadingStrike(_ sender: Any?) { command("strike") }
+    @objc func leadingCode(_ sender: Any?) { command("code") }
+    @objc func leadingLink(_ sender: Any?) { command("link") }
+    @objc func leadingToggleSmartTyping(_ sender: Any?) { SettingsStore.shared.settings.smartTyping.toggle() }
     @objc func leadingTogglePlainText(_ sender: Any?) {
         guard let doc else { return }
         doc.showsPlainText.toggle()
@@ -157,6 +209,18 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             item.title = SettingsStore.shared.settings.outlineOpen ? "Hide Outline" : "Show Outline"
         case #selector(leadingTogglePlainText(_:)):
             item.state = doc?.showsPlainText == true ? .on : .off
+            return !editing
+        case #selector(leadingToggleEdit(_:)):
+            item.title = editing ? "Read" : "Edit Source"
+        case #selector(leadingUndo(_:)): return canUndo
+        case #selector(leadingRedo(_:)): return canRedo
+        // Formatting and Replace change the file, so they exist only while editing.
+        case #selector(leadingBold(_:)), #selector(leadingItalic(_:)), #selector(leadingUnderline(_:)),
+             #selector(leadingStrike(_:)), #selector(leadingCode(_:)), #selector(leadingLink(_:)),
+             #selector(leadingFindReplace(_:)):
+            return editing
+        case #selector(leadingToggleSmartTyping(_:)):
+            item.state = SettingsStore.shared.settings.smartTyping ? .on : .off
         default: break
         }
         return true

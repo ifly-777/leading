@@ -18,28 +18,36 @@ enum MainMenu {
             item("Quit \(name)", #selector(NSApplication.terminate(_:)), "q"),
         ])
 
-        let recent = NSMenu(title: "Open Recent")
-        // AppKit fills this submenu itself once it sees the Clear Menu action in it.
-        recent.addItem(item("Clear Menu", #selector(NSDocumentController.clearRecentDocuments(_:))))
-        let recentItem = NSMenuItem(title: "Open Recent", action: nil, keyEquivalent: "")
-        recentItem.submenu = recent
         bar.addSubmenu("File", [
+            // macOS adds Open Recent (and Close All, Share) to a document app's File menu itself.
             item("Open…", #selector(NSDocumentController.openDocument(_:)), "o"),
-            recentItem,
             .separator(),
             item("Close", #selector(NSWindow.performClose(_:)), "w"),
+            item("Save", #selector(NSDocument.save(_:)), "s"),
+            item("Duplicate", #selector(NSDocument.duplicate(_:)), "s", [.command, .shift]),
+            item("Rename…", #selector(NSDocument.rename(_:))),
+            item("Move To…", #selector(NSDocument.move(_:))),
+            // With autosave, AppKit turns this into the Revert To submenu (Last Opened, Browse All Versions…).
+            item("Revert To Saved", #selector(NSDocument.revertToSaved(_:))),
         ])
 
         let find = NSMenu(title: "Find")
         find.items = [
             item("Find…", #selector(ReaderActions.leadingFind(_:)), "f"),
+            item("Find and Replace…", #selector(ReaderActions.leadingFindReplace(_:)), "f", [.command, .option]),
             item("Find Next", #selector(ReaderActions.leadingFindNext(_:)), "g"),
             item("Find Previous", #selector(ReaderActions.leadingFindPrevious(_:)), "g", [.command, .shift]),
         ]
         let findItem = NSMenuItem(title: "Find", action: nil, keyEquivalent: "")
         findItem.submenu = find
         bar.addSubmenu("Edit", [
+            // The page's editor keeps the one undo history (it includes highlights in Stage 4).
+            item("Undo", #selector(ReaderActions.leadingUndo(_:)), "z"),
+            item("Redo", #selector(ReaderActions.leadingRedo(_:)), "z", [.command, .shift]),
+            .separator(),
+            item("Cut", #selector(NSText.cut(_:)), "x"),
             item("Copy", #selector(NSText.copy(_:)), "c"),
+            item("Paste", #selector(NSText.paste(_:)), "v"),
             item("Select All", #selector(NSText.selectAll(_:)), "a"),
             .separator(),
             findItem,
@@ -50,7 +58,19 @@ enum MainMenu {
         let biggerAlias = item("Bigger", #selector(ReaderActions.leadingBigger(_:)), "=")
         biggerAlias.isHidden = true
         biggerAlias.allowsKeyEquivalentWhenHidden = true
+        bar.addSubmenu("Format", [
+            item("Bold", #selector(ReaderActions.leadingBold(_:)), "b"),
+            item("Italic", #selector(ReaderActions.leadingItalic(_:)), "i"),
+            item("Underline", #selector(ReaderActions.leadingUnderline(_:)), "u"),
+            item("Strikethrough", #selector(ReaderActions.leadingStrike(_:)), "x", [.command, .shift]),
+            item("Code", #selector(ReaderActions.leadingCode(_:)), "c", [.command, .option]),
+            item("Link…", #selector(ReaderActions.leadingLink(_:)), "k"),
+            .separator(),
+            item("Smart Punctuation While Typing", #selector(ReaderActions.leadingToggleSmartTyping(_:))),
+        ])
         bar.addSubmenu("View", [
+            item("Edit Source", #selector(ReaderActions.leadingToggleEdit(_:)), "e"),
+            .separator(),
             item("Show Outline", #selector(ReaderActions.leadingToggleOutline(_:)), "o", [.command, .option]),
             .separator(),
             bigger, biggerAlias,
@@ -116,4 +136,15 @@ private extension NSMenu {
     func leadingWider(_ sender: Any?)
     func leadingCycleTheme(_ sender: Any?)
     func leadingTogglePlainText(_ sender: Any?)
+    func leadingToggleEdit(_ sender: Any?)
+    func leadingFindReplace(_ sender: Any?)
+    func leadingUndo(_ sender: Any?)
+    func leadingRedo(_ sender: Any?)
+    func leadingBold(_ sender: Any?)
+    func leadingItalic(_ sender: Any?)
+    func leadingUnderline(_ sender: Any?)
+    func leadingStrike(_ sender: Any?)
+    func leadingCode(_ sender: Any?)
+    func leadingLink(_ sender: Any?)
+    func leadingToggleSmartTyping(_ sender: Any?)
 }
