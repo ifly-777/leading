@@ -73,9 +73,30 @@ export class TableWatcher {
     const bleed = el.parentElement as HTMLElement
     const table = el.firstElementChild as HTMLElement
     el.classList.remove('scrolls')
+    bleed.classList.remove('placed')
+    bleed.style.removeProperty('margin-left')
+    bleed.style.removeProperty('width')
     bleed.classList.add('in-column')
     // Laid out at the column's width, a table that cannot shrink that far overflows it.
-    if (table.offsetWidth > bleed.clientWidth + 1) bleed.classList.remove('in-column')
+    const colW = bleed.clientWidth
+    if (table.offsetWidth > colW + 1) {
+      bleed.classList.remove('in-column')
+      // Its own width, given all the room there is.
+      const tw = table.offsetWidth
+      const root = getComputedStyle(document.documentElement)
+      const availW = parseFloat(root.getPropertyValue('--avail-w'))
+      const availOff = parseFloat(root.getPropertyValue('--avail-offset'))
+      if (tw < availW - 1 && Number.isFinite(availOff)) {
+        // Step out evenly on both sides of the text column, moving over only
+        // as far as the window's edge (or the outline) makes it.
+        let left = -(tw - colW) / 2
+        left = Math.min(left, availOff + availW - tw)
+        left = Math.max(left, availOff)
+        bleed.classList.add('placed')
+        bleed.style.marginLeft = Math.floor(left) + 'px' // down, so it never crosses the edge it was kept from
+        bleed.style.width = Math.ceil(tw) + 'px'
+      }
+    }
     el.classList.toggle('scrolls', table.scrollWidth > el.clientWidth + 1)
     this.fade(el)
   }

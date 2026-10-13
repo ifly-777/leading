@@ -190,6 +190,8 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .doc .table-scroll { max-width: 100%; position: relative; }
 /* A table that fits the reading column stays in it, aligned with the prose. */
 .doc .table-bleed.in-column { width: auto; margin-left: 0; justify-content: flex-start; }
+/* Wider than the column but not the window: placed by tables.ts, centred on the column. */
+.doc .table-bleed.placed { justify-content: flex-start; }
 /* A table written without a header (an empty first row) shows none. */
 .doc table.headless thead { display: none; }
 .doc .table-scroll.scrolls {

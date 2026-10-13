@@ -72,3 +72,26 @@ test('a two-column table that can wrap stays in the reading column; an empty hea
   expect(geo.tRight).toBeLessThanOrEqual(geo.pRight + 1) // and no wider than the column
   expect(geo.headShown).toBe(false)
 })
+
+test('a table a little wider than the column steps out evenly, and never under the outline', async ({ page }) => {
+  // The narrow column, so the small numeric table no longer fits in it.
+  const place = () => page.evaluate(() => {
+    const t = document.querySelector('.doc .table-bleed table')!.getBoundingClientRect()
+    const d = document.getElementById('doc')!.getBoundingClientRect()
+    const o = document.getElementById('outline')!
+    return { tl: t.left, tr: t.right, cl: d.left, cr: d.right, ol: o.hidden ? Infinity : o.getBoundingClientRect().left }
+  })
+  await page.evaluate(async () => { const v = (window as any).leading.view; await v.change({ measure: 'narrow', size: 20, outlineOpen: false }) })
+  await page.setViewportSize({ width: 1300, height: 700 })
+  await page.waitForTimeout(200)
+  let p = await place()
+  expect(p.tr - p.tl).toBeGreaterThan(p.cr - p.cl) // it does need more room than the column
+  expect(Math.abs((p.cl - p.tl) - (p.tr - p.cr))).toBeLessThan(2) // equally on both sides
+  // With the outline open beside the text, it may only step left.
+  await page.evaluate(async () => { await (window as any).leading.view.change({ outlineOpen: true }) })
+  await page.waitForTimeout(200)
+  p = await place()
+  expect(p.tr).toBeLessThanOrEqual(p.cr + 2) // layout figures are whole pixels
+  expect(p.tr).toBeLessThan(p.ol)
+  expect(p.tl).toBeLessThan(p.cl)
+})
