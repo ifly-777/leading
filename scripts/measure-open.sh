@@ -14,7 +14,8 @@ LOG="$WORK/timing.jsonl"
 FIX="$ROOT/web/test/fixtures"
 [ -f "$FIX/stress-5mb.md" ] || node "$ROOT/web/scripts/gen-stress.mjs" >/dev/null
 
-lines() { [ -f "$LOG" ] && wc -l < "$LOG" | tr -d ' ' || echo 0; }
+# Count only first-paint records; the log also holds "loaded" records.
+lines() { [ -f "$LOG" ] && grep -c sinceOpenMs "$LOG" || true; }
 wait_for_line() { # wait until the log has more than $1 lines (10 s at most)
   for _ in $(seq 1 100); do [ "$(lines)" -gt "$1" ] && return 0; sleep 0.1; done; echo "  (timed out)" >&2; return 1
 }
@@ -32,15 +33,15 @@ for f in prose.md tables.md stress-5mb.md; do
     n=$(lines)
     copy="$WORK/$RANDOM-$f"; cp "$FIX/$f" "$copy"
     # -ApplePersistenceIgnoreState: do not reopen last session's windows, so only this file is timed.
-    open --env LEADING_TIMING_LOG="$LOG" -a "$APP" "$copy" --args -ApplePersistenceIgnoreState YES
+    open -n --env LEADING_TIMING_LOG="$LOG" -a "$APP" "$copy" --args -ApplePersistenceIgnoreState YES
     wait_for_line "$n"
     sleep 0.5
   done
-  cold=$(python3 -c "import json,statistics as s;v=[json.loads(l)['sinceLaunchMs'] for l in open('$LOG') if 'sinceLaunchMs' in l];print(f'median {s.median(v):5.0f} ms   worst {max(v):5.0f} ms') if v else print('no data')")
+  cold=$(python3 -c "import json,statistics as s;v=[json.loads(l)['sinceLaunchMs'] for l in open('$LOG') if 'sinceLaunchMs' in l and 'sinceOpenMs' in l];print(f'median {s.median(v):5.0f} ms   worst {max(v):5.0f} ms') if v else print('no data')")
   # Warm: the app is running from the last cold run.
   : > "$LOG.warm"
   for _ in $(seq 1 "$RUNS"); do
-    n=$(lines); open_in_app "$FIX/$f"; wait_for_line "$n"; tail -1 "$LOG" >> "$LOG.warm"; sleep 0.6
+    n=$(lines); open_in_app "$FIX/$f"; wait_for_line "$n"; grep sinceOpenMs "$LOG" | tail -1 >> "$LOG.warm"; sleep 0.6
   done
   warm=$(python3 -c "import json,statistics as s;v=[json.loads(l)['sinceOpenMs'] for l in open('$LOG.warm')];print(f'median {s.median(v):5.0f} ms   worst {max(v):5.0f} ms') if v else print('no data')")
   printf "%-15s cold: %s\n%-15s warm: %s\n" "$f" "$cold" "" "$warm"
