@@ -47,6 +47,8 @@ mkdir -p "$APP/Contents/Frameworks"
 SPARKLE="$ROOT/mac/Vendor/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
 cp "$ROOT/mac/Resources/Credits.html" "$APP/Contents/Resources/"
+# Opened (as a copy) on the first launch and from Help › Welcome to Leading.
+cp "$ROOT/mac/Resources/Welcome to Leading.md" "$APP/Contents/Resources/"
 # The icon: layers made in the Icon Composer format, which macOS 26 lights and
 # tints itself; actool (part of Xcode) also writes a flat copy for older places.
 xcrun actool "$ROOT/mac/Resources/AppIcon.icon" --compile "$APP/Contents/Resources" --platform macosx \

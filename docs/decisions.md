@@ -2,6 +2,30 @@
 
 Short notes on choices that are not obvious from the code, and what testing showed. Newest first.
 
+## Stage 5
+
+### Releases are made on the release Mac, not on CI
+The update-signing key (EdDSA) was generated with Sparkle's `generate_keys` and lives only in this Mac's login Keychain, under the account `io.github.ifly-777.leading`. Putting it in a GitHub secret would let anyone who gained write access to the repository's workflows sign updates. So `scripts/release.sh` builds, packs and signs here, checks that the key compiled into the app is the Keychain's, verifies the signature, and only publishes with `--publish`. The Release workflow on CI still builds the DMG on a clean Mac, as a check that the repository alone is enough.
+
+Losing the key would strand every installed copy: they would refuse all future updates. It needs a backup (`generate_keys -x`) in a password manager.
+
+### The update feed
+Each release carries an `appcast.xml` naming only itself; the app reads `releases/latest/download/appcast.xml`, which GitHub redirects to the newest release's copy. Release notes are Markdown in `docs/releases/<version>.md`, shown formatted by Sparkle and used for the GitHub release. The feed works only once the repository is public.
+
+End-to-end test with the real key: a 0.9.9 build read a local copy of the 1.0.0 feed, downloaded the zip, verified it and installed it. The result had a valid signature, no quarantine flag, and was identical to the release build.
+
+### Updates stay off until the reader says yes
+The first-launch question has the update box unticked. Sparkle is created only when checks are on or the reader chooses Check for Updates…, and its own automatic-check setting is set from Leading's record of the answer each time it starts. A reader who says no never causes a network request; one test run confirmed no Sparkle preferences were written at all.
+
+### First launch
+Launched with no file for the first time, Leading opens the welcome document, then asks two things over it: open Markdown files with Leading (ticked; hidden if it already does) and check for updates (unticked). The welcome document is copied to `~/Library/Application Support/Leading/` and opened from there, because highlighting or editing it would otherwise write inside the app and break its signature. If Leading is running from the disk image or from macOS's translocation folder, it asks the reader to move it to Applications first and asks the two questions next time: a default app or an update in a temporary place would not last.
+
+### The disk image
+`dmgbuild` writes Finder's layout file directly, so the DMG needs no scripting of Finder and builds the same on CI. It is installed into `build/.dmg-venv` at pinned versions with pinned hashes, and needs Python 3.10 or later. The background and the "If macOS blocks Leading" guide are HTML in `mac/Resources/dmg/`, rendered by WebKit (`scripts/render.swift`) in the app's own fonts. Finder counts its title bar in the window size, so the window is 28 pt taller than the background.
+
+### Gatekeeper on this Mac cannot show the first-run block
+A quarantined copy of a build that had already run here was let through (macOS remembers code it has allowed by its hash) and ran from the translocation folder. A copy with an unseen hash was held at launch as expected. The warning is drawn by a system process that screenshots here cannot capture, and the "was blocked" line in Privacy & Security appears only after the warning is dismissed, so the guide's drawings follow the published wording for macOS 15 and later, to be checked against a real first install.
+
 ## Between Stages 4 and 5
 
 ### First feedback from real use

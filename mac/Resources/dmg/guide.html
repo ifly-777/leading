@@ -1,0 +1,106 @@
+<!doctype html>
+<!-- "If macOS blocks Leading.pdf", in the disk image. One A4 page (595 × 842 pt),
+     rendered by scripts/render.swift. The dialogs are drawn, not screenshots,
+     so they stay legible and match the wording of macOS 15 and later. -->
+<html lang="en">
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Literata"; src: url("../../../web/fonts/literata/Literata-VF.ttf"); font-weight: 200 900; }
+  @font-face { font-family: "Literata"; src: url("../../../web/fonts/literata/Literata-Italic-VF.ttf"); font-weight: 200 900; font-style: italic; }
+  :root { --paper: #FBF8F2; --ink: #2B2824; --soft: #6E675E; --rule: #E4DED3; --accent: #F2C94C; --blue: #2F6FEB; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 595px; height: 842px; background: var(--paper); color: var(--ink); }
+  body { padding: 40px 50px 0; font: 10.3px/1.45 "Literata", Georgia, serif; }
+  h1 { font-size: 25px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.15; }
+  .lede { margin-top: 8px; font-size: 11.2px; color: var(--ink); max-width: 470px; }
+  .lede em { font-style: italic; }
+  ol { list-style: none; padding: 0; margin-top: 16px; }
+  li { display: grid; grid-template-columns: 26px 1fr 228px; column-gap: 14px; padding: 13px 0; border-top: 1px solid var(--rule); align-items: start; }
+  .n { font-size: 22px; font-weight: 600; line-height: 1; color: var(--soft); }
+  h2 { font-size: 12.5px; font-weight: 600; margin-bottom: 4px; }
+  p + p { margin-top: 5px; }
+  b { font-weight: 600; }
+  .ui { font-family: -apple-system, "SF Pro Text", sans-serif; }
+  /* Drawn stand-ins for macOS's own windows */
+  .dialog { font-family: -apple-system, sans-serif; background: #F3F1EE; border-radius: 13px; padding: 14px 14px 12px; text-align: center;
+            box-shadow: 0 0 0 0.5px rgba(0,0,0,.18), 0 6px 18px rgba(0,0,0,.12); font-size: 9.3px; line-height: 1.35; color: #222; }
+  .dialog .icon { width: 30px; height: 30px; margin: 0 auto 7px; border-radius: 7px; background: linear-gradient(#fff, #e9e5df); box-shadow: 0 0 0 0.5px rgba(0,0,0,.2);
+                  font: 600 18px/30px "Literata", serif; color: #2B2824; position: relative; }
+  .dialog .icon::after { content: ""; position: absolute; left: 6px; right: 6px; bottom: 7px; height: 4px; background: var(--accent); opacity: .8; border-radius: 2px; }
+  .dialog .title { font-weight: 700; font-size: 10.2px; margin-bottom: 4px; }
+  .dialog .btn { display: block; margin-top: 6px; padding: 4px 0; border-radius: 7px; background: #E2DFDA; font-size: 9.5px; }
+  .dialog .btn.go { background: var(--blue); color: #fff; }
+  .ring { outline: 2.5px solid #E8833A; outline-offset: 2px; }
+  .settings { font-family: -apple-system, sans-serif; background: #F3F1EE; border-radius: 10px; padding: 10px 11px; font-size: 9.2px; color: #222;
+              box-shadow: 0 0 0 0.5px rgba(0,0,0,.18), 0 6px 18px rgba(0,0,0,.10); }
+  .settings .head { font-weight: 700; font-size: 10px; margin-bottom: 6px; }
+  .settings .row { background: #fff; border-radius: 6px; padding: 7px 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .settings .row + .row { margin-top: 5px; }
+  .settings .muted { color: #8A847C; }
+  .settings .pill { padding: 3px 8px; border-radius: 6px; background: #E2DFDA; white-space: nowrap; }
+  .after { padding: 13px 0 0; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; column-gap: 26px; }
+  .after h2 { font-size: 11.5px; }
+  .foot { position: absolute; left: 50px; right: 50px; bottom: 26px; font-size: 9px; color: var(--soft); display: flex; justify-content: space-between; }
+</style>
+
+<h1>If macOS blocks Leading</h1>
+<p class="lede">Leading is free, and is not signed with Apple’s paid developer certificate. So the first time you open it, macOS stops it and says it <em>could not verify</em> it. Letting it through takes a minute, and you only do it once: updates do not ask again.</p>
+
+<ol>
+  <li>
+    <div class="n">1</div>
+    <div>
+      <h2>Open Leading, then click Done</h2>
+      <p>First drag Leading into the Applications folder, and open it from there. macOS shows the message on the right.</p>
+      <p>Click <b class="ui">Done</b>. Not Move to Trash.</p>
+    </div>
+    <div class="dialog">
+      <div class="icon">L</div>
+      <div class="title">“Leading” Not Opened</div>
+      <div>Apple could not verify “Leading” is free of malware that may harm your Mac or compromise your privacy.</div>
+      <span class="btn go ring">Done</span>
+      <span class="btn">Move to Trash</span>
+    </div>
+  </li>
+  <li>
+    <div class="n">2</div>
+    <div>
+      <h2>Open Anyway, in System Settings</h2>
+      <p>Open <b class="ui">System Settings</b> from the Apple menu, and choose <b class="ui">Privacy &amp; Security</b> in the sidebar.</p>
+      <p>Scroll down to <b class="ui">Security</b>. Beside “Leading” was blocked to protect your Mac, click <b class="ui">Open Anyway</b>.</p>
+    </div>
+    <div class="settings">
+      <div class="head">Security</div>
+            <div class="row"><span>“Leading” was blocked to protect your Mac.</span><span class="pill ring">Open Anyway</span></div>
+    </div>
+  </li>
+  <li>
+    <div class="n">3</div>
+    <div>
+      <h2>Confirm it’s you</h2>
+      <p>macOS asks once more. Click <b class="ui">Open Anyway</b>, and confirm with Touch ID or the password you use to log in to your Mac.</p>
+      <p>Leading opens. From now on it opens like any other app.</p>
+    </div>
+    <div class="dialog">
+      <div class="icon">L</div>
+      <div class="title">Open “Leading”?</div>
+      <div>Apple is not able to verify that it is free from malware. Open it only if you trust where it came from.</div>
+      <span class="btn go ring">Open Anyway</span>
+      <span class="btn">Move to Trash</span>
+    </div>
+  </li>
+</ol>
+
+<div class="after">
+  <div>
+    <h2>Why this happens</h2>
+    <p>Apple charges developers a yearly fee to have their apps verified. Leading is a free, one-person project, so it is signed without that certificate. macOS treats any such app this way.</p>
+  </div>
+  <div>
+    <h2>Is it safe?</h2>
+    <p>Leading’s source code is public, so anyone can read what it does. It has no account, collects nothing and sends nothing. Download it only from its GitHub page, below.</p>
+  </div>
+</div>
+
+<div class="foot"><span>github.com/ifly-777/leading</span><span>Leading @VERSION@</span></div>
+</html>

@@ -11,15 +11,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Updates.shared.startIfEnabled()
+        // The first-launch questions wait until the first window has appeared,
+        // so they sit over the welcome document (or the file being opened).
+        if FirstRun.isFirst { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { FirstRun.ask() } }
     }
 
     // Launched without a file (from the Dock or Launchpad), or the Dock icon
     // clicked with no windows open: a blank page, ready to write in. Closing
     // it with text in it brings macOS's own "keep this new document?" question;
-    // quitting keeps it for next time. (Stage 5 shows the welcome document on
-    // the very first launch instead.)
+    // quitting keeps it for next time. The very first launch shows the
+    // welcome document instead.
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
-        ProcessInfo.processInfo.environment["LEADING_SPIKE_UPDATE"] != "1"
+        if FirstRun.isFirst {
+            FirstRun.openWelcome()
+            return false
+        }
+        return ProcessInfo.processInfo.environment["LEADING_SPIKE_UPDATE"] != "1"
+    }
+
+    // MARK: Help
+
+    @objc func showWelcome(_ sender: Any?) { FirstRun.openWelcome() }
+
+    @objc func showWebsite(_ sender: Any?) {
+        NSWorkspace.shared.open(URL(string: "https://github.com/ifly-777/leading")!)
     }
 
     // Document apps stay running with no windows, as on every Mac.

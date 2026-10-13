@@ -2,19 +2,63 @@ import AppKit
 import LeadingCore
 import SwiftUI
 
-/// Leading › Settings… (⌘,): the five highlight colours, as Leading shows
-/// them on light and on dark paper. Changing one alters only the display; the
-/// colour written into files stays the standard one, so Obsidian and other
-/// apps see the same highlights as before.
+/// Leading › Settings… (⌘,): updates and the default app for Markdown, then
+/// the five highlight colours, as Leading shows them on light and on dark
+/// paper. Changing a colour alters only the display; the colour written into
+/// files stays the standard one, so Obsidian and other apps see the same
+/// highlights as before.
 enum SettingsWindow {
     static func make() -> NSWindowController {
-        let host = NSHostingController(rootView: HighlightColorsView())
+        let host = NSHostingController(rootView: SettingsView())
         host.sizingOptions = .preferredContentSize
         let window = NSWindow(contentViewController: host)
         window.title = "Settings"
         window.styleMask = [.titled, .closable]
         window.setFrameAutosaveName("Settings")
         return NSWindowController(window: window)
+    }
+}
+
+struct SettingsView: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            GeneralSettingsView()
+            Divider()
+            HighlightColorsView()
+        }
+        .padding(20)
+        .frame(width: 400)
+    }
+}
+
+/// The two first-launch questions, open to change.
+struct GeneralSettingsView: View {
+    @ObservedObject var updates = Updates.shared
+    // Not observable through macOS, so read when the window opens and after a change.
+    @State private var isDefault = MarkdownDefault.isLeading
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("General").font(.headline)
+            Toggle("Check for updates automatically", isOn: Binding(get: { updates.optedIn }, set: { updates.setOptedIn($0) }))
+            Text("Once a day, Leading asks GitHub whether a newer version exists. It is the only time Leading uses the network.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button("Check Now") { updates.checkForUpdates(nil) }
+                Spacer()
+            }
+            HStack {
+                if isDefault {
+                    Label("Markdown files open in Leading", systemImage: "checkmark.circle").foregroundStyle(.secondary)
+                } else {
+                    Button("Open Markdown Files with Leading") { MarkdownDefault.make { isDefault = MarkdownDefault.isLeading } }
+                        .disabled(AppLocation.isTemporary)
+                }
+                Spacer()
+            }
+        }
+        // Another app may have claimed Markdown since; look again whenever Settings comes forward.
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in isDefault = MarkdownDefault.isLeading }
     }
 }
 
@@ -52,8 +96,6 @@ struct HighlightColorsView: View {
                     .disabled(store.settings.highlightColors.isDefault)
             }
         }
-        .padding(20)
-        .frame(width: 400)
     }
 
     private func swatch(_ slot: String, dark: Bool) -> some View {

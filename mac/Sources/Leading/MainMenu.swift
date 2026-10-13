@@ -10,6 +10,7 @@ enum MainMenu {
 
         bar.addSubmenu(name, [
             item("About \(name)", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
+            updatesItem(),
             .separator(),
             item("Settings…", #selector(AppDelegate.showSettings(_:)), ","),
             .separator(),
@@ -114,11 +115,22 @@ enum MainMenu {
         NSApp.windowsMenu = window
 
         let help = NSMenu(title: "Help")
+        help.items = [
+            item("Welcome to \(name)", #selector(AppDelegate.showWelcome(_:))),
+            item("\(name) on GitHub", #selector(AppDelegate.showWebsite(_:))),
+        ]
         let helpItem = NSMenuItem(title: "Help", action: nil, keyEquivalent: "")
         helpItem.submenu = help
         bar.addItem(helpItem)
         NSApp.helpMenu = help
         return bar
+    }
+
+    /// Sparkle's checker is not in the responder chain, so this item targets it directly.
+    private static func updatesItem() -> NSMenuItem {
+        let i = item("Check for Updates…", #selector(Updates.checkForUpdates(_:)))
+        i.target = Updates.shared
+        return i
     }
 
     private static func item(_ title: String, _ action: Selector, _ key: String = "", _ mods: NSEvent.ModifierFlags = [.command]) -> NSMenuItem {

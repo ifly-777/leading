@@ -1,2 +1,3 @@
-# The update-signing public key (EdDSA). Generated in Stage 5; the private half never enters the repository.
-REPLACE_IN_STAGE_5
+# The update-signing public key (EdDSA). The private half lives only in the
+# release Mac's login Keychain (account io.github.ifly-777.leading), never here.
+xgjK6ntdOeKa/5KkGJA1YNvSe9i7xTsMfL78xj5uwYE=

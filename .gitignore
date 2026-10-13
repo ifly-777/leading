@@ -11,3 +11,4 @@ mac/.build/
 .swiftpm/
 mac/.swiftpm/
 mac/Vendor/
+mac/Resources/dmg/.guide-*
