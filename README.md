@@ -97,6 +97,8 @@ All of it is bundled with the app, so nothing is fetched from the internet.
 
 A typical note is on screen in about a tenth of a second once Leading is running; a 5 MB file, around half a second from a cold start (Apple M2). Leading collects nothing and sends nothing, and it never loads anything from the web, not even images in a note.
 
+**Encrypted notes:** File › Encrypt… protects one note with a password, using AES-256. The file keeps its name and stays Markdown, so links and sync still work; other apps see only a notice. Leading locks encrypted notes when the Mac sleeps, its lid closes or the screen locks, and ⌃⌘L locks them at once. There is no way to recover a note whose password is forgotten. Copies made before you encrypted it, in Time Machine or a sync service's history, are not affected.
+
 ## Why Leading?
 
 Obsidian’s reading view, Typora and their kin are editors first, and their reading modes look it. Leading is a reader first: it sets the page, then lets you highlight, quote and print what you read, and edits only when you ask. It is not a notes manager and does not sync. Open a file from Finder, or a note straight from your vault; there is nothing to import.
@@ -115,6 +117,7 @@ Obsidian’s reading view, Typora and their kin are editors first, and their rea
 | Find · Find and Replace | ⌘F · ⌥⌘F |
 | Edit the Markdown, and back | ⌘E |
 | Print · insert a page break | ⌘P · ⌘↩ |
+| Lock encrypted notes | ⌃⌘L |
 
 The welcome document that opens the first time lists them all. Help › Welcome to Leading opens it again.
 

@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Updates.shared.startIfEnabled()
+        LockWatcher.shared.start()
         // The first-launch questions wait until the first window has appeared,
         // so they sit over the welcome document (or the file being opened).
         if FirstRun.isFirst { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { FirstRun.ask() } }
@@ -67,6 +68,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func leadingTogglePlainText(_ sender: Any?) { forward(#selector(ReaderActions.leadingTogglePlainText(_:))) }
     @objc func leadingToggleEdit(_ sender: Any?) { forward(#selector(ReaderActions.leadingToggleEdit(_:))) }
     @objc func leadingFindReplace(_ sender: Any?) { forward(#selector(ReaderActions.leadingFindReplace(_:))) }
+    // Locking needs no window at all: ⌃⌘L works with Leading in front and nothing open.
+    @objc func leadingLock(_ sender: Any?) { LockWatcher.lockAll() }
 
     // MARK: Settings (⌘,): the highlight colours
 

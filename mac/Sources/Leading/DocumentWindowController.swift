@@ -5,7 +5,11 @@ import LeadingCore
 /// One document's window: a warm reading page filling it, two quiet toolbar
 /// buttons (outline, Aa), and the menu commands, which it forwards to the page.
 final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSMenuItemValidation, ReaderWebViewHost, ReaderActions {
-    private let web = WebViewPool.shared.take()
+    /// The reading page; nil while the note is locked. Locking throws the page away,
+    /// with its text, rendering and undo history, rather than trying to clear it.
+    private var web: ReaderWebView?
+    /// A heading a link asked for while the note was locked, for when it opens.
+    private var pendingHeading: String?
     private let imageBase: String
     private var settingsWatch: AnyCancellable?
     // The window shows at once, in the page's paper colour. Waiting for text
@@ -22,7 +26,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private var doc: MarkdownDocument? { document as? MarkdownDocument }
     /// The window's page, for the self-test only.
-    var pageForTests: ReaderWebView { web }
+    var pageForTests: ReaderWebView { web! }
 
     init(document: MarkdownDocument) {
         let size = DocumentWindowController.lastSize
@@ -41,19 +45,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         super.init(window: window)
         shouldCascadeWindows = true
         window.delegate = self
-        window.contentView = web
         window.center()
         let toolbar = NSToolbar(identifier: "reader")
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false
         window.toolbar = toolbar
-        web.host = self
         aaPopover.behavior = .transient
         aaPopover.contentViewController = AaPanel.controller()
 
         applyAppearance(SettingsStore.shared.settings)
-        sendSettings(SettingsStore.shared.settings)
         settingsWatch = SettingsStore.shared.$settings.dropFirst().sink { [weak self] s in
             self?.applyAppearance(s)
             self?.outlineButton?.state = s.outlineOpen ? .on : .off
@@ -65,13 +66,62 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             DispatchQueue.main.async { self?.sendChrome() }
         }
         // AppKit attaches `document` only after this initialiser returns, so pass it in directly.
-        // A new, unsaved document starts in edit mode: there is nothing to read yet.
-        sendDocument(document, keepPlace: false, startEditing: document.fileURL == nil)
+        if document.isPasswordLocked {
+            showLocked(document)
+        } else {
+            attachPage()
+            // A new, unsaved document starts in edit mode: there is nothing to read yet.
+            sendDocument(document, keepPlace: false, startEditing: document.fileURL == nil)
+        }
+    }
+
+    /// Put a warm reading page in the window and bring it up to date.
+    private func attachPage() {
+        let page = WebViewPool.shared.take()
+        page.host = self
+        web = page
+        window?.contentView = page
+        lastChrome = -1
+        sendSettings(SettingsStore.shared.settings)
+        sendChrome()
+    }
+
+    // MARK: Locking
+
+    private func showLocked(_ doc: MarkdownDocument) {
+        let name = doc.fileURL?.deletingPathExtension().lastPathComponent ?? doc.displayName ?? "Note"
+        window?.contentView = LockedView(name: name) { [weak doc] password, done in
+            guard let doc else { return done(false) }
+            doc.unlock(password: password, done: done)
+        }
+    }
+
+    func documentLocked() {
+        guard let doc else { return }
+        if aaPopover.isShown { aaPopover.close() }
+        if let page = web {
+            page.host = nil
+            page.stopLoading()
+            web = nil
+            // Drops the copy of a long note's text held for the page to fetch.
+            SchemeHandler.shared.forget(base: imageBase)
+        }
+        editing = false; canUndo = false; canRedo = false; canGoBack = false
+        showLocked(doc)
+    }
+
+    func documentUnlocked() {
+        guard let doc, web == nil else { return }
+        if let url = doc.fileURL { SchemeHandler.shared.setFolder(base: imageBase, document: url) }
+        attachPage()
+        sendDocument(doc, keepPlace: false)
+        if let heading = pendingHeading { pendingHeading = nil; jumpToHeading(heading) }
+        if let web { window?.makeFirstResponder(web) }
     }
 
     func documentMoved(to url: URL) {
         SchemeHandler.shared.setFolder(base: imageBase, document: url)
-        web.call("setName", ["name": url.deletingPathExtension().lastPathComponent])
+        web?.call("setName", ["name": url.deletingPathExtension().lastPathComponent])
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -85,6 +135,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func sendDocument(_ doc: MarkdownDocument, keepPlace: Bool, fromDisk: Bool = false, startEditing: Bool = false) {
+        guard web != nil, !doc.isPasswordLocked else { return }
         var args: [String: Any] = ["imageBase": imageBase, "plain": doc.showsPlainText, "keepPlace": keepPlace, "fromDisk": fromDisk, "edit": startEditing]
         // For the link back that Copy as Quote adds: the note's name, as a wikilink names it.
         if let url = doc.fileURL { args["name"] = url.deletingPathExtension().lastPathComponent }
@@ -101,11 +152,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         } else {
             args["textURL"] = SchemeHandler.shared.setText(text, base: imageBase)
         }
-        web.call("load", args)
+        web?.call("load", args)
     }
 
     private func sendSettings(_ s: ReaderSettings) {
-        web.call("settings", ["settings": s.dictionary])
+        web?.call("settings", ["settings": s.dictionary])
     }
 
     /// Match the window chrome to the chosen theme, so title bar, traffic lights
@@ -132,11 +183,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if let doc { OpenTiming.shared.painted(file: doc.fileURL, openedAt: doc.openedAt, pageMs: ms) }
         // Text is on screen; now is a good moment to warm the next page.
         DispatchQueue.main.async { WebViewPool.shared.prepare() }
-        if Snapshot.enabled, let window { Snapshot.take(window: window, page: web, controller: self) }
+        if Snapshot.enabled, let window, let web { Snapshot.take(window: window, page: web, controller: self) }
         // The self-test waits until a second window is open, so it can check settings reach both.
         if SelfTest.enabled, let window {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                if NSApp.windows.filter({ $0.windowController is DocumentWindowController }).count >= 2 { SelfTest.run(in: window, page: self.web) }
+                if NSApp.windows.filter({ $0.windowController is DocumentWindowController }).count >= 2 { if let web = self.web { SelfTest.run(in: window, page: web) } }
             }
         }
     }
@@ -170,7 +221,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private func resync() {
-        web.fetchText { [weak self] text in
+        web?.fetchText { [weak self] text in
             if let text, let doc = self?.doc { doc.resync(text) }
         }
     }
@@ -245,13 +296,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     /// The page waits for its document to finish loading before it jumps.
-    func jumpToHeading(_ text: String) { web.call("jumpToHeading", ["text": text]) }
+    func jumpToHeading(_ text: String) {
+        guard let web else { pendingHeading = text; return }
+        web.call("jumpToHeading", ["text": text])
+    }
 
     func pageCanGoBack(_ can: Bool) { canGoBack = can }
 
     // MARK: Menu commands
 
-    private func command(_ name: String) { web.call("command", ["name": name]) }
+    private func command(_ name: String) { web?.call("command", ["name": name]) }
 
     @objc func leadingFind(_ sender: Any?) { command("find") }
     @objc func leadingFindNext(_ sender: Any?) { command("findNext") }
@@ -303,7 +357,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// pages go into a PDF there instead of to a printer. The page first readies
     /// itself for paper (light theme, every diagram and image) and is put back after.
     func runPrint(to url: URL?, done: (() -> Void)? = nil) {
-        guard let window else { return }
+        guard let window, let web else { return }
         // The print sheet hangs from this window: if it is a tab behind another, bring it forward.
         window.makeKeyAndOrderFront(nil)
         web.callAsyncJavaScript("return window.leading.preparePrint()", arguments: [:], in: nil, in: .page) { [weak self] _ in
@@ -319,12 +373,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 info.jobDisposition = .save
                 info.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = url
             }
-            let op = self.web.printOperation(with: info)
+            let op = web.printOperation(with: info)
             op.showsPrintPanel = url == nil
             op.showsProgressPanel = true
             op.jobTitle = self.doc?.displayName ?? "Leading"
             // WebKit prints blank pages unless its print view is given a size first.
-            op.view?.frame = self.web.bounds
+            op.view?.frame = web.bounds
             self.printDone = done
             op.runModal(for: window, delegate: self, didRun: #selector(self.printOperationDidRun(_:success:contextInfo:)), contextInfo: nil)
         }
@@ -340,11 +394,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         let top = window.frame.height - window.contentLayoutRect.maxY
         guard top > 0, abs(top - lastChrome) > 0.5 else { return }
         lastChrome = top
-        web.call("chrome", ["top": top])
+        web?.call("chrome", ["top": top])
     }
 
     @objc private func printOperationDidRun(_ op: NSPrintOperation, success: Bool, contextInfo: UnsafeMutableRawPointer?) {
-        web.callAsyncJavaScript("return window.leading.afterPrint()", arguments: [:], in: nil, in: .page) { _ in }
+        web?.callAsyncJavaScript("return window.leading.afterPrint()", arguments: [:], in: nil, in: .page) { _ in }
         printDone?()
         printDone = nil
     }
@@ -358,6 +412,31 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingHighlightPink(_ sender: Any?) { command("highlightPink") }
     @objc func leadingHighlightOrange(_ sender: Any?) { command("highlightOrange") }
     @objc func leadingRemoveHighlight(_ sender: Any?) { command("removeHighlight") }
+    // MARK: Encryption commands
+
+    @objc func leadingLock(_ sender: Any?) { LockWatcher.lockAll() }
+
+    @objc func leadingEncrypt(_ sender: Any?) {
+        guard let doc, doc.canEncrypt, let window else { return }
+        PasswordSheet.show(.encrypt, name: doc.displayName, on: window) { _, new, done in
+            doc.encrypt(password: new, done: done)
+        }
+    }
+
+    @objc func leadingChangePassword(_ sender: Any?) {
+        guard let doc, doc.isEncrypted, !doc.isPasswordLocked, let window else { return }
+        PasswordSheet.show(.change, name: doc.displayName, on: window) { current, new, done in
+            doc.changePassword(current: current, new: new, done: done)
+        }
+    }
+
+    @objc func leadingRemoveEncryption(_ sender: Any?) {
+        guard let doc, doc.isEncrypted, !doc.isPasswordLocked, let window else { return }
+        PasswordSheet.show(.remove, name: doc.displayName, on: window) { current, _, done in
+            doc.removeEncryption(password: current, done: done)
+        }
+    }
+
     @objc func leadingTogglePlainText(_ sender: Any?) {
         guard let doc else { return }
         doc.showsPlainText.toggle()
@@ -365,6 +444,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        switch item.action {
+        // Setting up encryption is for a saved note; the rest for an encrypted one, unlocked.
+        case #selector(leadingEncrypt(_:)): return doc?.canEncrypt == true
+        case #selector(leadingLock(_:)): return LockWatcher.anyUnlocked
+        case #selector(leadingChangePassword(_:)), #selector(leadingRemoveEncryption(_:)):
+            return doc?.isEncrypted == true && doc?.isPasswordLocked == false
+        default: break
+        }
+        // A locked note has no page: nothing else here has anything to act on.
+        if doc?.isPasswordLocked == true { return false }
         switch item.action {
         case #selector(leadingToggleOutline(_:)):
             item.title = SettingsStore.shared.settings.outlineOpen ? "Hide Outline" : "Show Outline"

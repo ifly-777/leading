@@ -29,7 +29,11 @@ final class PreviewViewController: NSViewController, QLPreviewingController, WKS
 
     func preparePreviewOfFile(at url: URL, completionHandler handler: @escaping (Error?) -> Void) {
         do {
-            text = TextFile.decode(try Data(contentsOf: url)).text
+            let data = try Data(contentsOf: url)
+            // An encrypted note: say so, rather than set its base64 as a page. Never decrypt here.
+            text = SealedText.isSealed(data)
+                ? "# \(url.deletingPathExtension().lastPathComponent)\n\nThis note is encrypted. Open it in Leading and enter its password to read it.\n"
+                : TextFile.decode(data).text
         } catch {
             return handler(error)
         }

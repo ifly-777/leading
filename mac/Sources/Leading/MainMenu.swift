@@ -34,6 +34,13 @@ enum MainMenu {
             // With autosave, AppKit turns this into the Revert To submenu (Last Opened, Browse All Versions…).
             item("Revert To Saved", #selector(NSDocument.revertToSaved(_:))),
             .separator(),
+            // Setting up, changing or removing a password is deliberate: no shortcuts.
+            // Locking should be quick: ⌃⌘L (⌃⌘Q is macOS's own Lock Screen).
+            item("Encrypt…", #selector(ReaderActions.leadingEncrypt(_:))),
+            item("Lock Encrypted Notes", #selector(ReaderActions.leadingLock(_:)), "l", [.command, .control]),
+            item("Change Password…", #selector(ReaderActions.leadingChangePassword(_:))),
+            item("Remove Encryption…", #selector(ReaderActions.leadingRemoveEncryption(_:))),
+            .separator(),
             item("Export as PDF…", #selector(ReaderActions.leadingExportPDF(_:))),
             item("Print…", #selector(ReaderActions.leadingPrint(_:)), "p"),
         ])
@@ -206,4 +213,8 @@ private extension NSMenu {
     func leadingHighlightPink(_ sender: Any?)
     func leadingHighlightOrange(_ sender: Any?)
     func leadingRemoveHighlight(_ sender: Any?)
+    func leadingEncrypt(_ sender: Any?)
+    func leadingLock(_ sender: Any?)
+    func leadingChangePassword(_ sender: Any?)
+    func leadingRemoveEncryption(_ sender: Any?)
 }

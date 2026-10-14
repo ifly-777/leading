@@ -26,6 +26,7 @@ Close a file and open it again later, and it opens where you stopped. Click a fo
 | Print, or File › Export as PDF | ⌘P |
 | Start a new page there, when printed (while editing) | ⌘↩ |
 | Find | ⌘F, then ⌘G for the next match |
+| Lock every encrypted note (File › Encrypt… sets one up) | ⌃⌘L |
 
 > [!tip] Notes from Obsidian
 > Leading reads Obsidian’s callouts like this one, its wikilinks and its highlights, and shows a note’s properties as one quiet line you can open.
