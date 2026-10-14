@@ -1,0 +1,106 @@
+# Checks that Leading runs on macOS older than the one it is built on.
+# Run it from the Actions tab ("Run workflow"), choosing the branch to test.
+#
+# The app is built once, on macos-26 as a release is: the Icon Composer icon
+# needs Xcode 26's actool, which the older runners lack. Each older Mac then
+# runs that same app: the self-test (tabs, highlights, editing, math, Mermaid,
+# embeds, PDF and page breaks), the app's own window snapshots, a look at the
+# real screen with tabs, and whether the Quick Look extension is registered.
+name: Older macOS
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json }
+      - name: Build the app
+        run: scripts/build-app.sh
+      # ditto keeps the bundle's symlinks (the web folder, Sparkle's versions),
+      # which upload-artifact's own zipping would flatten.
+      - name: Pack the app
+        run: ditto -c -k --keepParent build/Leading.app Leading.zip
+      - uses: actions/upload-artifact@v4
+        with: { name: Leading-app, path: Leading.zip, retention-days: 7 }
+
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        # Apple Silicon on 14 and 15, and the Intel half of the binary on 15.
+        os: [macos-14, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: Leading-app }
+      - name: Unpack into build/, where the test scripts look
+        run: mkdir -p build && ditto -x -k Leading.zip build && ls build
+      # WebKit comes with Safari, which updates apart from macOS, so both matter.
+      - name: System and WebKit versions
+        run: |
+          sw_vers
+          uname -m
+          echo "Safari $(defaults read /Applications/Safari.app/Contents/Info CFBundleShortVersionString)"
+          codesign --verify --strict --verbose=2 build/Leading.app
+
+      - name: Self-test
+        run: scripts/selftest-app.sh
+
+      - name: Window snapshots (the app draws its own window)
+        if: always()
+        run: |
+          ROOT="$PWD"
+          source scripts/lib/snapshot.sh
+          mkdir -p shots
+          S=docs/screenshots/sources
+          snapshot shots/reading.png   "$S/Where I Lived.md"   '{"theme":"light"}'                   1100x780
+          snapshot shots/outline.png   "$S/Walden.md"          '{"theme":"dark","outlineOpen":true}' 1100x780
+          snapshot shots/editing.png   "$S/Where I Lived.md"   '{"theme":"light"}'                   1100x780 1
+          snapshot shots/technical.png "$S/Lift and Range.md"  '{"theme":"sepia"}'                   1100x830
+          snapshot shots/vault.png     "$S/Reading Marcus.md"  '{"theme":"dark"}'                    1100x820 0 showHighlights
+
+      # The snapshots leave out the system's title and tab bars, so also look at
+      # the real screen: two notes in one window as tabs, the band of paper behind
+      # both bars. Screen capture may be refused on a runner, hence continue-on-error.
+      - name: Real screen with tabs
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p shots
+          cp -R build/Leading.app /Applications/
+          defaults write io.github.ifly-777.leading firstRunDone -bool true
+          defaults write -g AppleWindowTabbingMode always
+          S=docs/screenshots/sources
+          open -a /Applications/Leading.app "$S/Lift and Range.md"
+          sleep 4
+          open -a /Applications/Leading.app "$S/Reading Marcus.md"
+          sleep 4
+          screencapture -x shots/screen-tabs.png
+          osascript -e 'quit app "Leading"' || pkill -x Leading
+
+      - name: Quick Look extension
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p shots
+          [ -d /Applications/Leading.app ] || cp -R build/Leading.app /Applications/
+          /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/Leading.app
+          sleep 2
+          pluginkit -m -v -i io.github.ifly-777.leading.preview | tee shots/quicklook-pluginkit.txt
+          grep -q io.github.ifly-777.leading.preview shots/quicklook-pluginkit.txt
+          # A preview window, if the runner allows one to be drawn and captured.
+          qlmanage -p "docs/screenshots/sources/Lift and Range.md" >/dev/null 2>&1 &
+          sleep 6
+          screencapture -x shots/quicklook.png
+          pkill qlmanage || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shots-${{ matrix.os }}
+          path: shots/
+          retention-days: 14
