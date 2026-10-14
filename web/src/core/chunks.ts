@@ -10,7 +10,21 @@ import { containerDepth } from './pipeline'
 export interface Chunk { start: number; end: number }
 
 const HEADING = /^#{1,6}(?:[ \t]|$)/
-const FENCE = /^ {0,3}(`{3,}|~{3,})/
+// Code fences, and $$ around a block of math: a file is never cut inside either.
+export const FENCE = /^ {0,3}(`{3,}|~{3,}|\${2,})/
+
+/** Whether a fence is open after `line`: the open fence's marker, or null. */
+export function nextFence(line: string, fence: string | null): string | null {
+  const f = FENCE.exec(line)
+  if (!f) return fence
+  if (!fence) {
+    // "$$x$$" on one line is math within a paragraph, not the start of a block.
+    if (f[1][0] === '$' && line.slice(f[0].length).includes('$')) return null
+    return f[1]
+  }
+  if (f[1][0] === fence[0] && f[1].length >= fence.length && line.trim() === f[1]) return null
+  return fence
+}
 const DEFINITION = /^ {0,3}\[(?!\^)[^\]\n]+\]:.*$/gm
 
 /** Offsets where the document may be cut, in order. */
@@ -28,13 +42,14 @@ function cutPoints(src: string): number[] {
     const nl = src.indexOf('\n', i)
     const stop = nl < 0 ? src.length : nl
     const line = src.slice(i, stop)
-    const f = FENCE.exec(line)
-    if (f) {
-      if (!fence) fence = f[1]
-      else if (f[1][0] === fence[0] && f[1].length >= fence.length && line.trim() === f[1]) fence = null
-    } else if (!fence && /^ {0,3}</.test(line)) {
+    const isFence = FENCE.test(line)
+    const was = fence
+    fence = nextFence(line, fence)
+    if (isFence || was) {
+      // A fence line, or inside a fence: never a cut.
+    } else if (/^ {0,3}</.test(line)) {
       html = Math.max(0, html + containerDepth(line))
-    } else if (!fence && !html && prevBlank && HEADING.test(line)) {
+    } else if (!html && prevBlank && HEADING.test(line)) {
       cuts.push(i)
     }
     prevBlank = line.trim() === ''

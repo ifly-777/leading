@@ -323,7 +323,28 @@ enum SelfTest {
             let js = "const h = document.getElementById('far-heading'); const s = document.getElementById('scroller'); return s.scrollTop > 0 && h.getBoundingClientRect().top < s.clientHeight * 0.4"
             page.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { r in
                 check("[[linked#Far heading]] opens Linked.md at that heading", (try? r.get()) as? Bool == true)
-                done()
+                mathCheck(folder: folder, check: check, done: done)
+            }
+        }
+    }
+
+    /// A note with a formula and a Mermaid diagram: KaTeX typesets the one, Mermaid draws the other.
+    private static func mathCheck(folder: URL, check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        let url = folder.appendingPathComponent("Math.md")
+        try? "# Math\n\nEuler: $e^{i\\pi} + 1 = 0$, for $5.\n\n```mermaid\ngraph LR\n  A --> B\n```\n".write(to: url, atomically: true, encoding: .utf8)
+        NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { doc, _, _ in
+            // Mermaid loads on first use; give it a moment.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                guard let page = (doc?.windowControllers.first as? DocumentWindowController)?.pageForTests else {
+                    check("Math.md opens", false); return done()
+                }
+                let js = "return [document.querySelectorAll('#doc .math .katex').length, document.querySelectorAll('#doc figure.diagram.drawn svg').length, document.fonts.check('20px KaTeX_Main')]"
+                page.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { r in
+                    let v = (try? r.get()) as? [Any] ?? []
+                    check("A formula is typeset in KaTeX's fonts, and a price stays prose", (v.first as? Int) == 1 && (v.count > 2 && v[2] as? Bool == true))
+                    check("A Mermaid diagram is drawn", (v.count > 1 ? v[1] as? Int : nil) == 1)
+                    done()
+                }
             }
         }
     }

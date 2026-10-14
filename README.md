@@ -31,6 +31,7 @@ The disk image has the same steps, with pictures, as *If macOS blocks Leading.pd
 - **Reading.** Literata, New York, Charter, Atkinson Hyperlegible Next or iA Writer Quattro, or any installed font. Size, line spacing and column width; light, sepia and dark themes; an outline of the headings. Tables, footnotes, code, task lists, and local images next to the file.
 - **Where you were.** Every file reopens where you stopped. Footnotes open beside their number, and an optional hairline shows how far through you are and the time left.
 - **Obsidian notes.** Callouts, properties (as one quiet line) and highlights; wikilinks open their note, found anywhere in the vault, at the heading they name.
+- **Math and diagrams.** LaTeX math in `$…$` and `$$…$$`, typeset by KaTeX, with prices left alone; Mermaid diagrams drawn in the theme's colours. Both are bundled: nothing is fetched.
 - **Highlighting.** Select text and press ⇧⌘H, or ⌥⌘1 to ⌥⌘5 for yellow, green, blue, pink and orange. Highlights are written as `==text==` or as Highlightr's `<mark>`, so Obsidian shows them too.
 - **Editing.** ⌘E switches to the Markdown source and back. Changes save as you go, File › Revert To brings back any earlier version, and if another app changes the file Leading shows the new text without losing your place.
 - **Find**, which ignores case, accents and curly quotes, and **Find and Replace** (⌥⌘F) while editing.
@@ -78,6 +79,8 @@ cd .. && scripts/selftest-app.sh   # the built app checks its own menus, editing
 ## Fonts
 
 Bundled unmodified under the SIL Open Font License 1.1: Literata (TypeTogether, for Google), Atkinson Hyperlegible Next (Braille Institute), and iA Writer Quattro and Mono (Information Architects, based on IBM Plex). Leading is not affiliated with iA and does not imitate iA Writer. New York, Charter and SF Mono come with macOS and are not bundled.
+
+Math is set by [KaTeX](https://katex.org) and its own math fonts (MIT, Khan Academy and contributors), and diagrams are drawn by [Mermaid](https://mermaid.js.org) (MIT). Both are bundled with the app.
 
 ## Licence
 

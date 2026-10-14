@@ -23,6 +23,7 @@ import { referenceDefinitions } from '../core/chunks'
 import { ReaderPalette, pointToSource, notice, type PaletteTarget } from './highlights'
 import { ProgressMark, cumulativeWords, progressAt } from './progress'
 import { FootnotePopover } from './footnote-popover'
+import { Diagrams } from './diagrams'
 
 export interface ViewElements {
   win: HTMLElement; scroller: HTMLElement; doc: HTMLElement; layer: HTMLElement
@@ -84,6 +85,8 @@ export class ReaderView {
   readonly progress: ProgressMark
   /** Footnotes shown beside their reference */
   readonly footnotes: FootnotePopover
+  /** Mermaid diagrams, drawn on the page after it renders */
+  readonly diagrams: Diagrams
   /** Words before each block, for the progress mark; rebuilt when the blocks change. */
   private words: { blocks: unknown; n: number; cum: Float64Array } | null = null
   private progressFrame = 0
@@ -130,6 +133,7 @@ export class ReaderView {
     this.palette = new ReaderPalette(win, frame, scroller, doc)
     this.progress = new ProgressMark(win)
     this.footnotes = new FootnotePopover(win, scroller)
+    this.diagrams = new Diagrams(doc, scroller)
     // Plain text shows the file unrendered: there is no Markdown to place a highlight in.
     this.palette.active = () => this.mode === 'read' && !this.lastOpen.plain
     this.palette.onPick = (slot, target) => { void this.highlightInReader(slot, false, target) }
@@ -147,7 +151,7 @@ export class ReaderView {
     this.readerFind.onLayoutShift = () => this.reader.invalidateGeometry()
     this.readerFind.onRedraw = () => this.find.draw()
     this.reader.onIndexGrew = () => { this.readerFind.invalidate(); if (this.mode === 'read') this.find.invalidate() }
-    this.reader.onBlocksAdded = () => this.reader.invalidateGeometry()
+    this.reader.onBlocksAdded = () => { this.reader.invalidateGeometry(); this.diagrams.scan() }
 
     // Report the place once scrolling has settled, not on every frame.
     scroller.addEventListener('scroll', () => {
@@ -211,6 +215,7 @@ export class ReaderView {
     }
     if (this.editor?.exists) this.editor.setSmartTyping(s.smartTyping)
     this.relayout()
+    this.diagrams.restyle()
   }
 
   /** Change some settings from inside the view, apply them, and tell the host. */
@@ -278,6 +283,7 @@ export class ReaderView {
     this.readerOutline = result.outline
     if (this.mode === 'read') this.outline.setItems(result.outline)
     this.tables.scan(doc)
+    this.diagrams.scan()
     this.tables.recheckAll(doc)
     this.readerFind.invalidate()
     if (this.mode === 'read') this.find.invalidate()
@@ -547,6 +553,7 @@ export class ReaderView {
       // New tables are watched and measured as they come into view; measuring
       // every table now would lay out the whole page (seconds at 5 MB).
       this.tables.scan(this.els.doc)
+      this.diagrams.scan()
       this.readerFind.invalidate()
       this.find.invalidate()
     } else {

@@ -14,7 +14,7 @@
 // count to VoiceOver.
 
 import { fold, findAll } from '../core/fold'
-import { blockText, type Match, type SearchIndex } from '../core/search-index'
+import { blockText, isUnsearched, type Match, type SearchIndex } from '../core/search-index'
 
 const MAX_DRAWN = 400
 
@@ -293,7 +293,7 @@ export class ReaderFind implements FindEngine {
     const nodes: Text[] = []
     const starts: number[] = []
     // Same text rule as the index, so the k-th hit here is the k-th hit there.
-    const text = blockText<Node>(el, (n) => n.childNodes, (n) => (n.nodeType === 1 ? (n as Element).tagName.toLowerCase() : null),
+    const text = blockText<Node>(el, (n) => (n.nodeType === 1 && isUnsearched((n as Element).classList) ? null : n.childNodes), (n) => (n.nodeType === 1 ? (n as Element).tagName.toLowerCase() : null),
       (n) => (n.nodeType === 3 ? (n as Text).data : null), (n, start) => { nodes.push(n as Text); starts.push(start) })
     const at = (off: number): [Text, number] => {
       let lo = 0, hi = starts.length - 1

@@ -15,6 +15,7 @@ open --env LEADING_SELFTEST=1 --stdout "$OUT" --stderr /dev/null -a "$ROOT/build
 sleep 1.5
 open -a "$ROOT/build/Leading.app" "$TMP/prose.md"
 sleep 2
-for _ in $(seq 1 60); do pgrep -x Leading >/dev/null || break; sleep 0.5; done
+# The checks take about half a minute; allow twice that.
+for _ in $(seq 1 120); do pgrep -x Leading >/dev/null || break; sleep 0.5; done
 cat "$OUT"
 ! grep -q FAIL "$OUT"
