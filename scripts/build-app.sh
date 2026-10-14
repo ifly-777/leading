@@ -30,7 +30,7 @@ echo "› Sparkle"
 echo "› Swift app ($ARCHS)"
 ARCH_FLAGS=""
 for a in $ARCHS; do ARCH_FLAGS="$ARCH_FLAGS --arch $a"; done
-( cd "$ROOT/mac" && swift build -c release $ARCH_FLAGS --product "$APP_NAME" )
+( cd "$ROOT/mac" && swift build -c release $ARCH_FLAGS --product "$APP_NAME" && swift build -c release $ARCH_FLAGS --product LeadingPreview )
 BIN_DIR="$(cd "$ROOT/mac" && swift build -c release $ARCH_FLAGS --show-bin-path)"
 
 echo "› Bundle"
@@ -44,7 +44,13 @@ sed -e "s/@APP_NAME@/$APP_NAME/g" -e "s/@BUNDLE_ID@/$BUNDLE_ID/g" -e "s/@VERSION
     -e "s|@SPARKLE_PUBLIC_KEY@|$SPARKLE_PUBLIC_KEY|g" "$ROOT/mac/Resources/Info.plist.in" > "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 printf 'APPL????' > "$APP/Contents/PkgInfo"
-cp -R "$ROOT/web/dist" "$APP/Contents/Resources/web"
+# The page lives inside the Quick Look extension, which (being sandboxed) may read
+# only its own bundle; the app reaches the same files through a relative link.
+# One copy, not two: Mermaid alone is several megabytes.
+PREVIEW="$APP/Contents/PlugIns/LeadingPreview.appex"
+mkdir -p "$PREVIEW/Contents/Resources"
+cp -R "$ROOT/web/dist" "$PREVIEW/Contents/Resources/web"
+ln -s ../PlugIns/LeadingPreview.appex/Contents/Resources/web "$APP/Contents/Resources/web"
 # Sparkle, the update framework (only ever active if the reader turns updates on).
 mkdir -p "$APP/Contents/Frameworks"
 SPARKLE="$ROOT/mac/Vendor/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
@@ -63,6 +69,14 @@ for d in "$ROOT"/web/fonts/*/; do
   name="$(basename "$d")"
   for f in "$d"OFL.txt "$d"LICENSE.md; do [ -f "$f" ] && cp "$f" "$APP/Contents/Resources/Licenses/$name-$(basename "$f")"; done
 done
+
+# The Quick Look extension: Space in Finder shows a Markdown file as Leading sets it,
+# with the page above (already in place in its Resources).
+mkdir -p "$PREVIEW/Contents/MacOS"
+cp "$BIN_DIR/LeadingPreview" "$PREVIEW/Contents/MacOS/LeadingPreview"
+sed -e "s/@APP_NAME@/$APP_NAME/g" -e "s/@BUNDLE_ID@/$BUNDLE_ID/g" -e "s/@VERSION@/$VERSION/g" \
+    -e "s/@BUILD@/$BUILD/g" -e "s/@MIN_MACOS@/$MIN_MACOS/g" "$ROOT/mac/Resources/Preview-Info.plist.in" > "$PREVIEW/Contents/Info.plist"
+plutil -lint "$PREVIEW/Contents/Info.plist" >/dev/null
 
 # A test build (the update spike) says so inside itself, so that a copy Sparkle
 # relaunches after updating, which inherits none of the test's environment,

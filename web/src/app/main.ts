@@ -94,8 +94,10 @@ document.addEventListener('click', (e) => {
 
 ;(window as any).leading = {
   /** Show a document (called by Swift when a file opens or changes on disk). */
-  async load(args: { text?: string; textURL?: string; imageBase: string | null; plain?: boolean; keepPlace?: boolean; fromDisk?: boolean; edit?: boolean; resume?: Place; name?: string }) {
+  async load(args: { text?: string; textURL?: string; imageBase: string | null; plain?: boolean; keepPlace?: boolean; fromDisk?: boolean; edit?: boolean; resume?: Place; name?: string; preview?: boolean }) {
     view.docName = args.name ?? null
+    view.readOnly = !!args.preview
+    if (view.readOnly) document.documentElement.dataset.readOnly = ''
     // Heading jumps that arrive with the document wait until its text is shown.
     let shown!: () => void
     loading = new Promise<void>((ok) => { shown = ok })
@@ -134,6 +136,9 @@ document.addEventListener('click', (e) => {
     await view.apply()
   },
   command(args: { name: Command }) { return view.command(args.name) },
+  /** File › Print and Export as PDF: get the page ready for paper, then put it back. */
+  preparePrint() { return view.preparePrint() },
+  afterPrint() { return view.afterPrint() },
   /** The file was saved under a new name, or moved. */
   setName(args: { name: string | null }) { view.docName = args.name },
   /** Go to a heading named in a link that opened this document (or one already open). */

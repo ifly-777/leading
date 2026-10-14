@@ -15,3 +15,24 @@ html, body { height: 100%; overflow: hidden; }
   content: ""; position: absolute; top: 0; left: 0; right: 0; height: var(--sticky-top);
   background: var(--bg); z-index: 9; pointer-events: none;
 }
+
+/* ---- Print and Export as PDF ----------------------------------------------
+   The window scrolls inside a fixed frame; on paper the document flows from
+   page to page instead. Only the text prints: no outline, bars or cards. The
+   app switches the page to the light theme while printing (view.preparePrint),
+   so dark paper never reaches a printer. Type is set for paper: the reader's
+   font and spacing, at a size for reading in the hand, across the full width
+   between the margins the print settings give. */
+@media print {
+  html, body, #window, #scroller { height: auto !important; overflow: visible !important; contain: none !important; position: static !important; }
+  #window::before, #outline, #editor, #frame, .findbar, .scroll-ticks, .search-layer, .progress-rule, .progress-left, .fn-pop, .format-popover, .notice { display: none !important; }
+  :root { --size: 11pt !important; --col-w: auto !important; --col-left: 0 !important; }
+  .doc { width: auto !important; margin: 0 !important; padding: 0 !important; }
+  /* Long documents skip laying out far-away parts on screen; paper needs every part. */
+  :root[data-large="true"] .doc > section.cv { content-visibility: visible !important; }
+  .doc :is(h1, h2, h3, h4, h5, h6) { break-after: avoid; }
+  .doc :is(pre, table, figure, img, .math.display, .callout, blockquote, .note-embed) { break-inside: avoid; }
+  .doc p { orphans: 3; widows: 3; }
+  .doc .table-scroll, .doc .math.display, .doc figure.diagram .diagram-svg { overflow: visible !important; }
+  :root[data-focus="on"] .doc :is([data-b], [data-b] > li) { opacity: 1 !important; }
+}

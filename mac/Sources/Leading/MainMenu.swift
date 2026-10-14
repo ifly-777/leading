@@ -33,6 +33,9 @@ enum MainMenu {
             item("Move To…", #selector(NSDocument.move(_:))),
             // With autosave, AppKit turns this into the Revert To submenu (Last Opened, Browse All Versions…).
             item("Revert To Saved", #selector(NSDocument.revertToSaved(_:))),
+            .separator(),
+            item("Export as PDF…", #selector(ReaderActions.leadingExportPDF(_:))),
+            item("Print…", #selector(ReaderActions.leadingPrint(_:)), "p"),
         ])
 
         let find = NSMenu(title: "Find")
@@ -192,6 +195,8 @@ private extension NSMenu {
     func leadingShowHighlights(_ sender: Any?)
     func leadingCopyHighlights(_ sender: Any?)
     func leadingCopyQuote(_ sender: Any?)
+    func leadingPrint(_ sender: Any?)
+    func leadingExportPDF(_ sender: Any?)
     func leadingHighlight(_ sender: Any?)
     func leadingHighlightYellow(_ sender: Any?)
     func leadingHighlightGreen(_ sender: Any?)

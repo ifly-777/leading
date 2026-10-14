@@ -42,6 +42,14 @@ export class Diagrams {
     }
   }
 
+  /** Draw every diagram now, near or far (for printing), and wait until all are drawn. */
+  async drawAll(): Promise<void> {
+    for (const fig of this.doc.querySelectorAll<HTMLElement>('figure.diagram')) {
+      if (fig.dataset.look !== this.look) { this.io.unobserve(fig); this.queue(fig) }
+    }
+    await this.chain
+  }
+
   /** The page's colours or font changed: draw every diagram again to match. */
   restyle(): void {
     const css = getComputedStyle(document.documentElement)

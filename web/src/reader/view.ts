@@ -158,7 +158,7 @@ export class ReaderView {
     this.paging = new Paging(scroller, doc)
     this.paging.active = () => this.mode === 'read'
     // Plain text shows the file unrendered: there is no Markdown to place a highlight in.
-    this.palette.active = () => this.mode === 'read' && !this.lastOpen.plain
+    this.palette.active = () => this.mode === 'read' && !this.lastOpen.plain && !this.readOnly
     this.palette.onPick = (slot, target) => { void this.highlightInReader(slot, false, target) }
     this.outline.locate = (item, force) => {
       const blk = this.reader.blockEl(item.b, force)
@@ -370,6 +370,41 @@ export class ReaderView {
     if (!el?.dataset.s) return null
     return { s: Number(el.dataset.s) + this.reader.correction(Number(el.dataset.b)), dy: this.els.scroller.scrollTop - topIn(el, this.els.scroller) }
   }
+
+  private themeBeforePrint: Settings['theme'] | null = null
+
+  /**
+   * Before printing: the light theme (dark paper never reaches a printer), every
+   * diagram drawn and every image loaded, since paper shows the whole file at once.
+   */
+  async preparePrint(): Promise<void> {
+    if (this.mode === 'edit') await this.toggleEdit()
+    this.footnotes.hide()
+    this.preview.hide()
+    if (this.theme !== 'light') {
+      this.themeBeforePrint = this.settings.theme
+      this.settings = { ...this.settings, theme: 'light' }
+      await this.apply()
+    }
+    const imgs = Array.from(this.els.doc.querySelectorAll<HTMLImageElement>('img'))
+    const loaded = Promise.all(imgs.map((i) => {
+      if (i.complete) return null
+      i.loading = 'eager'
+      return new Promise((ok) => { i.addEventListener('load', ok, { once: true }); i.addEventListener('error', ok, { once: true }) })
+    }))
+    await Promise.all([this.diagrams.drawAll(), Promise.race([loaded, new Promise((ok) => setTimeout(ok, 3000))]), document.fonts.ready])
+  }
+
+  /** Printing is over: the reader's own theme again. */
+  async afterPrint(): Promise<void> {
+    if (this.themeBeforePrint === null) return
+    this.settings = { ...this.settings, theme: this.themeBeforePrint }
+    this.themeBeforePrint = null
+    await this.apply()
+  }
+
+  /** A preview with nowhere to save (Quick Look): no highlighting, no ticking, no editing. */
+  readOnly = false
 
   /** The file's name, for the link a quotation carries back to it (set by the host). */
   docName: string | null = null
@@ -591,7 +626,7 @@ export class ReaderView {
   }
 
   async highlightInReader(slot: HighlightSlot | null, toggle: boolean, target?: PaletteTarget): Promise<void> {
-    if (this.lastOpen.plain) return
+    if (this.lastOpen.plain || this.readOnly) return
     let t = target ?? null
     let match = false
     if (!t) {
@@ -638,7 +673,7 @@ export class ReaderView {
     const li = box.closest<HTMLElement>('li.task-list-item')
     if (!li) return
     const blk = li.closest<HTMLElement>('[data-b]')
-    if (this.mode !== 'read' || this.lastOpen.plain || !li.dataset.s || !blk) return
+    if (this.mode !== 'read' || this.lastOpen.plain || this.readOnly || !li.dataset.s || !blk) return
     const s = Number(li.dataset.s) + this.reader.correction(Number(blk.dataset.b))
     const text = this.text
     // The item starts at its bullet: "- [ ] ", "* [x] ", "12. [ ] ", after any indent.
@@ -679,7 +714,7 @@ export class ReaderView {
   command(c: Command): Promise<void> | void {
     const s = this.settings
     switch (c) {
-      case 'toggleEdit': return this.toggleEdit()
+      case 'toggleEdit': return this.readOnly ? undefined : this.toggleEdit()
       case 'back': this.goBack(); break
       case 'showHighlights': this.toggleHighlights(); break
       case 'copyHighlights': this.copyHighlights(); break

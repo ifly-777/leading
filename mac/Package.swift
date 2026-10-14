@@ -7,7 +7,7 @@ import PackageDescription
 let package = Package(
     name: "Leading",
     platforms: [.macOS("26.0")],
-    products: [.executable(name: "Leading", targets: ["Leading"])],
+    products: [.executable(name: "Leading", targets: ["Leading"]), .executable(name: "LeadingPreview", targets: ["LeadingPreview"])],
     targets: [
         // Pure logic (text decoding, link and image paths, settings), unit-tested.
         .target(name: "LeadingCore", path: "Sources/LeadingCore"),
@@ -23,6 +23,15 @@ let package = Package(
         // Updates (opt-in; the only network access the app ever makes). MIT licence.
         // Fetched and checksum-verified by scripts/fetch-sparkle.sh.
         .binaryTarget(name: "Sparkle", path: "Vendor/Sparkle.xcframework"),
+        // The Quick Look extension (Space in Finder on a Markdown file). An app extension
+        // has no main of its own, and may use only extension-safe APIs.
+        .executableTarget(
+            name: "LeadingPreview",
+            dependencies: ["LeadingCore"],
+            path: "Sources/LeadingPreview",
+            swiftSettings: [.swiftLanguageMode(.v5), .unsafeFlags(["-application-extension"])],
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-application_extension"])]
+        ),
         .testTarget(name: "LeadingTests", dependencies: ["LeadingCore"], path: "Tests/LeadingTests"),
     ]
 )

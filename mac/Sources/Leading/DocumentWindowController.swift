@@ -197,9 +197,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// [[Note#Heading]]: find the note in the vault, off the main thread (a big vault takes a moment).
     func pageOpenWiki(target: String, heading: String?) {
         let from = doc?.fileURL
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let found = Paths.wikiTarget(target, document: from)
-            DispatchQueue.main.async { [weak self] in
+            DispatchQueue.main.async {
                 guard let found else { NSSound.beep(); return }
                 switch Paths.classifyFile(found) {
                 case .document(let url): self?.open(url, heading: heading)
@@ -258,6 +258,59 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingShowHighlights(_ sender: Any?) { command("showHighlights") }
     @objc func leadingCopyHighlights(_ sender: Any?) { command("copyHighlights") }
     @objc func leadingCopyQuote(_ sender: Any?) { command("copyQuote") }
+
+    // MARK: Print and Export as PDF
+
+    @objc func leadingPrint(_ sender: Any?) { runPrint(to: nil) }
+
+    @objc func leadingExportPDF(_ sender: Any?) {
+        guard let window else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = (doc?.fileURL?.deletingPathExtension().lastPathComponent ?? doc?.displayName ?? "Untitled") + ".pdf"
+        panel.beginSheetModal(for: window) { [weak self] r in
+            guard r == .OK, let url = panel.url else { return }
+            // The panel is still closing; print once it has gone, or the next sheet cannot attach.
+            DispatchQueue.main.async { self?.runPrint(to: url) }
+        }
+    }
+
+    /// Print through WebKit, so the text is split into real pages. With `url`, the
+    /// pages go into a PDF there instead of to a printer. The page first readies
+    /// itself for paper (light theme, every diagram and image) and is put back after.
+    func runPrint(to url: URL?, done: (() -> Void)? = nil) {
+        guard let window else { return }
+        web.callAsyncJavaScript("return window.leading.preparePrint()", arguments: [:], in: nil, in: .page) { [weak self] _ in
+            guard let self else { return }
+            let info = (self.doc?.printInfo ?? NSPrintInfo.shared).copy() as! NSPrintInfo
+            info.horizontalPagination = .fit
+            info.verticalPagination = .automatic
+            info.isHorizontallyCentered = false
+            info.isVerticallyCentered = false
+            // Margins for reading in the hand: three quarters of an inch, a little more at the foot.
+            info.topMargin = 54; info.bottomMargin = 60; info.leftMargin = 54; info.rightMargin = 54
+            if let url {
+                info.jobDisposition = .save
+                info.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = url
+            }
+            let op = self.web.printOperation(with: info)
+            op.showsPrintPanel = url == nil
+            op.showsProgressPanel = true
+            op.jobTitle = self.doc?.displayName ?? "Leading"
+            // WebKit prints blank pages unless its print view is given a size first.
+            op.view?.frame = self.web.bounds
+            self.printDone = done
+            op.runModal(for: window, delegate: self, didRun: #selector(self.printOperationDidRun(_:success:contextInfo:)), contextInfo: nil)
+        }
+    }
+
+    private var printDone: (() -> Void)?
+
+    @objc private func printOperationDidRun(_ op: NSPrintOperation, success: Bool, contextInfo: UnsafeMutableRawPointer?) {
+        web.callAsyncJavaScript("return window.leading.afterPrint()", arguments: [:], in: nil, in: .page) { _ in }
+        printDone?()
+        printDone = nil
+    }
     @objc func leadingToggleProgress(_ sender: Any?) { SettingsStore.shared.settings.progress.toggle() }
     @objc func leadingToggleFocus(_ sender: Any?) { SettingsStore.shared.settings.focus.toggle() }
     @objc func leadingTogglePaged(_ sender: Any?) { SettingsStore.shared.settings.paged.toggle() }

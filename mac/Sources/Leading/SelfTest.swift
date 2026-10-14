@@ -1,4 +1,5 @@
 import AppKit
+import PDFKit
 
 /// LEADING_SELFTEST=1: after the first document paints, send the View and
 /// Find menu commands through the normal responder chain, then ask the page
@@ -343,8 +344,62 @@ enum SelfTest {
                     let v = (try? r.get()) as? [Any] ?? []
                     check("A formula is typeset in KaTeX's fonts, and a price stays prose", (v.first as? Int) == 1 && (v.count > 2 && v[2] as? Bool == true))
                     check("A Mermaid diagram is drawn", (v.count > 1 ? v[1] as? Int : nil) == 1)
-                    done()
+                    embedCheck(folder: folder, check: check, done: done)
                 }
+            }
+        }
+    }
+
+    /// ![[Linked#Far heading]] and ![[dot.png]] found on disk and shown; a task ticked while reading reaches the file.
+    private static func embedCheck(folder: URL, check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        let url = folder.appendingPathComponent("Embeds.md")
+        // A 2×2 PNG, in a subfolder, so it is found by searching rather than beside the note.
+        let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGP8z8DwnwEJMDKgCQAAhgQB/0FqBv4AAAAASUVORK5CYII=")!
+        try? FileManager.default.createDirectory(at: folder.appendingPathComponent("attachments"), withIntermediateDirectories: true)
+        try? png.write(to: folder.appendingPathComponent("attachments/dot.png"))
+        try? "# Embeds\n\n![[Linked#Far heading]]\n\n![[dot.png|40]]\n\n- [ ] Walkaround\n".write(to: url, atomically: true, encoding: .utf8)
+        NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { opened, _, _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                guard let doc = opened as? MarkdownDocument, let page = (doc.windowControllers.first as? DocumentWindowController)?.pageForTests else {
+                    check("Embeds.md opens", false); return done()
+                }
+                let js = "const e = document.querySelector('#doc .note-embed'); const i = document.querySelector('#doc img.embed-img'); const t = e?.textContent ?? ''; return [e?.dataset.filled === 'yes' && t.includes('Far heading') && t.indexOf('Here.') < t.indexOf('Filler'), i ? i.naturalWidth : -1, e?.dataset.filled ?? 'none']"
+                page.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { r in
+                    let v = (try? r.get()) as? [Any] ?? []
+                    // The section starts at its heading, so the filler before it is left out.
+                    check("![[Linked#Far heading]] shows that section of the note, found on disk (\(v.count > 2 ? v[2] : "?"))", v.first as? Bool == true)
+                    check("![[dot.png]] shows the picture, found in a subfolder", (v.count > 1 ? v[1] as? Int : nil) == 2)
+                    page.callAsyncJavaScript("document.querySelector('#doc li.task-list-item input').click(); return true", arguments: [:], in: nil, in: .page) { _ in
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            check("Ticking a task while reading writes [x] into the file", doc.text.contains("- [x] Walkaround"))
+                            pdfCheck(check: check, done: done)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// File › Export as PDF: real pages, with the text on them.
+    private static func pdfCheck(check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        guard let wc = NSDocumentController.shared.documents.first(where: { $0.fileURL?.lastPathComponent == "prose.md" })?.windowControllers.first as? DocumentWindowController else {
+            check("The PDF test has prose.md open", false); return done()
+        }
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent("leading-selftest-\(UUID().uuidString).pdf")
+        wc.runPrint(to: out) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                let pdf = PDFDocument(url: out)
+                let pages = pdf?.pageCount ?? 0
+                let text = pdf?.string ?? ""
+                check("Export as PDF writes the whole file as pages (\(pages) pages)", pages >= 2 && text.contains("typographer"))
+                // LEADING_SELFTEST_PDF=<path> keeps the PDF there, to look at.
+                if let keep = ProcessInfo.processInfo.environment["LEADING_SELFTEST_PDF"] {
+                    try? FileManager.default.removeItem(atPath: keep)
+                    try? FileManager.default.moveItem(at: out, to: URL(fileURLWithPath: keep))
+                } else {
+                    try? FileManager.default.removeItem(at: out)
+                }
+                done()
             }
         }
     }
