@@ -57,6 +57,8 @@ document.addEventListener('click', (e) => {
   if (!a) return
   const href = a.getAttribute('href')!
   e.preventDefault()
+  // A footnote number shows its note beside it; ⌥-click jumps to the endnotes as before.
+  if (a.hasAttribute('data-footnote-ref') && !e.altKey && view.footnotes.toggle(a)) return
   if (href.startsWith('#')) {
     const target = document.getElementById(decodeURIComponent(href.slice(1)))
     target?.scrollIntoView({ block: 'start' })

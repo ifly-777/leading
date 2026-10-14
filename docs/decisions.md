@@ -4,6 +4,9 @@ Short notes on choices that are not obvious from the code, and what testing show
 
 ## After 1.0.0
 
+### Footnotes open beside their number
+Clicking a footnote number shows the note in a card under its line, within the column, flipped above when there is no room below. Esc, a click elsewhere, or scrolling the number out of sight closes it. ⌥-click jumps to the endnotes as before, and the endnotes stay on the page. The card holds a copy of the note with its ids and source positions stripped, so nothing in it maps back into the file: a highlight is made in the endnote itself, and the card shows it there next time.
+
 ### Progress is counted in words, not pixels
 View › Show Reading Progress (⌥⌘P, off by default) draws a hairline the width of the column under the title bar, and shows the time left in the window's corner while scrolling. Both are measured in words: a table, an image or a code block takes far more height than reading time, and long pages give far-away blocks only an estimated height, so a scroll fraction would jump about. Time left assumes 238 words a minute, Brysbaert's 2019 meta-analysis figure for silent reading of English non-fiction; a fast reader will beat it. The label first sat at the column's foot, but there it covered text; the corner is clear except in narrow windows, and it shows only while scrolling.
 

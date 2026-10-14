@@ -51,3 +51,34 @@ test('the progress mark follows the reader and stays off by default', async ({ p
   await page.evaluate(() => (window as any).leading.command({ name: 'toggleEdit' }))
   expect(await page.locator('.progress-rule').isVisible()).toBe(false)
 })
+
+const notes = ['# Notes', 'A claim that needs support.[^a] Another.[^b]', ...Array(30).fill('Filler paragraph to give the page some length, so the endnotes sit well below the fold.'),
+  '[^a]: The **support**, with [a link](https://example.com).', '[^b]: Second note.'].join('\n\n')
+
+test('a footnote number shows its note beside it, and Esc closes it', async ({ page }) => {
+  await open(page, notes)
+  const ref = page.locator('#doc a[data-footnote-ref]').first()
+  await ref.click()
+  const pop = page.locator('.fn-pop')
+  await expect(pop).toBeVisible()
+  await expect(pop).toContainText('The support, with a link.')
+  // A copy: no back-link, no ids, nothing that maps into the file.
+  expect(await pop.evaluate((el) => el.querySelectorAll('[id], [data-s], [data-footnote-backref]').length)).toBe(0)
+  // The page did not jump to the endnotes.
+  expect(await page.evaluate(() => document.getElementById('scroller')!.scrollTop)).toBe(0)
+  // Under the reference, within the column.
+  const [r, p] = await Promise.all([ref.boundingBox(), pop.boundingBox()])
+  expect(p!.y).toBeGreaterThan(r!.y)
+  await page.keyboard.press('Escape')
+  await expect(pop).toBeHidden()
+  // The second number replaces the first; a click elsewhere closes it.
+  await ref.click()
+  await page.locator('#doc a[data-footnote-ref]').nth(1).click()
+  await expect(pop).toContainText('Second note.')
+  await page.mouse.click(5, 400)
+  await expect(pop).toBeHidden()
+  // ⌥-click still jumps to the endnotes.
+  await ref.click({ modifiers: ['Alt'] })
+  await expect(pop).toBeHidden()
+  expect(await page.evaluate(() => document.getElementById('scroller')!.scrollTop)).toBeGreaterThan(0)
+})

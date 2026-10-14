@@ -22,6 +22,7 @@ import { highlightEdits } from '../core/highlight-edit'
 import { referenceDefinitions } from '../core/chunks'
 import { ReaderPalette, pointToSource, notice, type PaletteTarget } from './highlights'
 import { ProgressMark, cumulativeWords, progressAt } from './progress'
+import { FootnotePopover } from './footnote-popover'
 
 export interface ViewElements {
   win: HTMLElement; scroller: HTMLElement; doc: HTMLElement; layer: HTMLElement
@@ -81,6 +82,8 @@ export class ReaderView {
   /** The colour dots over a selection while reading. */
   readonly palette: ReaderPalette
   readonly progress: ProgressMark
+  /** Footnotes shown beside their reference */
+  readonly footnotes: FootnotePopover
   /** Words before each block, for the progress mark; rebuilt when the blocks change. */
   private words: { blocks: unknown; n: number; cum: Float64Array } | null = null
   private progressFrame = 0
@@ -122,6 +125,7 @@ export class ReaderView {
     this.tables = new TableWatcher(scroller, win, frame)
     this.palette = new ReaderPalette(win, frame, scroller, doc)
     this.progress = new ProgressMark(win)
+    this.footnotes = new FootnotePopover(win, scroller)
     // Plain text shows the file unrendered: there is no Markdown to place a highlight in.
     this.palette.active = () => this.mode === 'read' && !this.lastOpen.plain
     this.palette.onPick = (slot, target) => { void this.highlightInReader(slot, false, target) }
@@ -249,6 +253,7 @@ export class ReaderView {
         return null // the reader re-renders when reading resumes
       }
     }
+    this.footnotes.hide()
     const place = opts.keepPlace ? this.placeMark() : null
     if (!opts.keepPlace && opts.placeAt === undefined && !opts.resume) scroller.scrollTop = 0
     let result: LoadResult | null
@@ -370,6 +375,7 @@ export class ReaderView {
       this.outline.watch(view.scrollDOM)
       this.find.setEngine(session.find, view.scrollDOM)
       this.progress.hide()
+      this.footnotes.hide()
       ed.focus()
       ed.scrollToPos(pos)
     } else {
