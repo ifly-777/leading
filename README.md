@@ -1,8 +1,14 @@
 # Leading
 
+Leading is a free Mac app for reading Markdown. It sets a note as a well-made page, in a good typeface, with nothing else on screen. It reads everything a modern note holds: Obsidian vaults with their links, embeds, callouts and highlights, LaTeX math, Mermaid diagrams and code. Then it does what a reader does: it marks passages, lists and quotes them, follows links, and puts the result on paper. There is no account, no subscription and no network connection.
+
 *Said “ledding”, to rhyme with heading.* Leading is the typesetter’s word for the space between lines of type, named after the strips of lead that once held them apart.
 
-Leading is a free Mac app for reading Markdown. It sets a note as a well-made page, in a good typeface, with nothing else on screen. It reads everything a modern note holds: Obsidian vaults with their links, embeds, callouts and highlights, LaTeX math, Mermaid diagrams and code. Then it does what a reader does: it marks passages, lists and quotes them, follows links, and puts the result on paper. There is no account, no subscription and no network connection.
+<p align="center">
+<a href="https://github.com/ifly-777/leading/releases/latest"><img src="https://img.shields.io/github/v/release/ifly-777/leading?label=download" alt="Download the latest release"></a>
+<img src="https://img.shields.io/badge/macOS-26%2B-lightgrey?logo=apple" alt="macOS 26 or later">
+<a href="LICENSE"><img src="https://img.shields.io/github/license/ifly-777/leading" alt="MIT licence"></a>
+</p>
 
 <p align="center"><img src="docs/screenshots/reading.png" alt="Leading showing a passage from Thoreau's Walden in Literata on warm light paper, with one sentence highlighted in yellow" width="880"></p>
 
@@ -85,6 +91,10 @@ All of it is bundled with the app, so nothing is fetched from the internet.
 
 A typical note is on screen in about a tenth of a second once Leading is running; a 5 MB file, around half a second from a cold start (Apple M2). Leading collects nothing and sends nothing, and it never loads anything from the web, not even images in a note.
 
+## Why Leading?
+
+Obsidian’s reading view, Typora and their kin are editors first, and their reading modes look it. Leading is a reader first: it sets the page, then lets you highlight, quote and print what you read, and edits only when you ask. It is not a notes manager and does not sync. Open a file from Finder, or a note straight from your vault; there is nothing to import.
+
 ## Keyboard
 
 | To do this | Press |
@@ -135,7 +145,7 @@ cd .. && scripts/selftest-app.sh   # the built app checks its own menus, editing
 
 ## Fonts
 
-Bundled unmodified under the SIL Open Font License 1.1: Literata (TypeTogether, for Google), Atkinson Hyperlegible Next (Braille Institute), and iA Writer Quattro and Mono (Information Architects, based on IBM Plex). Leading is not affiliated with iA and does not imitate iA Writer. New York, Charter and SF Mono come with macOS and are not bundled.
+Bundled unmodified under the SIL Open Font License 1.1, each with its licence file in its folder in `web/fonts/`: Literata (TypeTogether, for Google), Atkinson Hyperlegible Next (Braille Institute), and iA Writer Quattro and Mono (Information Architects, based on IBM Plex). Leading is not affiliated with iA and does not imitate iA Writer. New York, Charter and SF Mono come with macOS and are not bundled.
 
 Math is set by [KaTeX](https://katex.org) and its own math fonts (MIT, Khan Academy and contributors), and diagrams are drawn by [Mermaid](https://mermaid.js.org) (MIT). Both are bundled with the app.
 

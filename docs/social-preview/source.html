@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- GitHub's social-preview card, 1280 × 640, rendered to ../social-preview.png by
+       swift scripts/render.swift docs/social-preview/source.html docs/social-preview.png 1280 640 1
+     and uploaded by hand in the repository's Settings › Social preview. -->
+<html lang="en">
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Literata"; src: url("../../web/fonts/literata/Literata-VF.ttf"); font-weight: 200 900; }
+  @font-face { font-family: "Literata"; src: url("../../web/fonts/literata/Literata-Italic-VF.ttf"); font-weight: 200 900; font-style: italic; }
+  * { margin: 0; box-sizing: border-box; }
+  /* The same warm paper as the disk image, so the brand reads the same everywhere. */
+  html, body { width: 1280px; height: 640px; background: #FBF8F2; color: #2B2824; font-family: "Literata", serif; overflow: hidden; }
+  .words { position: absolute; left: 72px; top: 0; bottom: 0; width: 400px; display: flex; flex-direction: column; justify-content: center; }
+  .words img { width: 112px; height: 112px; margin: 0 0 28px -10px; }
+  h1 { font-size: 76px; font-weight: 600; letter-spacing: -0.015em; line-height: 1; }
+  p { margin-top: 22px; font-size: 32px; line-height: 1.3; font-style: italic; color: #4A453F; }
+  .small { margin-top: 30px; font-size: 19px; font-style: normal; color: #7A7268; }
+  /* The screenshot bleeds off the right edge, so the card shows a page, not a whole window.
+     It already carries the window's own shadow, so it gets no frame of its own. */
+  .shot { position: absolute; left: 500px; top: 34px; width: 860px; }
+</style>
+<div class="words">
+  <img src="../icon/icon.png" alt="">
+  <h1>Leading</h1>
+  <p>Markdown and Obsidian notes, set as pages.</p>
+  <p class="small">Free for the Mac · No account · Nothing sent</p>
+</div>
+<img class="shot" src="../screenshots/reading.png" alt="">
+</html>
