@@ -61,7 +61,8 @@ public enum SealedText {
             }
         }
         precondition(status == kCCSuccess, "PBKDF2 failed: \(status)")
-        defer { key.withUnsafeMutableBytes { memset_s($0.baseAddress, $0.count, 0, $0.count) } }
+        // memset_s, unlike memset, is never optimised away; its status is of no use here.
+        defer { _ = key.withUnsafeMutableBytes { memset_s($0.baseAddress, $0.count, 0, $0.count) } }
         return SymmetricKey(data: key)
     }
 
