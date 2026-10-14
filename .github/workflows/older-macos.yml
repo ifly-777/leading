@@ -56,12 +56,14 @@ jobs:
           ROOT="$PWD"
           source scripts/lib/snapshot.sh
           mkdir -p shots
+          # Absolute paths: an app started by open runs from /, not from here.
+          O="$PWD/shots"
           S=docs/screenshots/sources
-          snapshot shots/reading.png   "$S/Where I Lived.md"   '{"theme":"light"}'                   1100x780
-          snapshot shots/outline.png   "$S/Walden.md"          '{"theme":"dark","outlineOpen":true}' 1100x780
-          snapshot shots/editing.png   "$S/Where I Lived.md"   '{"theme":"light"}'                   1100x780 1
-          snapshot shots/technical.png "$S/Lift and Range.md"  '{"theme":"sepia"}'                   1100x830
-          snapshot shots/vault.png     "$S/Reading Marcus.md"  '{"theme":"dark"}'                    1100x820 0 showHighlights
+          snapshot "$O/reading.png"   "$S/Where I Lived.md"   '{"theme":"light"}'                   1100x780
+          snapshot "$O/outline.png"   "$S/Walden.md"          '{"theme":"dark","outlineOpen":true}' 1100x780
+          snapshot "$O/editing.png"   "$S/Where I Lived.md"   '{"theme":"light"}'                   1100x780 1
+          snapshot "$O/technical.png" "$S/Lift and Range.md"  '{"theme":"sepia"}'                   1100x830
+          snapshot "$O/vault.png"     "$S/Reading Marcus.md"  '{"theme":"dark"}'                    1100x820 0 showHighlights
 
       # The snapshots leave out the system's title and tab bars, so also look at
       # the real screen: two notes in one window as tabs, the band of paper behind
@@ -73,7 +75,7 @@ jobs:
           mkdir -p shots
           cp -R build/Leading.app /Applications/
           defaults write io.github.ifly-777.leading firstRunDone -bool true
-          defaults write -g AppleWindowTabbingMode always
+          defaults write io.github.ifly-777.leading AppleWindowTabbingMode always
           S=docs/screenshots/sources
           open -a /Applications/Leading.app "$S/Lift and Range.md"
           sleep 4
