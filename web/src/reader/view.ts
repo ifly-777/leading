@@ -407,6 +407,9 @@ export class ReaderView {
   /** A preview with nowhere to save (Quick Look): no highlighting, no ticking, no editing. */
   readOnly = false
 
+  /** Highlights and ticks allowed, but no source editing (the Leading Guide). */
+  noEdit = false
+
   /** The file's name, for the link a quotation carries back to it (set by the host). */
   docName: string | null = null
 
@@ -715,7 +718,7 @@ export class ReaderView {
   command(c: Command): Promise<void> | void {
     const s = this.settings
     switch (c) {
-      case 'toggleEdit': return this.readOnly ? undefined : this.toggleEdit()
+      case 'toggleEdit': return this.readOnly || this.noEdit ? undefined : this.toggleEdit()
       case 'back': this.goBack(); break
       case 'showHighlights': this.toggleHighlights(); break
       case 'copyHighlights': this.copyHighlights(); break

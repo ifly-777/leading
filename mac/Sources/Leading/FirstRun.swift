@@ -31,11 +31,19 @@ enum FirstRun {
     /// copy go with it; that is the price of never showing stale instructions.
     static func openGuide() { openCopy(of: "Leading Guide", refreshPerVersion: true) }
 
+    /// Where the guide's copy lives. A document at this address opens without
+    /// source editing (see MarkdownDocument.isGuide).
+    static var guideURL: URL? { copiesFolder?.appendingPathComponent("Leading Guide.md") }
+
+    private static var copiesFolder: URL? {
+        try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            .appendingPathComponent("Leading", isDirectory: true)
+    }
+
     private static func openCopy(of name: String, refreshPerVersion: Bool) {
         guard let bundled = Bundle.main.url(forResource: name, withExtension: "md") else { return }
         let fm = FileManager.default
-        guard let support = try? fm.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true) else { return }
-        let folder = support.appendingPathComponent("Leading", isDirectory: true)
+        guard let folder = copiesFolder else { return }
         let copy = folder.appendingPathComponent(bundled.lastPathComponent)
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
         let versionKey = "copyVersion." + name

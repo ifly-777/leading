@@ -166,7 +166,15 @@ final class MarkdownDocument: NSDocument {
 
     /// The four commands that change encryption are only for a saved file:
     /// an untitled note's autosaves live elsewhere and could leave plain copies.
-    var canEncrypt: Bool { fileURL != nil && !isEncrypted }
+    var canEncrypt: Bool { fileURL != nil && !isEncrypted && !isGuide }
+
+    /// The Leading Guide's own copy. It is reference, so its source cannot be
+    /// edited; highlighting and ticking tasks still write to it, as marking up a
+    /// manual should. File › Duplicate gives a copy that edits normally.
+    var isGuide: Bool {
+        guard let url = fileURL, let guide = FirstRun.guideURL else { return false }
+        return url.resolvingSymlinksInPath().standardizedFileURL == guide.resolvingSymlinksInPath().standardizedFileURL
+    }
 
     /// Encrypt a plain note. Once the sealed file is saved, the plain versions
     /// macOS kept for File › Revert To are removed, or they would stay readable.

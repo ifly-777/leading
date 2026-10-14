@@ -108,9 +108,10 @@ document.addEventListener('click', (e) => {
 
 ;(window as any).leading = {
   /** Show a document (called by Swift when a file opens or changes on disk). */
-  async load(args: { text?: string; textURL?: string; imageBase: string | null; plain?: boolean; keepPlace?: boolean; fromDisk?: boolean; edit?: boolean; resume?: Place; name?: string; preview?: boolean }) {
+  async load(args: { text?: string; textURL?: string; imageBase: string | null; plain?: boolean; keepPlace?: boolean; fromDisk?: boolean; edit?: boolean; resume?: Place; name?: string; preview?: boolean; noEdit?: boolean }) {
     view.docName = args.name ?? null
     view.readOnly = !!args.preview
+    view.noEdit = !!args.noEdit
     if (view.readOnly) document.documentElement.dataset.readOnly = ''
     // Heading jumps that arrive with the document wait until its text is shown.
     let shown!: () => void

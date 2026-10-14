@@ -2,7 +2,7 @@
 
 This guide covers everything Leading does, and the Markdown it reads: plain Markdown, Obsidian’s additions, LaTeX math and Mermaid diagrams. Where it shows syntax, the source comes first, in a grey block, and the result follows, as Leading sets it. The outline (⌥⌘O) is the quickest way round. Every keyboard shortcut is listed at the end.
 
-This copy is yours to try things on. Leading replaces it with a fresh one when it updates, so highlights you make here last only until then.
+You can highlight this guide and tick its tasks, but not edit its text; File › Duplicate (⇧⌘S) makes a copy you can edit. Leading replaces the guide with a fresh copy when it updates, so highlights made here last only until then.
 
 ## Opening files
 

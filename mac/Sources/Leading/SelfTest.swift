@@ -285,10 +285,35 @@ enum SelfTest {
                                 check("Cancel keeps the new document open, text intact", stillOpen && doc.text == "A new thought.")
                                 doc.updateChangeCount(.changeCleared)
                                 doc.close()
-                                placeCheck(check: check, done: done)
+                                guideCheck(check: check, done: done)
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    /// Help › Leading Guide: the guide opens for reading and highlighting, but
+    /// Edit Source is off and ⌘E sent straight to the window does nothing.
+    private static func guideCheck(check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        FirstRun.openGuide()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            guard let doc = NSDocumentController.shared.documents.first(where: { ($0 as? MarkdownDocument)?.isGuide == true }) as? MarkdownDocument,
+                  let wc = doc.windowControllers.first as? DocumentWindowController else {
+                check("Help › Leading Guide opens the guide", false); return placeCheck(check: check, done: done)
+            }
+            let edit = NSMenuItem(title: "", action: #selector(ReaderActions.leadingToggleEdit(_:)), keyEquivalent: "")
+            let highlight = NSMenuItem(title: "", action: #selector(ReaderActions.leadingHighlightYellow(_:)), keyEquivalent: "")
+            let validator = wc as? NSMenuItemValidation
+            check("The guide offers highlighting but not Edit Source",
+                  validator?.validateMenuItem(edit) == false && validator?.validateMenuItem(highlight) == true && !doc.canEncrypt)
+            wc.leadingToggleEdit(nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                wc.pageForTests.callAsyncJavaScript("return document.documentElement.dataset.mode !== 'edit' && window.leading.view.mode === 'read'", arguments: [:], in: nil, in: .page) { r in
+                    check("⌘E leaves the guide in reading mode", (try? r.get()) as? Bool == true)
+                    doc.close()
+                    placeCheck(check: check, done: done)
                 }
             }
         }

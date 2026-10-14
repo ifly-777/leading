@@ -136,7 +136,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func sendDocument(_ doc: MarkdownDocument, keepPlace: Bool, fromDisk: Bool = false, startEditing: Bool = false) {
         guard web != nil, !doc.isPasswordLocked else { return }
-        var args: [String: Any] = ["imageBase": imageBase, "plain": doc.showsPlainText, "keepPlace": keepPlace, "fromDisk": fromDisk, "edit": startEditing]
+        var args: [String: Any] = ["imageBase": imageBase, "plain": doc.showsPlainText, "keepPlace": keepPlace, "fromDisk": fromDisk, "edit": startEditing, "noEdit": doc.isGuide]
         // For the link back that Copy as Quote adds: the note's name, as a wikilink names it.
         if let url = doc.fileURL { args["name"] = url.deletingPathExtension().lastPathComponent }
         // Opening afresh: go back to where the reader stopped last time.
@@ -317,7 +317,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingNarrower(_ sender: Any?) { command("narrower") }
     @objc func leadingWider(_ sender: Any?) { command("wider") }
     @objc func leadingCycleTheme(_ sender: Any?) { command("cycleTheme") }
-    @objc func leadingToggleEdit(_ sender: Any?) { command("toggleEdit") }
+    @objc func leadingToggleEdit(_ sender: Any?) {
+        // The menu item is off for the guide; this also stops a direct send.
+        guard doc?.isGuide != true else { return NSSound.beep() }
+        command("toggleEdit")
+    }
     @objc func leadingFindReplace(_ sender: Any?) { command("findReplace") }
     @objc func leadingUndo(_ sender: Any?) { command("undo") }
     @objc func leadingRedo(_ sender: Any?) { command("redo") }
@@ -462,6 +466,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             return !editing
         case #selector(leadingToggleEdit(_:)):
             item.title = editing ? "Read" : "Edit Source"
+            return doc?.isGuide != true
         case #selector(leadingUndo(_:)): return canUndo
         case #selector(leadingRedo(_:)): return canRedo
         // Formatting and Replace change the file, so they exist only while editing.
