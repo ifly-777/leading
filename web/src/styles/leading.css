@@ -321,6 +321,10 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .fn-pop .fn-body > :last-child { margin-bottom: 0; }
 .fn-pop .fn-num { color: var(--muted); margin-right: 0.5em; font-size: 0.85em; font-variant-numeric: lining-nums; }
 [data-mode="edit"] .fn-pop { display: none; }
+/* A linked note's preview: the same card, a little taller, its headings scaled down. */
+.link-pop { max-height: 50vh; }
+.link-pop .fn-body :is(h1, h2, h3) { font-size: 1.1em; margin-top: 0.6em; }
+.link-pop .fn-body > :first-child { margin-top: 0; }
 
 /* ---- Embeds (![[…]]) ---------------------------------------------------------
    An embedded note sits in the column like a quotation from another file: a

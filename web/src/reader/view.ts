@@ -25,6 +25,7 @@ import { ProgressMark, cumulativeWords, progressAt } from './progress'
 import { FootnotePopover } from './footnote-popover'
 import { Diagrams } from './diagrams'
 import { NoteEmbeds } from './embeds'
+import { LinkPreview } from './link-preview'
 
 export interface ViewElements {
   win: HTMLElement; scroller: HTMLElement; doc: HTMLElement; layer: HTMLElement
@@ -90,6 +91,8 @@ export class ReaderView {
   readonly diagrams: Diagrams
   /** Notes embedded with ![[Note]], filled in after the page renders */
   readonly embeds: NoteEmbeds
+  /** A glance at a linked note, on hover */
+  readonly preview: LinkPreview
   /** Words before each block, for the progress mark; rebuilt when the blocks change. */
   private words: { blocks: unknown; n: number; cum: Float64Array } | null = null
   private progressFrame = 0
@@ -139,6 +142,7 @@ export class ReaderView {
     this.diagrams = new Diagrams(doc, scroller)
     this.embeds = new NoteEmbeds(doc)
     this.embeds.onFilled = () => this.diagrams.scan()
+    this.preview = new LinkPreview(win, scroller, doc, this.embeds)
     // Plain text shows the file unrendered: there is no Markdown to place a highlight in.
     this.palette.active = () => this.mode === 'read' && !this.lastOpen.plain
     this.palette.onPick = (slot, target) => { void this.highlightInReader(slot, false, target) }
@@ -276,6 +280,7 @@ export class ReaderView {
       }
     }
     this.footnotes.hide()
+    this.preview.hide()
     this.embeds.setDocument(opts.imageBase)
     // A different document (not a reload of this one): its jumps have nothing to go back to.
     if (!opts.keepPlace && !opts.fromDisk && opts.placeAt === undefined && this.backStack.length) {
@@ -447,6 +452,7 @@ export class ReaderView {
       this.find.setEngine(session.find, view.scrollDOM)
       this.progress.hide()
       this.footnotes.hide()
+      this.preview.hide()
       ed.focus()
       ed.scrollToPos(pos)
     } else {

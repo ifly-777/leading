@@ -35,3 +35,28 @@ test('embedded notes and pictures appear in place, as copies the page cannot edi
   await page.waitForTimeout(300)
   await expect(page.locator('.findbar .count')).toHaveText(/^(No matches|0)/)
 })
+
+test('resting on a link to a note shows its opening, or the section it names', async ({ page }) => {
+  await page.route('**/__wiki/abc/Reading%20list', (r) => r.fulfill({ body: NOTE, contentType: 'text/plain' }))
+  await page.route('**/__wiki/abc/notes%2Fother.md', (r) => r.fulfill({ body: '# Other\n\nThe other note.', contentType: 'text/plain' }))
+  await page.setViewportSize({ width: 920, height: 870 })
+  await page.goto('/app.html')
+  await page.waitForFunction(() => (window as any).leading)
+  const text = 'See [[Reading list#Films|films]], [[Reading list]] and [the other](notes/other.md), or [the web](https://example.com).'
+  await page.evaluate(async (t) => { await (window as any).leading.load({ text: t, imageBase: '/doc/abc/' }) }, text)
+  const card = page.locator('.link-pop')
+  await page.locator('#doc .wikilink', { hasText: 'films' }).hover()
+  await expect(card).toBeVisible()
+  await expect(card).toContainText('Not this part.') // the Films section
+  await expect(card).not.toContainText('Walden')
+  await page.mouse.move(5, 800)
+  await expect(card).toBeHidden()
+  await page.locator('#doc a', { hasText: 'the other' }).hover()
+  await expect(card).toContainText('The other note.')
+  await page.keyboard.press('Escape')
+  await expect(card).toBeHidden()
+  // A web link shows nothing: nothing ever leaves the Mac.
+  await page.locator('#doc a', { hasText: 'the web' }).hover()
+  await page.waitForTimeout(800)
+  await expect(card).toBeHidden()
+})

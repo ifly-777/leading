@@ -36,24 +36,43 @@ export class NoteEmbeds {
     }
   }
 
+  /** Another note, or one section of it, rendered as a copy (see `noteCopy`). Null if it cannot be found. */
+  note(target: string, heading?: string, maxBlocks = Infinity): Promise<HTMLElement | null> {
+    return this.docId ? noteCopy(this.docId, this.imageBase, target, heading, maxBlocks) : Promise.resolve(null)
+  }
+
   private async fill(el: HTMLElement): Promise<void> {
-    const target = el.dataset.target ?? ''
-    let text: string | null = null
-    try {
-      const r = await fetch(`/__wiki/${this.docId}/${encodeURIComponent(target)}`)
-      if (r.ok) text = await r.text()
-    } catch { /* not found: stays a link */ }
+    const body = await this.note(el.dataset.target ?? '', el.dataset.heading)
     if (!el.isConnected) return
-    if (text === null) { el.dataset.filled = 'missing'; return }
-    const body = document.createElement('div')
+    if (!body) { el.dataset.filled = 'missing'; return }
     body.className = 'note-embed-body'
-    body.innerHTML = renderMarkdown(text, { imageBase: this.imageBase }).blocks.map((b) => b.html).join('')
-    if (el.dataset.heading) keepSection(body, el.dataset.heading)
-    unplace(body)
     el.append(body)
     el.dataset.filled = 'yes'
     this.onFilled()
   }
+}
+
+/**
+ * Fetch a note the app finds in the vault (relative paths and names alike) and
+ * render it as a copy: positions, ids and nested embeds removed.
+ */
+export async function noteCopy(docId: string, imageBase: string | null, target: string, heading?: string, maxBlocks = Infinity): Promise<HTMLElement | null> {
+  let text: string | null = null
+  try {
+    const r = await fetch(`/__wiki/${docId}/${encodeURIComponent(target)}`)
+    if (r.ok) text = await r.text()
+  } catch { /* not found */ }
+  if (text === null) return null
+  const body = document.createElement('div')
+  const blocks = renderMarkdown(text, { imageBase }).blocks
+  // A section is cut from the whole note; a preview needs only the opening.
+  body.innerHTML = (heading ? blocks : blocks.slice(0, maxBlocks)).map((b) => b.html).join('')
+  if (heading) {
+    keepSection(body, heading)
+    while (body.children.length > maxBlocks) body.lastElementChild!.remove()
+  }
+  unplace(body)
+  return body
 }
 
 /** Keep only the section under the named heading: from it to the next heading at its level or above. */
