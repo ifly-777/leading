@@ -25,6 +25,19 @@ Close a file and open it again later, and it opens where you stopped. Click a fo
 > [!tip] Notes from Obsidian
 > Leading reads Obsidian’s callouts like this one, its wikilinks and its highlights, and shows a note’s properties as one quiet line you can open.
 
+Math is typeset as Obsidian writes it: $e^{i\pi} + 1 = 0$ between single dollars, and a display formula between double ones. A dollar before a price stays a dollar, so $5 and $10 read as written.
+
+$$
+\int_0^1 x^2\,dx = \frac{1}{3}
+$$
+
+Mermaid diagrams are drawn in the page’s colours:
+
+```mermaid
+graph LR
+  A[Read] --> B[Highlight] --> C[Find it again]
+```
+
 ## Highlighting
 
 Select some text and press ⇧⌘H, or pick a colour with ⌥⌘1 to ⌥⌘5 (yellow, green, blue, pink, orange). ⌥⌘0 removes a highlight. Try it on this sentence.

@@ -16,6 +16,20 @@ export const TEXT_BREAK_TAGS = new Set([
 ])
 
 /**
+ * Formulas and diagrams are left out of Find: their source is not what the
+ * page shows, and what KaTeX and Mermaid draw is not text a reader searches.
+ */
+export const UNSEARCHED_CLASSES = ['math', 'diagram']
+/** For a hast className (array or string) or a DOM classList. */
+export function isUnsearched(className: unknown): boolean {
+  if (!className) return false
+  const has: (c: string) => boolean = typeof (className as DOMTokenList).contains === 'function'
+    ? (c) => (className as DOMTokenList).contains(c)
+    : (c) => (typeof className === 'string' ? className.split(' ') : (className as string[])).includes(c)
+  return UNSEARCHED_CLASSES.some(has)
+}
+
+/**
  * Concatenated text of a tree, with "\n" wherever the nearest text-breaking
  * ancestor changes. Works on hast (in workers) and, via `kids`/`tag`/`value`
  * accessors, on the DOM, so both sides follow exactly the same rule.

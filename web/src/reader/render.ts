@@ -8,7 +8,7 @@
 
 import { renderMarkdown, renderPiece, type Block, type OutlineItem, type RenderOptions, type RenderResult } from '../core/pipeline'
 import type { Edit } from '../core/format'
-import { splitForParallel, referenceDefinitions } from '../core/chunks'
+import { splitForParallel, referenceDefinitions, FENCE, nextFence } from '../core/chunks'
 import { topIn } from './geometry'
 import { SearchIndex } from '../core/search-index'
 
@@ -42,11 +42,10 @@ export function cutPrefix(src: string, target = PREVIEW_BYTES): string {
   while (i < src.length) {
     const nl = src.indexOf('\n', i)
     const line = src.slice(i, nl < 0 ? src.length : nl)
-    const f = /^ {0,3}(`{3,}|~{3,})/.exec(line)
-    if (f) {
-      if (!fence) fence = f[1]
-      else if (f[1][0] === fence[0] && f[1].length >= fence.length && line.trim() === f[1]) fence = null
-    } else if (!fence && i >= target && line.trim() === '') {
+    const isFence = FENCE.test(line)
+    const was = fence
+    fence = nextFence(line, fence)
+    if (!isFence && !was && i >= target && line.trim() === '') {
       return src.slice(0, i)
     }
     if (nl < 0) break

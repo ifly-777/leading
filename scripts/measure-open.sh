@@ -7,7 +7,8 @@
 #   scripts/measure-open.sh [runs]        (default 8; build/Leading.app must exist)
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$ROOT/build/Leading.app"
+# LEADING_APP measures another build instead, such as the last release, to compare.
+APP="${LEADING_APP:-$ROOT/build/Leading.app}"
 RUNS="${1:-8}"
 WORK="$(mktemp -d)"
 LOG="$WORK/timing.jsonl"

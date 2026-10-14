@@ -2,6 +2,22 @@
 
 Short notes on choices that are not obvious from the code, and what testing showed. Newest first.
 
+## Leading 1.2
+
+### Math is typeset while the file is parsed
+KaTeX is pure JavaScript, so the parsing workers typeset each formula as they render its block, and math arrives already set in the first paint. Nothing changes height afterwards, so a remembered place still lands on the right line. Each formula leaves a numbered empty span in the tree, and KaTeX's HTML replaces it after the block is serialised: KaTeX needs its own inline styles, which the sanitiser rightly strips from the file's HTML. Only the TeX ever reaches KaTeX, which escapes it, with `trust` off, so `\href{javascript:…}` and raw tags come out as text.
+
+Single dollars follow Obsidian's rule, not the CommonMark extension's. A `$` opens math only if a non-space follows it, and closes it only if a non-space precedes it and no digit follows. The stock extension would take "it costs $5 and $10" as a formula. A `$` that cannot close because a space precedes it ends the attempt, so in "$3.50 vs $x$" only `$x$` is math. The rule lives in a tokenizer (`plugins/math-text.ts`), not a pass over the text, because emphasis and escapes are resolved first: `$a*b*c$` and `$\{x\}$` would otherwise reach KaTeX broken. `$$` blocks count as fences when the file is split for the workers, so a display formula with a blank line or a `# ` inside is never cut.
+
+Formulas and diagrams are left out of Find, on both sides (the worker's index and the page's own count), so match numbers cannot drift. For highlights a formula is one piece, like inline code.
+
+KaTeX adds about 265 kB to the page and to each worker. Warm opening of the standard files changed by 1 to 3 ms (prose 69–70 → 72–73 ms, tables 82–83 → 84 ms, M2). Cold launches varied by hundreds of milliseconds between runs of the same build, too much to see a difference of this size. If it ever matters, KaTeX can load only for files that contain `$`.
+
+### Diagrams are drawn on the page, and only when there is one
+Mermaid measures text in a live page, so it cannot run in the workers. It is also large (about 7 MB with its layout engines), so it is a separate bundle loaded the first time a file has a diagram. It ships inside the app and needs nothing from the network or the CSP. All twenty diagram types tried, from flowcharts to C4, Kanban and architecture, drew under `script-src 'self'` with no CSP violation and no error. Diagrams near the window are drawn first and the rest as they come within 1,500 px. They use the theme's own colours and the reading font through Mermaid's `base` theme, are cached by source and look, and are drawn again when the theme or font changes. A diagram that fails shows its source and Mermaid's first line of complaint.
+
+Current WebKit anchors scrolling itself (`overflow-anchor`), so when a diagram above the window grows, the line being read stays put. Moving the page by the change as well, as first written, moved it twice. The manual correction now runs only on engines without native anchoring.
+
 ## After 1.0.0
 
 ### Wikilinks are found the way Obsidian finds them
@@ -25,6 +41,8 @@ Adding a highlight could make a whole paragraph re-break. The cause was `box-dec
 The marker is now a single uncloned box. It keeps its soft fill, rounded corners and slight overhang at the two ends of the highlight; where the highlight wraps onto another line, the fill now stops square at the text. `text-wrap: pretty` stays: it is the better paragraph and it was never the culprit.
 
 `highlight-reflow.spec.ts` renders three paragraphs with and without seven highlights, in all three styles, ragged and justified, at every 4 px from 420 to 640 px, and requires identical breaks. With the clone back it fails 2,241 cases; without it, none.
+
+The test that a boundary at a space moves nothing runs on macOS only. On the Linux CI runner, WebKit shapes with HarfBuzz instead of CoreText, and marking the word "office" moves its glyphs there. That is not the engine Leading ships on, and on macOS nothing moves.
 
 A boundary inside a word is a separate, smaller effect. WebKit shapes the text on each side of an inline element apart, so kerning and ligatures across the cut are lost: "AV|ATAR" grows 2.4 px, "of|fice" loses its ligature. The rest of the line shifts by that much, and now and then a break moves (12 of 2,016 mid-word cases per style in an earlier run of the same test, identical for every style and for a bare `<span>`). A boundary at a space changes no glyph's position. Reader highlights are not snapped to words, so a sloppy drag still causes this. The cures are to snap highlights to word edges or to draw them without an element (an overlay from the range's rectangles, or the CSS Custom Highlight API); both are larger changes and neither was made here.
 

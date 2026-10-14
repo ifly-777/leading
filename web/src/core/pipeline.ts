@@ -7,12 +7,15 @@ import { gfm } from 'micromark-extension-gfm'
 import { gfmFromMarkdown } from 'mdast-util-gfm'
 import { frontmatter } from 'micromark-extension-frontmatter'
 import { frontmatterFromMarkdown } from 'mdast-util-frontmatter'
+import { math } from 'micromark-extension-math'
+import { mathFromMarkdown } from 'mdast-util-math'
 import { toHast, defaultHandlers, type Handlers, type State } from 'mdast-util-to-hast'
 import { raw } from 'hast-util-raw'
 import { sanitize, defaultSchema, type Schema } from 'hast-util-sanitize'
 import { toHtml } from 'hast-util-to-html'
 import { trimLines } from 'trim-lines'
 import YAML from 'yaml'
+import katex from 'katex'
 import type { Root } from 'mdast'
 import type { Element, ElementContent, Root as HastRoot, Properties } from 'hast'
 import './nodes'
@@ -20,9 +23,10 @@ import type { Callout, Highlight, WikiLink } from './nodes'
 import { transformCallouts } from './plugins/callout'
 import { transformInline } from './plugins/inline'
 import { smarten } from './plugins/smartquotes'
+import { obsidianMathText } from './plugins/math-text'
 import { classifyTables } from './tables'
 import { textOf } from './text'
-import { blockText } from './search-index'
+import { blockText, isUnsearched } from './search-index'
 
 export interface OutlineItem { depth: number; text: string; id: string; s: number; /** top-level block holding it */ b: number }
 export interface Block {
@@ -42,8 +46,9 @@ export interface RenderOptions {
 export function parse(src: string): Root {
   const tree = fromMarkdown(src, {
     // Obsidian needs ~~double~~ tildes for strikethrough; a single ~ is literal.
-    extensions: [gfm({ singleTilde: false }), frontmatter(['yaml'])],
-    mdastExtensions: [gfmFromMarkdown(), frontmatterFromMarkdown(['yaml'])],
+    // Math: $$…$$ from the stock extension, single dollars by Obsidian's rules (see math-text.ts).
+    extensions: [gfm({ singleTilde: false }), frontmatter(['yaml']), math({ singleDollarTextMath: false }), obsidianMathText()],
+    mdastExtensions: [gfmFromMarkdown(), frontmatterFromMarkdown(['yaml']), mathFromMarkdown()],
   })
   transformCallouts(tree, src)
   transformInline(tree, src)
@@ -76,7 +81,30 @@ export function slugify(text: string): string {
     .replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'section'
 }
 
-function makeHandlers(outline: OutlineItem[], opts: RenderOptions): Handlers {
+/**
+ * A formula's place in the tree: an empty span holding its number in `tex`.
+ * KaTeX's HTML replaces it after the block is serialised (see `typeset`),
+ * so its inline styles never meet the sanitiser. Only the TeX goes in, and
+ * KaTeX escapes it, so nothing from the file reaches the page unescaped.
+ */
+function mathEl(tex: string[], value: string, display: boolean, node: any): Element {
+  tex.push((display ? 'D' : 'I') + value)
+  const slot = el('span', { dataTex: tex.length - 1 }, [])
+  return el(display ? 'div' : 'span', { className: display ? ['math', 'display'] : ['math'], ...pos(node) }, [slot])
+}
+
+const SLOT = /<span data-tex="(\d+)"><\/span>/g
+
+function typeset(html: string, tex: string[]): string {
+  if (!html.includes('data-tex')) return html
+  return html.replace(SLOT, (_, n) => {
+    const t = tex[Number(n)]
+    // A bad formula shows its source in the error colour; it never stops the page.
+    return katex.renderToString(t.slice(1), { displayMode: t[0] === 'D', throwOnError: false, output: 'htmlAndMathml', trust: false, strict: 'ignore' })
+  })
+}
+
+function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]): Handlers {
   const slugs = new Map<string, number>()
   return {
     text(state: State, node: any) {
@@ -99,7 +127,23 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions): Handlers {
       e.properties.dir = 'auto' // Arabic, Hebrew and other RTL paragraphs flow correctly
       return e
     },
+    math(state, node: any) {
+      const e = mathEl(tex, node.value, true, node)
+      state.patch(node, e)
+      return e
+    },
+    inlineMath(state, node: any) {
+      const e = mathEl(tex, node.value, false, node)
+      state.patch(node, e)
+      return e
+    },
     code(state, node) {
+      // GitHub writes display math as a ```math fence.
+      if (node.lang === 'math') return mathEl(tex, node.value, true, node)
+      // Mermaid draws on the page (reader/diagrams.ts); the source waits in the figure.
+      if (node.lang === 'mermaid') {
+        return el('figure', { className: ['diagram'], ...pos(node) }, [el('pre', { className: ['diagram-src'] }, [{ type: 'text', value: node.value }])])
+      }
       const e = defaultHandlers.code(state, node)
       Object.assign(e.properties, pos(node))
       return e
@@ -208,7 +252,8 @@ function hasRaw(node: any): boolean {
 
 export function render(tree: Root, opts: RenderOptions = {}): RenderResult {
   const outline: OutlineItem[] = []
-  const hast = toHast(tree, { allowDangerousHtml: true, handlers: makeHandlers(outline, opts) }) as HastRoot
+  const tex: string[] = []
+  const hast = toHast(tree, { allowDangerousHtml: true, handlers: makeHandlers(outline, opts, tex) }) as HastRoot
   const blocks: Block[] = []
   // HTML blocks arrive as top-level "raw" nodes; everything else as elements.
   const kids = hast.children.filter((c) => c.type === 'element' || c.type === ('raw' as string))
@@ -233,8 +278,8 @@ export function render(tree: Root, opts: RenderOptions = {}): RenderResult {
     const s = (group[0].position?.start.offset ?? -1) as number
     const e = (group[group.length - 1].position?.end.offset ?? -1) as number
     Object.assign(node.properties, { dataB: blocks.length, ...(s >= 0 ? { dataS: s, dataE: e } : {}) })
-    const text = blockText<any>(node, (n) => n.children ?? null, (n) => (n.type === 'element' ? n.tagName : null), (n) => (n.type === 'text' ? n.value : null))
-    blocks.push({ html: toHtml(node), s, e, text })
+    const text = blockText<any>(node, (n) => (isUnsearched(n.properties?.className) ? null : n.children ?? null), (n) => (n.type === 'element' ? n.tagName : null), (n) => (n.type === 'text' ? n.value : null))
+    blocks.push({ html: typeset(toHtml(node), tex), s, e, text })
   }
   // Which block holds each heading (most are blocks themselves; some sit in callouts or lists).
   let b = 0
