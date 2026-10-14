@@ -12,7 +12,7 @@
 # and store the file in a password manager.
 #
 #   scripts/release.sh            build and sign everything, publish nothing
-#   scripts/release.sh --publish  then tag, push the tag and publish a GitHub release
+#   scripts/release.sh --publish  then tag, push main and the tag, and publish a GitHub release
 #
 # Before releasing: raise VERSION and BUILD in app.env, and write the notes in
 # docs/releases/<version>.md (they appear in Sparkle's update window and on GitHub).
@@ -34,6 +34,11 @@ fail() { echo "✗ $*" >&2; exit 1; }
 if [ "$PUBLISH" = "--publish" ]; then
   [ -z "$(git -C "$ROOT" status --porcelain)" ] || fail "commit or stash changes first; a release is built from a clean tree"
   ! git -C "$ROOT" rev-parse -q --verify "refs/tags/$TAG" >/dev/null || fail "$TAG already exists; raise VERSION and BUILD in app.env"
+  # The release is pushed with main, so it must be main, and GitHub's main must
+  # be part of it. Checked now, before the build, rather than failing at the end.
+  [ "$(git -C "$ROOT" branch --show-current)" = main ] || fail "release from main"
+  git -C "$ROOT" fetch -q origin main
+  git -C "$ROOT" merge-base --is-ancestor origin/main HEAD || fail "GitHub's main has commits this one lacks; pull them first"
 fi
 
 echo "› Build $APP_NAME $VERSION ($BUILD), Apple Silicon and Intel"
@@ -88,7 +93,9 @@ fi
 
 echo "› Publish $TAG"
 git -C "$ROOT" tag -a "$TAG" -m "$APP_NAME $VERSION"
-git -C "$ROOT" push origin "$TAG"
+# Main and the tag together, or neither: GitHub's main should never lag a release.
+# If the push fails, drop the tag so the next run can make it again.
+git -C "$ROOT" push --atomic origin main "$TAG" || { git -C "$ROOT" tag -d "$TAG" >/dev/null; fail "push failed; nothing was published"; }
 # Marked latest, so releases/latest/download/appcast.xml now serves this feed.
 gh release create "$TAG" "$DMG" "$ZIP" "$FEED" --repo "$REPO" --title "$APP_NAME $VERSION" --notes-file "$NOTES" --latest
 echo "✓ https://github.com/$REPO/releases/tag/$TAG"
