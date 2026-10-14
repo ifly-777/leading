@@ -10,6 +10,10 @@ Leading is a free Mac app for reading Markdown. It sets a note as a well-made pa
 <a href="LICENSE"><img src="https://img.shields.io/github/license/ifly-777/leading" alt="MIT licence"></a>
 </p>
 
+<p align="center">Leading is free. If it helps you, you can buy me a coffee on Ko-fi.<br>
+<a href="https://ko-fi.com/ifly77x"><img height="36" src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" alt="Buy me a coffee at ko-fi.com"></a>
+</p>
+
 <p align="center"><img src="docs/screenshots/reading.png" alt="Leading showing a passage from Thoreau's Walden in Literata on warm light paper, with one sentence highlighted in yellow" width="880"></p>
 
 <p align="center"><img src="docs/video/film.webp" alt="A 28-second film of Leading: Marcus Aurelius set in Literata, a sentence highlighted, five typefaces, light, sepia and dark, a vault note with an embed and its highlights listed, math, a diagram and code, editing and the outline" width="880"><br><sub>Leading in 28 seconds. Download the film: <a href="https://github.com/ifly-777/leading/raw/main/docs/video/leading.mp4">wide</a> · <a href="https://github.com/ifly-777/leading/raw/main/docs/video/leading-square.mp4">square</a></sub></p>
