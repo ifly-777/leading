@@ -134,7 +134,9 @@ enum MainMenu {
 
         let help = NSMenu(title: "Help")
         help.items = [
-            item("Welcome to \(name)", #selector(AppDelegate.showWelcome(_:))),
+            // ⌘? is the Mac's usual key for an app's help; "?" already implies Shift.
+            item("\(name) Guide", #selector(AppDelegate.showGuide(_:)), "?"),
+            item("Welcome to \(name)",#selector(AppDelegate.showWelcome(_:))),
             item("\(name) on GitHub", #selector(AppDelegate.showWebsite(_:))),
         ]
         let helpItem = NSMenuItem(title: "Help", action: nil, keyEquivalent: "")

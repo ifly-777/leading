@@ -97,7 +97,7 @@ All of it is bundled with the app, so nothing is fetched from the internet.
 
 A typical note is on screen in about a tenth of a second once Leading is running; a 5 MB file, around half a second from a cold start (Apple M2). Leading collects nothing and sends nothing, and it never loads anything from the web, not even images in a note.
 
-**Encrypted notes:** File › Encrypt… protects one note with a password, using AES-256. The file keeps its name and stays Markdown, so links and sync still work; other apps see only a notice. Leading locks encrypted notes when the Mac sleeps, its lid closes or the screen locks, and ⌃⌘L locks them at once. There is no way to recover a note whose password is forgotten. Copies made before you encrypted it, in Time Machine or a sync service's history, are not affected.
+**Encrypted notes:** File › Encrypt… protects one note with a password, using AES-256. The file keeps its name and stays Markdown, so links and sync still work; other apps see only a notice. Leading locks encrypted notes when the Mac sleeps, its lid closes or the screen locks, and ⌃⌘L locks them at once. Change an encrypted note only in Leading: altering even one character of its encrypted block in another app destroys it for good. There is no way to recover a note whose password is forgotten. Copies made before you encrypted it, in Time Machine or a sync service's history, are not affected.
 
 ## Why Leading?
 
@@ -119,7 +119,7 @@ Obsidian’s reading view, Typora and their kin are editors first, and their rea
 | Print · insert a page break | ⌘P · ⌘↩ |
 | Lock encrypted notes | ⌃⌘L |
 
-The welcome document that opens the first time lists them all. Help › Welcome to Leading opens it again.
+Help › Leading Guide (⌘?) lists them all, and explains every feature, along with how to write Markdown, LaTeX math and Mermaid diagrams. The guide is a Markdown file you can also [read here](<mac/Resources/Leading Guide.md>).
 
 ## Privacy
 

@@ -24,18 +24,34 @@ enum FirstRun {
     /// file inside the app: highlighting or editing writes to the file, and
     /// writing inside the app would break its signature. The copy is the
     /// reader's own to try things on; it is only replaced if it has gone.
-    static func openWelcome() {
-        guard let bundled = Bundle.main.url(forResource: "Welcome to Leading", withExtension: "md") else { return }
+    static func openWelcome() { openCopy(of: "Welcome to Leading", refreshPerVersion: false) }
+
+    /// The guide is a copy for the same reason, but a manual must match the app
+    /// it describes, so each new version replaces it. Highlights made on the old
+    /// copy go with it; that is the price of never showing stale instructions.
+    static func openGuide() { openCopy(of: "Leading Guide", refreshPerVersion: true) }
+
+    private static func openCopy(of name: String, refreshPerVersion: Bool) {
+        guard let bundled = Bundle.main.url(forResource: name, withExtension: "md") else { return }
         let fm = FileManager.default
         guard let support = try? fm.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true) else { return }
         let folder = support.appendingPathComponent("Leading", isDirectory: true)
         let copy = folder.appendingPathComponent(bundled.lastPathComponent)
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        let versionKey = "copyVersion." + name
+        // Never swap the file out from under an open window; the next open after
+        // it closes picks up the new copy.
+        let stale = refreshPerVersion && UserDefaults.standard.string(forKey: versionKey) != version
+            && NSDocumentController.shared.document(for: copy) == nil
+        if stale { try? fm.removeItem(at: copy) }
         if !fm.fileExists(atPath: copy.path) {
             try? fm.createDirectory(at: folder, withIntermediateDirectories: true)
-            try? fm.copyItem(at: bundled, to: copy)
+            if (try? fm.copyItem(at: bundled, to: copy)) != nil, refreshPerVersion {
+                UserDefaults.standard.set(version, forKey: versionKey)
+            }
         }
         NSDocumentController.shared.openDocument(withContentsOf: copy, display: true) { _, _, error in
-            if let error { NSLog("Leading: could not open the welcome document: %@", String(describing: error)) }
+            if let error { NSLog("Leading: could not open %@: %@", name, String(describing: error)) }
         }
     }
 

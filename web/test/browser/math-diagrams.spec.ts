@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { readFileSync } from 'node:fs'
 
 // Math and Mermaid in the app page, under the app's own Content-Security-Policy.
 async function open(page: Page, text: string) {
@@ -83,4 +84,28 @@ test('highlighting beside a formula, or across one, writes the right source', as
   await page.evaluate(() => (window as any).leading.command({ name: 'highlightYellow' }))
   await expect.poll(() => page.evaluate(() => (window as any).leading.view.text)).toBe('==Energy $E=mc^2$ here== now.')
   expect(await page.locator('#doc mark .math .katex').count()).toBe(1)
+})
+
+test('every math and diagram example in the Leading Guide renders', async ({ page }) => {
+  // The guide teaches by example, so a broken example is a broken lesson.
+  const guide = readFileSync(new URL('../../../mac/Resources/Leading Guide.md', import.meta.url), 'utf8')
+  const problems = await open(page, guide)
+  const figures = await page.locator('#doc figure.diagram').count()
+  expect(figures).toBeGreaterThanOrEqual(9)
+  // Diagrams may draw only near the window, so walk the page down while they settle.
+  await page.evaluate(async () => {
+    const s = document.getElementById('scroller')!; const d = (window as any).leading.view.diagrams
+    for (let y = 0; y <= s.scrollHeight; y += s.clientHeight / 2) {
+      s.scrollTop = y
+      await d.settled; await new Promise((r) => setTimeout(r, 50))
+    }
+    for (let i = 0; i < 20; i++) { await d.settled; await new Promise((r) => setTimeout(r, 100)) }
+  })
+  const errors = await page.locator('#doc figure.diagram .diagram-error').allTextContents()
+  expect(errors).toEqual([])
+  expect(await page.locator('#doc figure.diagram.drawn svg').count()).toBe(figures)
+  // KaTeX, run with throwOnError off, marks a formula it cannot read with .katex-error.
+  expect(await page.locator('#doc .katex-error').allTextContents()).toEqual([])
+  expect(await page.locator('#doc .math .katex').count()).toBeGreaterThanOrEqual(30)
+  expect(problems).toEqual([])
 })

@@ -32,6 +32,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: Help
 
+    @objc func showGuide(_ sender: Any?) { FirstRun.openGuide() }
+
     @objc func showWelcome(_ sender: Any?) { FirstRun.openWelcome() }
 
     @objc func showWebsite(_ sender: Any?) {

@@ -15,18 +15,13 @@ Close a file and open it again later, and it opens where you stopped. Click a fo
 | To do this | Press |
 | --- | --- |
 | Make the text bigger or smaller | ⌘+ and ⌘− (⌘0 to reset) |
-| Narrow or widen the column | ⌥⌘[ and ⌥⌘] |
 | Change theme (auto, light, sepia, dark) | ⌥⌘T |
 | Show or hide the outline | ⌥⌘O |
-| Go back after jumping to a heading or note | ⌘[ |
-| Show how far through you are, and the time left | ⌥⌘P |
 | Dim all but the paragraph you are reading | ⌘D |
-| List your highlights beside the text | ⌥⌘L |
 | Copy the selection as a quotation, with a link back | ⇧⌘C |
-| Print, or File › Export as PDF | ⌘P |
-| Start a new page there, when printed (while editing) | ⌘↩ |
-| Find | ⌘F, then ⌘G for the next match |
-| Lock every encrypted note (File › Encrypt… sets one up) | ⌃⌘L |
+| Find | ⌘F |
+
+Help › Leading Guide (⌘?) has every shortcut, and explains everything here at more length, along with how to write Markdown, math and diagrams.
 
 > [!tip] Notes from Obsidian
 > Leading reads Obsidian’s callouts like this one, its wikilinks and its highlights, and shows a note’s properties as one quiet line you can open.
@@ -77,6 +72,10 @@ If another app changes a file you have open, Leading shows the new version. If y
 ## A new page
 
 Open Leading with no file, or press ⌘N, and you get a blank page ready to write in. Save it with ⌘S; it becomes a Markdown file.
+
+## Encrypted notes
+
+File › Encrypt… protects a note with a password. Once it is encrypted, change it only in Leading. In any other app, Obsidian included, altering a single character of the encrypted block destroys the note for good, and no password will open it again. The guide explains what to watch for.
 
 ## Privacy
 
