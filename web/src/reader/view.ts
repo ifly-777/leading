@@ -21,6 +21,7 @@ import type { HighlightSlot } from '../core/nodes'
 import { highlightEdits } from '../core/highlight-edit'
 import { referenceDefinitions } from '../core/chunks'
 import { ReaderPalette, pointToSource, notice, type PaletteTarget } from './highlights'
+import { ProgressMark, cumulativeWords, progressAt } from './progress'
 
 export interface ViewElements {
   win: HTMLElement; scroller: HTMLElement; doc: HTMLElement; layer: HTMLElement
@@ -79,6 +80,10 @@ export class ReaderView {
   readonly tables: TableWatcher
   /** The colour dots over a selection while reading. */
   readonly palette: ReaderPalette
+  readonly progress: ProgressMark
+  /** Words before each block, for the progress mark; rebuilt when the blocks change. */
+  private words: { blocks: unknown; n: number; cum: Float64Array } | null = null
+  private progressFrame = 0
   /** The source editor, once edit mode has been used (its code loads on demand). */
   editor: SourceEditor | null = null
   private session: EditorSession | null = null
@@ -116,6 +121,7 @@ export class ReaderView {
     this.find = new FindBar(win, scroller, ticks, this.readerFind)
     this.tables = new TableWatcher(scroller, win, frame)
     this.palette = new ReaderPalette(win, frame, scroller, doc)
+    this.progress = new ProgressMark(win)
     // Plain text shows the file unrendered: there is no Markdown to place a highlight in.
     this.palette.active = () => this.mode === 'read' && !this.lastOpen.plain
     this.palette.onPick = (slot, target) => { void this.highlightInReader(slot, false, target) }
@@ -138,6 +144,9 @@ export class ReaderView {
     scroller.addEventListener('scroll', () => {
       clearTimeout(this.placeTimer)
       this.placeTimer = window.setTimeout(() => this.reportPlace(), 500)
+      if (this.settings.progress && !this.progressFrame) {
+        this.progressFrame = requestAnimationFrame(() => { this.progressFrame = 0; this.updateProgress(true) })
+      }
     }, { passive: true })
     new ResizeObserver(() => this.relayout()).observe(scroller)
     this.dark.addEventListener('change', () => this.apply())
@@ -217,6 +226,7 @@ export class ReaderView {
     this.reader.invalidateGeometry()
     this.outline.updateCurrent()
     this.find.draw()
+    this.updateProgress(false)
   }
 
   get theme(): 'light' | 'sepia' | 'dark' { return resolveTheme(this.settings.theme, this.dark.matches) }
@@ -260,6 +270,7 @@ export class ReaderView {
     else if (opts.resume && !opts.plain) this.restorePlace(opts.resume, result)
     if (opts.placeAt !== undefined) this.placeAt(opts.placeAt, result)
     this.outline.updateCurrent()
+    this.updateProgress(false)
     // Warm block geometry once the page settles, so the first Find keystroke is quick,
     // and fetch edit mode's code in the background so ⌘E is instant when it comes.
     setTimeout(() => this.reader.blockY(0, scroller), 300)
@@ -273,13 +284,42 @@ export class ReaderView {
     if (p) this.onPlace({ s: p.s, dy: Math.round(p.dy) })
   }
 
-  /** Where the reader is: the source offset of the block at the top, and how far into it. */
-  private placeMark(): Place | null {
+  /** The block at the top of the reading column, just under the title bar. */
+  private topBlock(): HTMLElement | null {
     const box = this.els.frame.getBoundingClientRect()
     const x = box.left + (parseFloat(getComputedStyle(this.root).getPropertyValue('--col-left')) || box.width / 3) + 40
-    const el = (document.elementFromPoint(x, box.top + 8) as HTMLElement | null)?.closest('[data-b]') as HTMLElement | null
+    return (document.elementFromPoint(x, box.top + 8) as HTMLElement | null)?.closest('[data-b]') as HTMLElement | null
+  }
+
+  /** Where the reader is: the source offset of the block at the top, and how far into it. */
+  private placeMark(): Place | null {
+    const el = this.topBlock()
     if (!el?.dataset.s) return null
     return { s: Number(el.dataset.s) + this.reader.correction(Number(el.dataset.b)), dy: this.els.scroller.scrollTop - topIn(el, this.els.scroller) }
+  }
+
+  /** Redraw the progress mark, if it is on; `scrolling` also shows the time left for a moment. */
+  private updateProgress(scrolling: boolean): void {
+    const blocks = this.lastResult?.blocks
+    const { scroller } = this.els
+    // Off, editing, nothing loaded, or the whole text fits in the window: nothing to show.
+    if (!this.settings.progress || this.mode !== 'read' || !blocks?.length || scroller.scrollHeight <= scroller.clientHeight + 4) {
+      this.progress.hide()
+      return
+    }
+    // Long files grow their block list while they load; count again when it has changed.
+    if (this.words?.blocks !== blocks || this.words.n !== blocks.length) {
+      this.words = { blocks, n: blocks.length, cum: cumulativeWords(blocks) }
+    }
+    const atEnd = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4
+    const el = atEnd ? null : this.topBlock()
+    let p = { fraction: 1, wordsLeft: 0 }
+    if (!atEnd) {
+      const b = el ? Number(el.dataset.b) : 0
+      const into = el ? (scroller.scrollTop - topIn(el, scroller)) / Math.max(1, el.offsetHeight) : 0
+      p = progressAt(this.words.cum, b, into)
+    }
+    this.progress.show(p.fraction, p.wordsLeft, scrolling)
   }
 
   private restorePlace(place: Place, result: LoadResult): void {
@@ -329,6 +369,7 @@ export class ReaderView {
       }
       this.outline.watch(view.scrollDOM)
       this.find.setEngine(session.find, view.scrollDOM)
+      this.progress.hide()
       ed.focus()
       ed.scrollToPos(pos)
     } else {
@@ -347,6 +388,7 @@ export class ReaderView {
         if (this.lastResult) this.placeAt(pos, this.lastResult)
       }
       scroller.focus({ preventScroll: true })
+      this.updateProgress(false)
     }
     this.editHost.onMode(this.mode === 'edit')
   }

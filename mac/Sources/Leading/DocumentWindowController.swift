@@ -218,6 +218,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingNumberList(_ sender: Any?) { command("numberList") }
     @objc func leadingTable(_ sender: Any?) { command("table") }
     @objc func leadingToggleSmartTyping(_ sender: Any?) { SettingsStore.shared.settings.smartTyping.toggle() }
+    @objc func leadingToggleProgress(_ sender: Any?) { SettingsStore.shared.settings.progress.toggle() }
     @objc func leadingHighlight(_ sender: Any?) { command("highlight") }
     @objc func leadingHighlightYellow(_ sender: Any?) { command("highlightYellow") }
     @objc func leadingHighlightGreen(_ sender: Any?) { command("highlightGreen") }
@@ -258,6 +259,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             return doc?.showsPlainText != true || editing
         case #selector(leadingToggleSmartTyping(_:)):
             item.state = SettingsStore.shared.settings.smartTyping ? .on : .off
+        case #selector(leadingToggleProgress(_:)):
+            item.state = SettingsStore.shared.settings.progress ? .on : .off
         default: break
         }
         return true

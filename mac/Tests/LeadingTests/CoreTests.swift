@@ -75,6 +75,7 @@ final class SettingsTests: XCTestCase {
         let s = ReaderSettings()
         XCTAssertEqual(s.font, "literata"); XCTAssertEqual(s.size, 19); XCTAssertEqual(s.lineHeight, 1.5)
         XCTAssertEqual(s.measure, "medium"); XCTAssertEqual(s.theme, "system"); XCTAssertFalse(s.outlineOpen)
+        XCTAssertFalse(s.progress)
     }
 
     func testLenientDecodingKeepsDefaultsAndClamps() throws {

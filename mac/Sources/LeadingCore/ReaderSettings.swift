@@ -18,6 +18,8 @@ public struct ReaderSettings: Codable, Equatable {
     public var highlightStyle = "marker"
     public var zebra = false
     public var outlineOpen = false
+    /// A thin rule showing how far through the file, and minutes left (off by default)
+    public var progress = false
     /// Curly quotes, dashes and ellipses as you type in edit mode (on by default)
     public var smartTyping = true
     /// The colour ⇧⌘H applies: the last one chosen
@@ -39,6 +41,7 @@ public struct ReaderSettings: Codable, Equatable {
         take(.letterSpacing, &letterSpacing); take(.wordSpacing, &wordSpacing)
         take(.paragraphStyle, &paragraphStyle); take(.paragraphSpacing, &paragraphSpacing)
         take(.align, &align); take(.highlightStyle, &highlightStyle); take(.zebra, &zebra); take(.outlineOpen, &outlineOpen); take(.smartTyping, &smartTyping)
+        take(.progress, &progress)
         take(.lastHighlight, &lastHighlight); take(.highlightColors, &highlightColors)
         if !HighlightColors.slots.contains(lastHighlight) { lastHighlight = "yellow" }
         clamp()

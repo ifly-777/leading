@@ -25,6 +25,8 @@ export interface Settings {
   highlightStyle: HighlightStyle
   zebra: boolean
   outlineOpen: boolean
+  /** A thin rule showing how far through the file, and minutes left while scrolling */
+  progress: boolean
   /** Curly quotes, dashes and ellipses as you type in edit mode */
   smartTyping: boolean
   /** The colour ⇧⌘H applies */
@@ -52,6 +54,7 @@ export const DEFAULTS: Settings = {
   highlightStyle: 'marker',
   zebra: false,
   outlineOpen: false,
+  progress: false,
   smartTyping: true,
   lastHighlight: 'yellow',
   highlightColors: { light: {}, dark: {} },

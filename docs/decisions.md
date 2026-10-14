@@ -4,6 +4,9 @@ Short notes on choices that are not obvious from the code, and what testing show
 
 ## After 1.0.0
 
+### Progress is counted in words, not pixels
+View › Show Reading Progress (⌥⌘P, off by default) draws a hairline the width of the column under the title bar, and shows the time left in the window's corner while scrolling. Both are measured in words: a table, an image or a code block takes far more height than reading time, and long pages give far-away blocks only an estimated height, so a scroll fraction would jump about. Time left assumes 238 words a minute, Brysbaert's 2019 meta-analysis figure for silent reading of English non-fiction; a fast reader will beat it. The label first sat at the column's foot, but there it covered text; the corner is clear except in narrow windows, and it shows only while scrolling.
+
 ### The reader's place is kept outside the file
 Each file reopens where the reader stopped. The place is the source offset of the block at the top of the window plus pixels into it, the same mark ⌘E already carries across modes, so a file edited elsewhere still reopens near the right paragraph. Places live in `~/Library/Application Support/Leading/places.json`, keyed by resolved path, at most 1,000 files, oldest dropped first. An extended attribute on the file was rejected: autosave writes atomically and would drop it, and sync tools would see a change on every scroll. The page reports its place half a second after scrolling stops; the store is written on window close, on quit and every 10 s while dirty. README pictures always open at the top; the self-test keeps its places in a temporary folder.
 

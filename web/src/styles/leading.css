@@ -288,8 +288,25 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .scroll-ticks i { position: absolute; left: 0; width: 6px; height: 2px; border-radius: 1px; background: var(--search); opacity: 0.75; }
 .scroll-ticks i.current { height: 3px; opacity: 1; }
 
+/* Reading progress (View › Show Reading Progress): a hairline the width of the
+   column, under the title bar, darker as far as the reader has read; and the
+   time left in the window's bottom-right margin, only while scrolling. */
+.progress-rule {
+  position: absolute; z-index: 10; pointer-events: none;
+  top: var(--sticky-top, 0px); left: var(--col-left, 0px); width: var(--col-w, 100%); height: 2px;
+  background: linear-gradient(to right, color-mix(in srgb, var(--muted) 60%, transparent) calc(var(--read, 0) * 100%), color-mix(in srgb, var(--rule) 70%, transparent) 0);
+}
+.progress-left {
+  position: absolute; z-index: 10; pointer-events: none; right: 16px; bottom: 12px;
+  font: 11px/1 -apple-system, system-ui, sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap;
+  color: var(--muted); background: var(--bg); padding: 3px 6px; border-radius: 4px;
+  opacity: 0; transition: opacity 0.4s ease;
+}
+.progress-left.on { opacity: 1; transition-duration: 0.15s; }
+.progress-rule[hidden], .progress-left[hidden], [data-mode="edit"] .progress-rule, [data-mode="edit"] .progress-left { display: none; }
+
 @media (prefers-reduced-motion: reduce) {
-  .outline, .outline a, .outline .fold, .doc details summary::before, .doc details summary::after { transition: none; }
+  .outline, .outline a, .outline .fold, .doc details summary::before, .doc details summary::after, .progress-left { transition: none; }
 }
 
 /* ---- Find bar: slim, top right, clear of the text column on wide windows -- */

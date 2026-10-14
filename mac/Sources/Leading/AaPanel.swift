@@ -75,6 +75,7 @@ struct AaPanel: View {
                         Text("Marker").tag("marker"); Text("Lowlight").tag("lowlight"); Text("Underline").tag("underline")
                     }.pickerStyle(.segmented)
                     Toggle("Shade alternate table rows", isOn: s.zebra)
+                    Toggle("Show reading progress", isOn: s.progress)
                 }
                 .padding(.top, 6)
             }
