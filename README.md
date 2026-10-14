@@ -29,7 +29,8 @@ The disk image has the same steps, with pictures, as *If macOS blocks Leading.pd
 ## What it does
 
 - **Reading.** Literata, New York, Charter, Atkinson Hyperlegible Next or iA Writer Quattro, or any installed font. Size, line spacing and column width; light, sepia and dark themes; an outline of the headings. Tables, footnotes, code, task lists, and local images next to the file.
-- **Obsidian notes.** Callouts, wikilinks, properties (as one quiet line) and highlights.
+- **Where you were.** Every file reopens where you stopped. Footnotes open beside their number, and an optional hairline shows how far through you are and the time left.
+- **Obsidian notes.** Callouts, properties (as one quiet line) and highlights; wikilinks open their note, found anywhere in the vault, at the heading they name.
 - **Highlighting.** Select text and press ⇧⌘H, or ⌥⌘1 to ⌥⌘5 for yellow, green, blue, pink and orange. Highlights are written as `==text==` or as Highlightr's `<mark>`, so Obsidian shows them too.
 - **Editing.** ⌘E switches to the Markdown source and back. Changes save as you go, File › Revert To brings back any earlier version, and if another app changes the file Leading shows the new text without losing your place.
 - **Find**, which ignores case, accents and curly quotes, and **Find and Replace** (⌥⌘F) while editing.
