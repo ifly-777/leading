@@ -27,7 +27,9 @@ describe('search index', () => {
       expect(parts.find(q, { caseSensitive: true }), q).toEqual(whole.find(q, { caseSensitive: true }))
     }
   })
-  it('counts the same hits in a parallel-parsed document as in a whole one', () => {
+  // Parses a large document twice (whole and in pieces): under a second here, but shared
+  // CI runners are several times slower and once tipped it past the 5 s default.
+  it('counts the same hits in a parallel-parsed document as in a whole one', { timeout: 20_000 }, () => {
     const one = ['highlights.md', 'tables.md', 'torture.md'].map((n) => readFileSync(new URL(`../fixtures/${n}`, import.meta.url), 'utf8')).join('\n\n')
     const src = Array.from({ length: 8 }, () => one).join('\n\n')
     const whole = new SearchIndex()

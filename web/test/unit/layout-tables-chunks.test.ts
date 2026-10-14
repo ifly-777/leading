@@ -48,7 +48,9 @@ describe('table columns', () => {
 })
 
 describe('parallel pieces', () => {
-  it('render exactly as the whole document does', () => {
+  // Parses a large document twice (whole and in pieces): under a second here, but shared
+  // CI runners are several times slower and once tipped it past the 5 s default.
+  it('render exactly as the whole document does', { timeout: 20_000 }, () => {
     // Fixtures joined into a document big enough to split (prose.md and
     // obsidian.md use footnotes, which keep a document whole by design).
     const names = ['highlights.md', 'tables.md', 'torture.md']
