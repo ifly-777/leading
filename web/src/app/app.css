@@ -6,9 +6,11 @@ html, body { height: 100%; overflow: hidden; }
 /* Leave room under the window's title bar, which the page extends beneath;
    pinned table headers stop below it too. */
 :root { --sticky-top: 38px; }
-.doc { padding-top: calc(4.5em + 12px); }
-.findbar { top: 40px; }
-.outline { top: calc(4.5rem + 12px); }
+/* The app sets --sticky-top to the height of its title bar, and of the tab bar
+   too when a window has tabs (leading.chrome), so everything below moves with it. */
+.doc { padding-top: calc(4.5em + var(--sticky-top) - 26px); }
+.findbar { top: calc(var(--sticky-top) + 2px); }
+.outline { top: calc(4.5rem + var(--sticky-top) - 26px); }
 /* A band of paper behind the title bar, so text scrolling up never runs
    through the window title. Pinned table headers stop just below it. */
 #window::before {

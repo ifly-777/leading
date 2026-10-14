@@ -59,6 +59,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             self?.outlineButton?.state = s.outlineOpen ? .on : .off
             self?.sendSettings(s)
         }
+        // The page keeps a band of paper behind the title bar, and the tab bar when there
+        // are tabs; it needs their height, which changes as tabs come and go.
+        chromeWatch = window.observe(\.contentLayoutRect, options: [.initial, .new]) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.sendChrome() }
+        }
         // AppKit attaches `document` only after this initialiser returns, so pass it in directly.
         // A new, unsaved document starts in edit mode: there is nothing to read yet.
         sendDocument(document, keepPlace: false, startEditing: document.fileURL == nil)
@@ -326,6 +331,17 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     private var printDone: (() -> Void)?
+    private var chromeWatch: NSKeyValueObservation?
+    private var lastChrome: CGFloat = -1
+
+    /// Tell the page how tall the bars over it are (title bar, plus tab bar when tabbed).
+    private func sendChrome() {
+        guard let window else { return }
+        let top = window.frame.height - window.contentLayoutRect.maxY
+        guard top > 0, abs(top - lastChrome) > 0.5 else { return }
+        lastChrome = top
+        web.call("chrome", ["top": top])
+    }
 
     @objc private func printOperationDidRun(_ op: NSPrintOperation, success: Bool, contextInfo: UnsafeMutableRawPointer?) {
         web.callAsyncJavaScript("return window.leading.afterPrint()", arguments: [:], in: nil, in: .page) { _ in }

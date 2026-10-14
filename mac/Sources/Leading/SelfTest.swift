@@ -324,6 +324,12 @@ enum SelfTest {
             }
             check("[[linked]] opens as a new tab beside the note it came from", wc.window?.tabbedWindows?.contains(linkedWindow) == true)
             let page = linked.pageForTests
+            // With tabs, the bars over the page are taller: the band of paper behind them must cover the tab bar too.
+            let bars = linkedWindow.frame.height - linkedWindow.contentLayoutRect.maxY
+            page.callAsyncJavaScript("return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sticky-top'))", arguments: [:], in: nil, in: .page) { r in
+                let band = ((try? r.get()) as? NSNumber)?.doubleValue ?? 0
+                check("In a tab, the paper behind the title and tab bars covers both (\(Int(band)) of \(Int(bars)) pt)", bars > 50 && abs(band - bars) < 1.5)
+            }
             let js = "const h = document.getElementById('far-heading'); const s = document.getElementById('scroller'); return s.scrollTop > 0 && h.getBoundingClientRect().top < s.clientHeight * 0.4"
             page.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { r in
                 check("[[linked#Far heading]] opens Linked.md at that heading", (try? r.get()) as? Bool == true)

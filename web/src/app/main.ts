@@ -139,6 +139,15 @@ document.addEventListener('click', (e) => {
   /** File › Print and Export as PDF: get the page ready for paper, then put it back. */
   preparePrint() { return view.preparePrint() },
   afterPrint() { return view.afterPrint() },
+  /**
+   * The height of the window's own bars over the page: the title bar, and the
+   * tab bar when there are tabs. The band of paper behind them grows to match,
+   * so macOS's translucent tab bar sits on the theme's paper, not on text.
+   */
+  chrome(args: { top: number }) {
+    if (args.top > 0) document.documentElement.style.setProperty('--sticky-top', `${Math.round(args.top)}px`)
+    view.relayout()
+  },
   /** The file was saved under a new name, or moved. */
   setName(args: { name: string | null }) { view.docName = args.name },
   /** Go to a heading named in a link that opened this document (or one already open). */

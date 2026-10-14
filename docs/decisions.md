@@ -13,6 +13,9 @@ highlight.js grammars, through lowlight, return a hast tree, so colouring happen
 ### Page breaks in the forms notes already use
 Leading honours Obsidian's and Typora's `<div style="page-break-after: always"></div>` (and `break-after: page`), Pandoc's `\newpage` and `\pagebreak`, and the invisible `<!-- pagebreak -->`, so a note prints the same here as where it was written. On screen a break is a faint dashed rule; on paper it starts a new page and leaves no mark. Format › Insert Page Break (⌘↩) writes the Obsidian form. The print stylesheet breaks before the next block as well as after the marker, which holds even where WebKit ignores a break on an empty box. The self-test prints four paragraphs on exactly four pages.
 
+### Tabs on the theme's paper
+In macOS 26 the tab bar is translucent glass over whatever lies beneath, which in Leading is the page scrolling up under the title bar. The page kept a band of paper only behind the title bar (38 pt), so beneath the tab bar the glass showed text, and read as grey in every theme. AppKit offers no way to colour the tab bar, and its views are private, so instead the window tells the page how tall its bars are (title bar, plus tab bar when there are tabs: 76 pt), watching `contentLayoutRect` as tabs come and go, and the band, the text's starting point, the find bar and the outline follow. The glass then sits on sepia paper in sepia, and on dark paper in dark.
+
 ### No ligatures on paper
 Checking that test's text showed that WebKit writes Literata's "Th" ligature into PDFs with no letters behind it: "The" copied or searched as "!e". It is a common ligature, not a contextual alternate (turning those off did not help), so printing sets letters without ligatures. Text that copies correctly matters more than an fi joined; the screen keeps its ligatures.
 
