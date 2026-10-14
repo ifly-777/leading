@@ -108,7 +108,7 @@ document.addEventListener('click', (e) => {
     if (args.edit) document.documentElement.dataset.mode = 'edit'
     let r
     try {
-      r = await view.open(text, { imageBase: args.imageBase, plain: args.plain, keepPlace: args.keepPlace, fromDisk: args.fromDisk, resume: args.resume })
+      r = await view.open(text, { imageBase: args.imageBase, vaultEmbeds: !args.preview, plain: args.plain, keepPlace: args.keepPlace, fromDisk: args.fromDisk, resume: args.resume })
     } catch (e) {
       post({ type: 'log', text: `open failed: ${(e as Error)?.stack ?? e}` })
       throw e

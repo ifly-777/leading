@@ -64,7 +64,7 @@ export async function noteCopy(docId: string, imageBase: string | null, target: 
   } catch { /* not found */ }
   if (text === null) return null
   const body = document.createElement('div')
-  const blocks = renderMarkdown(text, { imageBase }).blocks
+  const blocks = renderMarkdown(text, { imageBase, vaultEmbeds: true }).blocks
   // A section is cut from the whole note; a preview needs only the opening.
   body.innerHTML = (heading ? blocks : blocks.slice(0, maxBlocks)).map((b) => b.html).join('')
   if (heading) {

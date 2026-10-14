@@ -42,6 +42,8 @@ export interface RenderOptions {
   /** URL prefix for local images, relative to the document. Null: show alt text only.
    *  Plain data (not a function) so options can cross into a Web Worker. */
   imageBase?: string | null
+  /** ![[file]] embeds are looked up in the vault by the app (SchemeHandler __wiki). Without the app, they stay links. */
+  vaultEmbeds?: boolean
 }
 
 export function parse(src: string): Root {
@@ -226,7 +228,7 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]
     },
     wikilink(state, node: WikiLink) {
       // ![[picture.png]] and ![[Note]]: the app finds the file in the vault (SchemeHandler, __wiki).
-      if (node.embed && opts.imageBase != null) {
+      if (node.embed && opts.vaultEmbeds && opts.imageBase != null) {
         const ext = /\.([a-z0-9]+)$/i.exec(node.target)?.[1]?.toLowerCase()
         if (ext && IMAGE_EXT.has(ext)) {
           // Obsidian sizes an image with |300 or |300x200.
