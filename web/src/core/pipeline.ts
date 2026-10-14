@@ -161,6 +161,20 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]
       }
       return e
     },
+    listItem(state, node, parent) {
+      const e = defaultHandlers.listItem(state, node, parent)
+      // A task can be ticked while reading (view.ts toggleTask): the box is live, and
+      // the item carries its source position so the page can find its [ ] in the file.
+      if (typeof node.checked === 'boolean') {
+        Object.assign(e.properties, pos(node))
+        // Tight lists put the box in the item; loose ones (blank lines between items) in its first paragraph.
+        const isBox = (c: ElementContent): c is Element => c.type === 'element' && c.tagName === 'input'
+        const first = e.children.find((c): c is Element => c.type === 'element')
+        const box = e.children.find(isBox) ?? (first?.tagName === 'p' ? first.children.find(isBox) : undefined)
+        if (box) { delete box.properties.disabled; box.properties.ariaLabel = 'Done' }
+      }
+      return e
+    },
     inlineCode(state, node) {
       const e = defaultHandlers.inlineCode(state, node)
       Object.assign(e.properties, pos(node))

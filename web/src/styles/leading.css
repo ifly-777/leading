@@ -92,6 +92,8 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .doc ol > li::marker { color: var(--muted); font-variant-numeric: lining-nums tabular-nums; }
 .doc li.task-list-item { list-style: none; }
 .doc li.task-list-item > input { margin: 0 0.5em 0 -1.4em; vertical-align: 0.05em; }
+.doc li.task-list-item input[type=checkbox] { cursor: pointer; accent-color: var(--muted); }
+.doc li.task-list-item:has(> input:checked) > :not(ul, ol) { color: var(--muted); }
 
 /* ---- Quotes, rules, code ------------------------------------------------- */
 .doc blockquote {

@@ -158,6 +158,13 @@ export class ReaderView {
     this.reader.onIndexGrew = () => { this.readerFind.invalidate(); if (this.mode === 'read') this.find.invalidate() }
     this.reader.onBlocksAdded = () => { this.reader.invalidateGeometry(); this.diagrams.scan(); this.embeds.scan() }
 
+    // Ticking a task while reading changes its [ ] in the file.
+    doc.addEventListener('click', (e) => {
+      const box = (e.target as Element).closest?.('li.task-list-item input[type=checkbox]') as HTMLInputElement | null
+      if (!box) return
+      e.preventDefault() // the box shows the file's state once the change is made
+      void this.toggleTask(box)
+    })
     // Report the place once scrolling has settled, not on every frame.
     scroller.addEventListener('scroll', () => {
       clearTimeout(this.placeTimer)
@@ -542,6 +549,21 @@ export class ReaderView {
     if (err) { notice(this.els.win, err); return }
     this.rememberColour(slot)
     if (span) this.find.step(1)
+  }
+
+  /** Tick or untick a task: "- [ ]" becomes "- [x]" in the file, and back. One edit, so ⌘Z undoes it. */
+  async toggleTask(box: HTMLInputElement): Promise<void> {
+    const li = box.closest<HTMLElement>('li.task-list-item')
+    if (!li) return
+    const blk = li.closest<HTMLElement>('[data-b]')
+    if (this.mode !== 'read' || this.lastOpen.plain || !li.dataset.s || !blk) return
+    const s = Number(li.dataset.s) + this.reader.correction(Number(blk.dataset.b))
+    const text = this.text
+    // The item starts at its bullet: "- [ ] ", "* [x] ", "12. [ ] ", after any indent.
+    const m = /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+\[([ xX])\]/.exec(text.slice(s, s + 40))
+    if (!m) return
+    const at = s + m[0].length - 2
+    await this.applyFromReader([{ from: at, to: at + 1, insert: m[1] === ' ' ? 'x' : ' ' }])
   }
 
   /** Apply edits made while reading: they go through the editor, so ⌘Z undoes them. */
