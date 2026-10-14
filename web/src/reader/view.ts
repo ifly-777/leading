@@ -728,11 +728,16 @@ export function balanceMarkers(text: string, from: number, to: number): [number,
   for (let round = 0; round < 8; round++) {
     let changed = false
     for (const ch of ['*', '_', '=', '~', '`']) {
+      // Count runs, not characters: "**" and "==" are one marker each.
       const slice = text.slice(from, to)
       let n = 0
-      for (let i = 0; i < slice.length; i++) if (slice[i] === ch && slice[i - 1] !== '\\') n++
+      for (let i = 0; i < slice.length; i++) {
+        if (slice[i] === ch && slice[i - 1] !== ch && slice[i - 1] !== '\\') n++
+      }
       if (n % 2 === 0) continue
-      if (text[from - 1] === ch) { from--; changed = true } else if (text[to] === ch) { to++; changed = true }
+      // Take in the whole run just outside the range.
+      if (text[from - 1] === ch) { while (text[from - 1] === ch) from--; changed = true }
+      else if (text[to] === ch) { while (text[to] === ch) to++; changed = true }
     }
     if (!changed) break
   }
