@@ -34,3 +34,32 @@ test('focus lights only the paragraph at the reading line, or the list item', as
   await page.waitForTimeout(400)
   expect(await op('#doc [data-b="2"]')).toBe(1)
 })
+
+test('page by page moves a screen less a line, and never starts on half a line', async ({ page }) => {
+  await open(page, { paged: true })
+  await page.locator('#scroller').focus()
+  const state = () => page.evaluate(() => {
+    const s = document.getElementById('scroller')!
+    const band = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sticky-top')) || 0
+    const lh = parseFloat(getComputedStyle(document.getElementById('doc')!).lineHeight)
+    const x = s.getBoundingClientRect().left + parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--col-left')) + 20
+    const r = (document as any).caretRangeFromPoint(x, band + 1).getBoundingClientRect()
+    return { top: s.scrollTop, page: s.clientHeight - band - lh, cut: r.height > 0 && r.top < band - 0.5, lh }
+  })
+  const a = await state()
+  await page.keyboard.press('Space')
+  const b = await state()
+  // One screen, less a line (minus at most one line, to start on a whole one).
+  expect(b.top - a.top).toBeGreaterThan(a.page - a.lh - 1)
+  expect(b.top - a.top).toBeLessThanOrEqual(a.page + 0.5)
+  expect(b.cut).toBe(false)
+  await page.keyboard.press('ArrowRight')
+  const c = await state()
+  expect(c.top).toBeGreaterThan(b.top)
+  expect(c.cut).toBe(false)
+  await page.keyboard.press('Shift+Space')
+  await page.keyboard.press('ArrowLeft')
+  expect((await state()).top).toBeLessThan(b.top)
+  // Off: Space is the browser's own scroll again (not a page minus a line).
+  await page.evaluate(() => (window as any).leading.settings({ settings: { paged: false } }))
+})

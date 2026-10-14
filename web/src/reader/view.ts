@@ -28,6 +28,7 @@ import { NoteEmbeds } from './embeds'
 import { LinkPreview } from './link-preview'
 import { HighlightsList, collectHighlights, highlightsMarkdown } from './highlights-list'
 import { Focus } from './focus'
+import { Paging } from './paging'
 
 export interface ViewElements {
   win: HTMLElement; scroller: HTMLElement; doc: HTMLElement; layer: HTMLElement
@@ -99,6 +100,8 @@ export class ReaderView {
   readonly highlights: HighlightsList
   /** Dims all but the paragraph being read, when on */
   readonly focus: Focus
+  /** A screen at a time, when on */
+  readonly paging: Paging
   /** Text the view wants on the clipboard (the host puts it there). */
   onCopyText: (text: string) => void = () => {}
   /** Words before each block, for the progress mark; rebuilt when the blocks change. */
@@ -152,6 +155,8 @@ export class ReaderView {
     this.embeds.onFilled = () => this.diagrams.scan()
     this.preview = new LinkPreview(win, scroller, doc, this.embeds)
     this.focus = new Focus(doc, scroller, document.documentElement)
+    this.paging = new Paging(scroller, doc)
+    this.paging.active = () => this.mode === 'read'
     // Plain text shows the file unrendered: there is no Markdown to place a highlight in.
     this.palette.active = () => this.mode === 'read' && !this.lastOpen.plain
     this.palette.onPick = (slot, target) => { void this.highlightInReader(slot, false, target) }
@@ -251,6 +256,7 @@ export class ReaderView {
     this.relayout()
     this.diagrams.restyle()
     this.focus.enabled = s.focus && this.mode === 'read'
+    this.paging.enabled = s.paged
   }
 
   /** Change some settings from inside the view, apply them, and tell the host. */
