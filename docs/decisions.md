@@ -2,6 +2,11 @@
 
 Short notes on choices that are not obvious from the code, and what testing showed. Newest first.
 
+## Next release
+
+### macOS 14 is the floor
+Nothing in Leading needed macOS 26; the requirement was only the package's deployment target. At 14.0 the app compiles cleanly. At 13.0 the one failure is showing the Aa popover from a toolbar item (`show(relativeTo:)`), which arrived in macOS 14, so 14 is the natural floor. The rest degrades quietly on older WebKit: `content-visibility`, `text-wrap: pretty` and `scrollbar-width` are ignored where unsupported, so very long notes render a little slower and paragraphs wrap plainly. The page is built for Safari 17's WebKit, not 18: Sonoma shipped with 17, and Safari 18 reached it as a separate update that not everyone takes. On macOS 14 and 15 the tab bar is opaque rather than glass, and the band of paper measured from `contentLayoutRect` simply sits behind it. The icon's asset catalog carries flat renderings up to 1024 px, which older systems show instead of the lit and tinted layers.
+
 ## Leading 1.3
 
 ### Code is coloured in the workers, and only when the block names its language

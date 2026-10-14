@@ -6,7 +6,7 @@ import PackageDescription
 
 let package = Package(
     name: "Leading",
-    platforms: [.macOS("26.0")],
+    platforms: [.macOS("14.0")],
     products: [.executable(name: "Leading", targets: ["Leading"]), .executable(name: "LeadingPreview", targets: ["LeadingPreview"])],
     targets: [
         // Pure logic (text decoding, link and image paths, settings), unit-tested.

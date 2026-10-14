@@ -16,7 +16,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    target: 'safari18',
+    target: 'safari17', // macOS 14 ships WebKit 17; Safari 18 is a separate update
     rollupOptions: { input: { app: fileURLToPath(new URL('./app.html', import.meta.url)) } },
   },
   worker: { format: 'es' },

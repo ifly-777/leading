@@ -6,7 +6,7 @@ Leading is a free Mac app for reading Markdown. It sets a note as a well-made pa
 
 <p align="center">
 <a href="https://github.com/ifly-777/leading/releases/latest"><img src="https://img.shields.io/github/v/release/ifly-777/leading?label=download" alt="Download the latest release"></a>
-<img src="https://img.shields.io/badge/macOS-26%2B-lightgrey?logo=apple" alt="macOS 26 or later">
+<img src="https://img.shields.io/badge/macOS-14%2B-lightgrey?logo=apple" alt="macOS 14 or later">
 <a href="LICENSE"><img src="https://img.shields.io/github/license/ifly-777/leading" alt="MIT licence"></a>
 </p>
 
@@ -16,7 +16,7 @@ Leading is a free Mac app for reading Markdown. It sets a note as a well-made pa
 
 ## Install
 
-Leading needs macOS 26 (Tahoe) or later, on Apple Silicon or Intel.
+Leading needs macOS 14 (Sonoma) or later, on Apple Silicon or Intel.
 
 1. Download **Leading-x.y.z.dmg** from the [latest release](https://github.com/ifly-777/leading/releases/latest).
 2. Open it and drag Leading into Applications.
@@ -27,6 +27,8 @@ The first time, macOS will say it could not verify Leading. That is because Lead
 1. Click **Done** in that message (not Move to Trash).
 2. Open **System Settings › Privacy & Security**, scroll down to **Security**, and click **Open Anyway** beside "Leading" was blocked to protect your Mac.
 3. Click **Open Anyway** again when macOS asks, and confirm with Touch ID or your password.
+
+On macOS 14 the wording differs but the steps are the same: the first message says the developer cannot be verified (click **Cancel**), and Privacy & Security says Leading was blocked because it is not from an identified developer.
 
 The disk image has the same steps, with pictures, as *If macOS blocks Leading.pdf*. Updates do not ask again.
 

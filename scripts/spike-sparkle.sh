@@ -89,7 +89,7 @@ cat > "$WORK/feed/appcast.xml" <<XML
       <title>Leading 0.2.1</title>
       <sparkle:version>21</sparkle:version>
       <sparkle:shortVersionString>0.2.1</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <enclosure url="http://127.0.0.1:$PORT/Leading-0.2.1.zip" length="$LEN" type="application/octet-stream" sparkle:edSignature="$SIG"/>
     </item>
   </channel>
