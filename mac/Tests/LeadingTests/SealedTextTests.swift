@@ -82,4 +82,18 @@ final class SealedTextTests: XCTestCase {
             XCTAssertEqual($0 as? SealedText.Failure, .malformed)
         }
     }
+
+    /// One changed character in the block: the right password no longer opens
+    /// the file, but finds the good copy kept before it, and skips the rest.
+    func testFindsTheCopyThatOpens() {
+        let good = sealed("the note")
+        var damaged = String(decoding: good, as: UTF8.self)
+        let at = damaged.range(of: "```leading-encrypted\n")!.upperBound
+        damaged.replaceSubrange(at..<damaged.index(after: at), with: damaged[at] == "A" ? "B" : "A")
+        let otherPassword = SealedText.seal("x", key: SealedText.deriveKey(password: "old", salt: salt, rounds: rounds), salt: salt, rounds: rounds)
+        let candidates = [Data(damaged.utf8), Data("plain text".utf8), otherPassword, good]
+        XCTAssertNil(SealedText.firstOpenable([candidates[0]], password: "correct horse"))
+        XCTAssertEqual(SealedText.firstOpenable(candidates, password: "correct horse"), 3)
+        XCTAssertNil(SealedText.firstOpenable(candidates, password: "wrong"))
+    }
 }

@@ -681,7 +681,7 @@ File › Encrypt… protects one note with a password, using AES-256. The file k
 To read it, open it in Leading and enter the password. Leading locks every encrypted note when the Mac sleeps, its lid closes or the screen locks, and Lock Encrypted Notes (⌃⌘L) locks them at once. File › Change Password… and File › Remove Encryption… do what they say.
 
 > [!danger] Never edit an encrypted note in another app
-> In Obsidian, a text editor or anywhere else but Leading, an encrypted note is a notice above a block of letters and numbers. **Change one character of that block — a keystroke, a paste, a stray Backspace — and the whole note is lost for good.** The encryption checks every character, so Leading cannot tell a damaged note from a wrong password: the right password will be refused, and nothing can repair it.
+> In Obsidian, a text editor or anywhere else but Leading, an encrypted note is a notice above a block of letters and numbers. **Change one letter or digit of that block — a keystroke, a paste, a stray Backspace — and the file can no longer be opened, not even with the right password.** The encryption checks every character, and a damaged block cannot be repaired.
 >
 > Edits can happen without your meaning them. Watch for:
 >
@@ -692,6 +692,12 @@ To read it, open it in Leading and enter the password. Leading locks every encry
 > - selecting everything in the note and typing.
 >
 > Viewing an encrypted note elsewhere is safe, and so are moving, renaming, syncing and linking to it. To change it, open it in Leading, enter the password, and edit it there; Leading encrypts it again as it saves.
+
+### If a note was damaged
+
+Each time Leading saves or opens an encrypted note, it keeps a copy of the encrypted file in the note’s version history. If another app later damages the note, enter its password as usual: Leading tries it on those copies too. When one opens, Leading says the note was changed outside Leading, gives the date of the copy, and offers to restore it. Anything written after that date is lost. The copies are encrypted with the same password, so keeping them reveals nothing.
+
+This is a safety net, not a backup. The copies live only on this Mac, so they cannot help with a note damaged on another Mac and synced here, or one Leading has never opened on this Mac. Someone with administrator access can delete them.
 
 There is no way to recover a note whose password is forgotten. Copies made before you encrypted it, in Time Machine or a sync service’s history, still hold the plain text. If a note matters, keep a backup copy of the encrypted file somewhere a plugin cannot touch it.
 

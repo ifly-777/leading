@@ -90,10 +90,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func showLocked(_ doc: MarkdownDocument) {
         let name = doc.fileURL?.deletingPathExtension().lastPathComponent ?? doc.displayName ?? "Note"
-        window?.contentView = LockedView(name: name) { [weak doc] password, done in
-            guard let doc else { return done(false) }
+        window?.contentView = LockedView(name: name, unlock: { [weak doc] password, done in
+            guard let doc else { return done(.wrong) }
             doc.unlock(password: password, done: done)
-        }
+        }, restore: { [weak doc] password, done in
+            guard let doc else { return done(false) }
+            doc.restoreKeptCopy(password: password, done: done)
+        })
     }
 
     func documentLocked() {

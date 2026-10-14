@@ -38,8 +38,10 @@ final class LockWatcher {
 /// Shown in place of the reading page while a note is locked. It is plain
 /// AppKit and SwiftUI, so the password never passes through the web page.
 final class LockedView: NSHostingView<LockedPanel> {
-    init(name: String, unlock: @escaping (String, @escaping (Bool) -> Void) -> Void) {
-        super.init(rootView: LockedPanel(name: name, unlock: unlock))
+    init(name: String,
+         unlock: @escaping (String, @escaping (MarkdownDocument.UnlockOutcome) -> Void) -> Void,
+         restore: @escaping (String, @escaping (Bool) -> Void) -> Void) {
+        super.init(rootView: LockedPanel(name: name, unlock: unlock, restore: restore))
     }
     required init(rootView: LockedPanel) { super.init(rootView: rootView) }
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -47,10 +49,16 @@ final class LockedView: NSHostingView<LockedPanel> {
 
 struct LockedPanel: View {
     let name: String
-    let unlock: (String, @escaping (Bool) -> Void) -> Void
+    let unlock: (String, @escaping (MarkdownDocument.UnlockOutcome) -> Void) -> Void
+    let restore: (String, @escaping (Bool) -> Void) -> Void
     @State private var password = ""
     @State private var working = false
     @State private var wrong = false
+    /// Set when the password opens a kept copy but not the file: the date of that copy,
+    /// and the password, held only until the reader restores or tries again.
+    @State private var keptDate: Date?
+    @State private var keptPassword = ""
+    @State private var restoreFailed = false
     @State private var shake: CGFloat = 0
     @FocusState private var focused: Bool
 
@@ -69,8 +77,18 @@ struct LockedPanel: View {
                     .modifier(Shake(amount: shake))
                 Button("Unlock", action: submit).disabled(password.isEmpty || working)
             }
-            // Keep the line's height so nothing jumps when the message appears.
-            Text(wrong ? "Wrong password" : " ").font(.callout).foregroundStyle(.red)
+            if let keptDate {
+                VStack(spacing: 10) {
+                    Text("This note was changed outside Leading and can no longer be read. Leading kept a copy from \(keptDate.formatted(date: .abbreviated, time: .shortened)) that opens with this password. Changes made after then are lost.")
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 380)
+                    Button("Restore That Copy", action: restoreCopy).keyboardShortcut(.defaultAction).disabled(working)
+                    if restoreFailed { Text("The copy could not be restored.").font(.callout).foregroundStyle(.red) }
+                }
+            } else {
+                // Keep the line's height so nothing jumps when the message appears.
+                Text(wrong ? "Wrong password" : " ").font(.callout).foregroundStyle(.red)
+            }
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -81,13 +99,31 @@ struct LockedPanel: View {
         guard !password.isEmpty, !working else { return }
         working = true
         wrong = false
-        unlock(password) { ok in
+        keptDate = nil; keptPassword = ""; restoreFailed = false
+        let tried = password
+        unlock(tried) { outcome in
             working = false
-            if ok { password = ""; return }
-            wrong = true
             password = ""
-            withAnimation(.linear(duration: 0.4)) { shake += 1 }
-            focused = true
+            switch outcome {
+            case .opened: return
+            case .recoverable(let date):
+                keptDate = date
+                keptPassword = tried
+            case .wrong:
+                wrong = true
+                withAnimation(.linear(duration: 0.4)) { shake += 1 }
+                focused = true
+            }
+        }
+    }
+
+    private func restoreCopy() {
+        guard !keptPassword.isEmpty, !working else { return }
+        working = true
+        restore(keptPassword) { ok in
+            working = false
+            keptPassword = ""
+            if ok { keptDate = nil } else { restoreFailed = true }
         }
     }
 }

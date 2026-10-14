@@ -135,19 +135,80 @@ final class MarkdownDocument: NSDocument {
         for wc in windowControllers { if let wc = wc as? DocumentWindowController { f(wc) } }
     }
 
-    /// Open the sealed bytes with a password. `done(false)`: wrong password (or damage).
-    func unlock(password: String, done: @escaping (Bool) -> Void) {
+    enum UnlockOutcome: Equatable {
+        case opened
+        /// The password opens nothing Leading has: most likely a wrong password.
+        case wrong
+        /// The password opens a copy kept in the version history, but not the
+        /// file: the file was changed outside Leading. The date is the copy's.
+        case recoverable(Date)
+    }
+
+    /// The good copy found by the last failed unlock, for restoreKeptCopy.
+    private var keptCopy: NSFileVersion?
+
+    /// Open the sealed bytes with a password. When they will not open, look for
+    /// an earlier copy that does, which tells damage from a wrong password.
+    func unlock(password: String, done: @escaping (UnlockOutcome) -> Void) {
         let bytes = sealed
+        let url = fileURL
+        keptCopy = nil
         Self.crypto.async {
             let opened = try? SealedText.open(bytes, password: password)
+            let kept = opened == nil ? url.flatMap { Self.copyThatOpens(at: $0, password: password) } : nil
             DispatchQueue.main.async {
                 // Locked again, or replaced from disk, while the key was being derived.
-                guard let opened, self.isPasswordLocked, bytes == self.sealed else { return done(false) }
+                guard self.isPasswordLocked, bytes == self.sealed else { return done(.wrong) }
+                guard let opened else {
+                    self.keptCopy = kept
+                    return done(kept.map { .recoverable($0.modificationDate ?? Date()) } ?? .wrong)
+                }
                 self.key = opened.key; self.salt = opened.salt; self.rounds = opened.rounds
                 self.setText(opened.text)
                 self.eachWindow { $0.documentUnlocked() }
-                done(true)
+                self.keepSealedCopy()
+                done(.opened)
             }
+        }
+    }
+
+    /// The newest version in the history that this password opens. Only sealed
+    /// versions are tried; at most the newest 50, so a long history cannot stall.
+    private static func copyThatOpens(at url: URL, password: String) -> NSFileVersion? {
+        let versions = (NSFileVersion.otherVersionsOfItem(at: url) ?? [])
+            .sorted { ($0.modificationDate ?? .distantPast) > ($1.modificationDate ?? .distantPast) }
+            .prefix(50)
+        let found = versions.compactMap { v in (try? Data(contentsOf: v.url)).map { (v, $0) } }
+        return SealedText.firstOpenable(found.map(\.1), password: password).map { found[$0].0 }
+    }
+
+    /// Put the copy found by unlock back in place of the damaged file, then open it.
+    func restoreKeptCopy(password: String, done: @escaping (Bool) -> Void) {
+        guard let kept = keptCopy, let url = fileURL, let type = fileType else { return done(false) }
+        keptCopy = nil
+        do {
+            _ = try kept.replaceItem(at: url, options: [])
+            try revert(toContentsOf: url, ofType: type)
+        } catch {
+            NSLog("Leading: could not restore %@: %@", url.lastPathComponent, error.localizedDescription)
+            return done(false)
+        }
+        unlock(password: password) { done($0 == .opened) }
+    }
+
+    /// Keep the sealed file itself in the version history, so that if another app
+    /// damages it, restoreKeptCopy has something to bring back. Without this the
+    /// history holds only the states before each save, and a note encrypted and
+    /// then damaged elsewhere would have no good copy at all. The copy is sealed,
+    /// so keeping it reveals nothing; one is added only when the file has changed.
+    private func keepSealedCopy(key held: SymmetricKey? = nil) {
+        guard isEncrypted, let key = held ?? key, let url = fileURL else { return }
+        Self.crypto.async {
+            guard let data = try? Data(contentsOf: url), (try? SealedText.open(data, key: key)) != nil else { return }
+            let newest = (NSFileVersion.otherVersionsOfItem(at: url) ?? []).max { ($0.modificationDate ?? .distantPast) < ($1.modificationDate ?? .distantPast) }
+            if let newest, (try? Data(contentsOf: newest.url)) == data { return }
+            do { _ = try NSFileVersion.addOfItem(at: url, withContentsOf: url, options: []) }
+            catch { NSLog("Leading: could not keep a copy of %@: %@", url.lastPathComponent, error.localizedDescription) }
         }
     }
 
@@ -253,8 +314,11 @@ final class MarkdownDocument: NSDocument {
         save(to: url, ofType: type, for: .saveOperation) { error in
             done(error)
             // macOS keeps the file as it was before this save in File › Revert To, and
-            // records it a moment after the save completes, not during it. Look again shortly.
-            if error == nil { DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.purgeVersions() } }
+            // records it a moment after the save completes, not during it. Look again shortly,
+            // with the key held now: locking in the meantime drops it, and the plain copy
+            // would otherwise stay in the history.
+            let key = self.key
+            if error == nil { DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.purgeVersions(key: key) } }
         }
     }
 
@@ -268,8 +332,8 @@ final class MarkdownDocument: NSDocument {
         }
     }
 
-    private func purgeVersions() {
-        guard isEncrypted, let key, let url = fileURL else { return }
+    private func purgeVersions(key held: SymmetricKey? = nil) {
+        guard isEncrypted, let key = held ?? key, let url = fileURL else { return }
         Self.crypto.async {
             for v in NSFileVersion.otherVersionsOfItem(at: url) ?? [] {
                 guard let data = try? Data(contentsOf: v.url), SealedText.isSealed(data), (try? SealedText.open(data, key: key)) != nil else {
@@ -278,6 +342,7 @@ final class MarkdownDocument: NSDocument {
                 }
             }
         }
+        keepSealedCopy(key: key)
     }
 
     // MARK: Versions
@@ -313,6 +378,10 @@ final class MarkdownDocument: NSDocument {
             newData = try? Data(contentsOf: u)
         }
         guard let data = newData else { return }
+        // A late notice of the plain file as it was before Encrypt, read while the
+        // sealed save is under way. Taken for "encryption removed elsewhere", it
+        // turned encryption off and let the save write plain text.
+        if isEncrypted, !SealedText.isSealed(data), TextFile.decode(data).text == diskText { return }
         if isEncrypted || SealedText.isSealed(data) {
             guard data != sealed else { return } // our own save
             return sealedChangedOnDisk(data)

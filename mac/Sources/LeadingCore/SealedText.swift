@@ -102,6 +102,22 @@ public enum SealedText {
         return (try open(data, key: key), key, p.salt, p.rounds)
     }
 
+    /// The index of the first candidate that opens with the password, or nil.
+    /// Used to find a good earlier copy of a damaged note: if one opens, the
+    /// password was right and the file was changed. Saves under one password
+    /// share a salt, so each distinct key is derived once, not once per copy.
+    public static func firstOpenable(_ candidates: [Data], password: String) -> Int? {
+        var keys: [Data: SymmetricKey] = [:]
+        for (i, data) in candidates.enumerated() {
+            guard isSealed(data), let p = try? parameters(data) else { continue }
+            let id = header(salt: p.salt, rounds: p.rounds)
+            let key = keys[id] ?? deriveKey(password: password, salt: p.salt, rounds: p.rounds)
+            keys[id] = key
+            if (try? open(data, key: key)) != nil { return i }
+        }
+        return nil
+    }
+
     // MARK: Parts
 
     static func header(salt: Data, rounds: UInt32) -> Data {

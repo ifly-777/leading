@@ -470,7 +470,50 @@ enum SelfTest {
                         check("Page breaks start new pages, and leave no mark (\(pages))", pages == ["One.", "Two.", "Three.", "Four."])
                         try? FileManager.default.removeItem(at: out)
                         opened?.close()
-                        done()
+                        recoveryCheck(check: check, done: done)
+                    }
+                }
+            }
+        }
+    }
+
+    /// An encrypted note damaged by another app: one changed letter in the block.
+    /// A wrong password is still called wrong; the right one finds the copy
+    /// Leading kept, and restoring it brings the note back as it was.
+    private static func recoveryCheck(check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("leading-recover-\(UUID().uuidString).md")
+        let original = "# Kept\n\nA private line.\n"
+        try? original.write(to: url, atomically: true, encoding: .utf8)
+        let finish = { (doc: NSDocument?) in doc?.close(); try? FileManager.default.removeItem(at: url); done() }
+        NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { opened, _, _ in
+            guard let doc = opened as? MarkdownDocument else { check("The note to encrypt opens", false); return finish(opened) }
+            doc.encrypt(password: "selftest pw") { error in
+                // The kept copy is written on the crypto queue after the save.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    let kept = NSFileVersion.otherVersionsOfItem(at: url)?.contains { (try? Data(contentsOf: $0.url)) == (try? Data(contentsOf: url)) } == true
+                    check("Encrypting keeps a copy of the sealed file in the version history", error == nil && doc.isEncrypted && kept)
+                    doc.lock()
+                    // Another app changes one letter of the block, writing in place.
+                    var text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+                    if let r = text.range(of: "```leading-encrypted\n") {
+                        let i = r.upperBound
+                        text.replaceSubrange(i..<text.index(after: i), with: text[i] == "Q" ? "R" : "Q")
+                    }
+                    if let h = try? FileHandle(forWritingTo: url) { try? h.truncate(atOffset: 0); h.write(Data(text.utf8)); try? h.close() }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        doc.unlock(password: "not it") { wrong in
+                            check("A wrong password on a damaged note is still called wrong", wrong == .wrong)
+                            doc.unlock(password: "selftest pw") { outcome in
+                                guard case .recoverable = outcome else {
+                                    check("The right password finds the kept copy of a damaged note (\(outcome))", false); return finish(doc)
+                                }
+                                check("The right password finds the kept copy of a damaged note", true)
+                                doc.restoreKeptCopy(password: "selftest pw") { ok in
+                                    check("Restoring it opens the note as it was", ok && !doc.isPasswordLocked && doc.text == original)
+                                    finish(doc)
+                                }
+                            }
+                        }
                     }
                 }
             }
