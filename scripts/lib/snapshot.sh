@@ -17,13 +17,13 @@ restore_recents() {
 }
 trap restore_recents EXIT
 
-snapshot() { # out.png document settings-json size [edit]
-  local out="$1" doc="$2" settings="$3" size="$4" edit="${5:-0}"
+snapshot() { # out.png document settings-json size [edit] [page commands, comma-separated]
+  local out="$1" doc="$2" settings="$3" size="$4" edit="${5:-0}" commands="${6:-}"
   echo "› $(basename "$out" .png)"
   rm -f "$out"
   # -n: a separate instance, so a Leading you have open is not disturbed.
   open -n -W --env LEADING_SNAPSHOT="$out" --env LEADING_SNAPSHOT_SETTINGS="$settings" \
-    --env LEADING_SNAPSHOT_SIZE="$size" --env LEADING_SNAPSHOT_EDIT="$edit" \
+    --env LEADING_SNAPSHOT_SIZE="$size" --env LEADING_SNAPSHOT_EDIT="$edit" --env LEADING_SNAPSHOT_COMMANDS="$commands" \
     -a "$APP" "$doc" --args -ApplePersistenceIgnoreState YES
   [ -f "$out" ] || { echo "✗ no picture for $out" >&2; exit 1; }
 }

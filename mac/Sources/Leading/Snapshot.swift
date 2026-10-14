@@ -41,6 +41,10 @@ enum Snapshot {
         taken = true
         // LEADING_SNAPSHOT_EDIT=1: show the source editor instead of the page.
         if env["LEADING_SNAPSHOT_EDIT"] == "1" { controller.leadingToggleEdit(nil) }
+        // LEADING_SNAPSHOT_COMMANDS=showHighlights,…: page commands to run first (see view.ts Command).
+        for name in (env["LEADING_SNAPSHOT_COMMANDS"] ?? "").split(separator: ",") where !name.isEmpty {
+            page.call("command", ["name": String(name)])
+        }
         // Let fonts, the outline and any mode change settle before drawing.
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
             capture(window: window, page: page) { png in
