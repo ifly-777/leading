@@ -259,6 +259,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingCopyHighlights(_ sender: Any?) { command("copyHighlights") }
     @objc func leadingCopyQuote(_ sender: Any?) { command("copyQuote") }
     @objc func leadingToggleProgress(_ sender: Any?) { SettingsStore.shared.settings.progress.toggle() }
+    @objc func leadingToggleFocus(_ sender: Any?) { SettingsStore.shared.settings.focus.toggle() }
+    @objc func leadingTogglePaged(_ sender: Any?) { SettingsStore.shared.settings.paged.toggle() }
     @objc func leadingHighlight(_ sender: Any?) { command("highlight") }
     @objc func leadingHighlightYellow(_ sender: Any?) { command("highlightYellow") }
     @objc func leadingHighlightGreen(_ sender: Any?) { command("highlightGreen") }
@@ -305,6 +307,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             return doc?.showsPlainText != true && !editing
         case #selector(leadingToggleProgress(_:)):
             item.state = SettingsStore.shared.settings.progress ? .on : .off
+        case #selector(leadingToggleFocus(_:)):
+            item.state = SettingsStore.shared.settings.focus ? .on : .off
+        case #selector(leadingTogglePaged(_:)):
+            item.state = SettingsStore.shared.settings.paged ? .on : .off
         default: break
         }
         return true

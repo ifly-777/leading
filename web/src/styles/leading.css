@@ -348,6 +348,14 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .link-pop .fn-body :is(h1, h2, h3) { font-size: 1.1em; margin-top: 0.6em; }
 .link-pop .fn-body > :first-child { margin-top: 0; }
 
+/* ---- Focus (⌘D): all but the paragraph being read recede ---------------------
+   Opacity, not colour, so highlights, code and math recede with their text.
+   A list stays lit itself and dims its items, so one item can be the focus. */
+:root[data-focus="on"] .doc [data-b], :root[data-focus="on"] .doc [data-b]:is(ul, ol) > li { opacity: 0.28; transition: opacity 0.25s ease; }
+:root[data-focus="on"] .doc [data-b]:is(ul, ol) { opacity: 1; }
+:root[data-focus="on"] .doc .focus-current { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { :root[data-focus="on"] .doc :is([data-b], [data-b] > li) { transition: none; } }
+
 /* ---- Embeds (![[…]]) ---------------------------------------------------------
    An embedded note sits in the column like a quotation from another file: a
    thin rule at its side and its name above, in the muted ink. An embedded

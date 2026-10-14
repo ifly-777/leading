@@ -27,6 +27,7 @@ import { Diagrams } from './diagrams'
 import { NoteEmbeds } from './embeds'
 import { LinkPreview } from './link-preview'
 import { HighlightsList, collectHighlights, highlightsMarkdown } from './highlights-list'
+import { Focus } from './focus'
 
 export interface ViewElements {
   win: HTMLElement; scroller: HTMLElement; doc: HTMLElement; layer: HTMLElement
@@ -96,6 +97,8 @@ export class ReaderView {
   readonly preview: LinkPreview
   /** The file's highlights, a second tab beside the outline */
   readonly highlights: HighlightsList
+  /** Dims all but the paragraph being read, when on */
+  readonly focus: Focus
   /** Text the view wants on the clipboard (the host puts it there). */
   onCopyText: (text: string) => void = () => {}
   /** Words before each block, for the progress mark; rebuilt when the blocks change. */
@@ -148,6 +151,7 @@ export class ReaderView {
     this.embeds = new NoteEmbeds(doc)
     this.embeds.onFilled = () => this.diagrams.scan()
     this.preview = new LinkPreview(win, scroller, doc, this.embeds)
+    this.focus = new Focus(doc, scroller, document.documentElement)
     // Plain text shows the file unrendered: there is no Markdown to place a highlight in.
     this.palette.active = () => this.mode === 'read' && !this.lastOpen.plain
     this.palette.onPick = (slot, target) => { void this.highlightInReader(slot, false, target) }
@@ -246,6 +250,7 @@ export class ReaderView {
     if (this.editor?.exists) this.editor.setSmartTyping(s.smartTyping)
     this.relayout()
     this.diagrams.restyle()
+    this.focus.enabled = s.focus && this.mode === 'read'
   }
 
   /** Change some settings from inside the view, apply them, and tell the host. */
@@ -326,6 +331,7 @@ export class ReaderView {
     this.outline.updateCurrent()
     this.updateProgress(false)
     this.highlights.invalidate()
+    this.focus.schedule()
     // Warm block geometry once the page settles, so the first Find keystroke is quick,
     // and fetch edit mode's code in the background so ⌘E is instant when it comes.
     setTimeout(() => this.reader.blockY(0, scroller), 300)
@@ -515,6 +521,7 @@ export class ReaderView {
       this.progress.hide()
       this.footnotes.hide()
       this.preview.hide()
+      this.focus.enabled = false
       ed.focus()
       ed.scrollToPos(pos)
     } else {
@@ -534,6 +541,7 @@ export class ReaderView {
       }
       scroller.focus({ preventScroll: true })
       this.updateProgress(false)
+      this.focus.enabled = this.settings.focus
     }
     this.editHost.onMode(this.mode === 'edit')
   }
@@ -653,6 +661,7 @@ export class ReaderView {
       this.diagrams.scan()
       this.embeds.scan()
       this.highlights.invalidate()
+      this.focus.schedule()
       this.readerFind.invalidate()
       this.find.invalidate()
     } else {

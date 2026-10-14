@@ -102,6 +102,8 @@ enum MainMenu {
             item("Next Theme", #selector(ReaderActions.leadingCycleTheme(_:)), "t", [.command, .option]),
             .separator(),
             item("Show Reading Progress", #selector(ReaderActions.leadingToggleProgress(_:)), "p", [.command, .option]),
+            item("Focus", #selector(ReaderActions.leadingToggleFocus(_:)), "d"),
+            item("Page by Page", #selector(ReaderActions.leadingTogglePaged(_:))),
             item("Show as Plain Text", #selector(ReaderActions.leadingTogglePlainText(_:))),
             .separator(),
             item("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]),
@@ -184,6 +186,8 @@ private extension NSMenu {
     func leadingTable(_ sender: Any?)
     func leadingToggleSmartTyping(_ sender: Any?)
     func leadingToggleProgress(_ sender: Any?)
+    func leadingToggleFocus(_ sender: Any?)
+    func leadingTogglePaged(_ sender: Any?)
     func leadingBack(_ sender: Any?)
     func leadingShowHighlights(_ sender: Any?)
     func leadingCopyHighlights(_ sender: Any?)

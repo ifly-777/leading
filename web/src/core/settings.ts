@@ -27,6 +27,10 @@ export interface Settings {
   outlineOpen: boolean
   /** A thin rule showing how far through the file, and minutes left while scrolling */
   progress: boolean
+  /** Dim everything but the paragraph being read */
+  focus: boolean
+  /** Space and the arrow keys move a screen at a time, less a line */
+  paged: boolean
   /** Curly quotes, dashes and ellipses as you type in edit mode */
   smartTyping: boolean
   /** The colour ⇧⌘H applies */
@@ -55,6 +59,8 @@ export const DEFAULTS: Settings = {
   zebra: false,
   outlineOpen: false,
   progress: false,
+  focus: false,
+  paged: false,
   smartTyping: true,
   lastHighlight: 'yellow',
   highlightColors: { light: {}, dark: {} },
