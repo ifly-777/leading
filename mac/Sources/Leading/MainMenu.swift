@@ -82,6 +82,7 @@ enum MainMenu {
             item("Pink Highlight", #selector(ReaderActions.leadingHighlightPink(_:)), "4", [.command, .option]),
             item("Orange Highlight", #selector(ReaderActions.leadingHighlightOrange(_:)), "5", [.command, .option]),
             item("Remove Highlight", #selector(ReaderActions.leadingRemoveHighlight(_:)), "0", [.command, .option]),
+            item("Copy All Highlights", #selector(ReaderActions.leadingCopyHighlights(_:)), "c", [.command, .shift, .option]),
             .separator(),
             item("Smart Punctuation While Typing", #selector(ReaderActions.leadingToggleSmartTyping(_:))),
         ])
@@ -89,6 +90,7 @@ enum MainMenu {
             item("Edit Source", #selector(ReaderActions.leadingToggleEdit(_:)), "e"),
             .separator(),
             item("Show Outline", #selector(ReaderActions.leadingToggleOutline(_:)), "o", [.command, .option]),
+            item("Show Highlights", #selector(ReaderActions.leadingShowHighlights(_:)), "l", [.command, .option]),
             item("Back", #selector(ReaderActions.leadingBack(_:)), "["),
             .separator(),
             bigger, biggerAlias,
@@ -182,6 +184,8 @@ private extension NSMenu {
     func leadingToggleSmartTyping(_ sender: Any?)
     func leadingToggleProgress(_ sender: Any?)
     func leadingBack(_ sender: Any?)
+    func leadingShowHighlights(_ sender: Any?)
+    func leadingCopyHighlights(_ sender: Any?)
     func leadingHighlight(_ sender: Any?)
     func leadingHighlightYellow(_ sender: Any?)
     func leadingHighlightGreen(_ sender: Any?)

@@ -274,6 +274,28 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .outline:hover .fold { opacity: 0.7; }
 .outline .fold.closed { transform: rotate(-90deg); opacity: 0.7; }
 .outline .empty { font-style: italic; padding-left: 0.75em; }
+/* Two tabs share the margin: the outline and the file's highlights. */
+.outline .side-tabs { display: flex; gap: 0.9em; margin: 0 0 0.6em 0.75em; }
+.outline .side-tabs button { all: unset; cursor: pointer; color: var(--muted); padding-bottom: 0.1em; border-bottom: 1px solid transparent; }
+.outline .side-tabs button[aria-pressed="true"] { color: var(--fg); border-bottom-color: color-mix(in srgb, var(--fg) 45%, transparent); }
+.outline[data-tab="highlights"] > ol, .outline[data-tab="highlights"] > input { display: none; }
+.outline:not([data-tab="highlights"]) > .hl-side { display: none; }
+.outline .hl-chips { display: flex; align-items: center; gap: 7px; margin: 0 0 0.5em 0.75em; }
+.outline .hl-chip { all: unset; width: 10px; height: 10px; border-radius: 50%; cursor: pointer; background: var(--c); box-shadow: inset 0 0 0 1px var(--cl); }
+.outline .hl-chip[hidden] { display: none; }
+.outline .hl-chip[aria-pressed="true"] { outline: 1.5px solid var(--cl); outline-offset: 2px; }
+.outline .hl-copy { all: unset; margin-left: auto; cursor: pointer; color: var(--muted); font-size: 0.9em; }
+.outline .hl-copy:hover { color: var(--fg); }
+.outline :is(.hl-chip, .hl-item)[data-c="yellow"] { --c: var(--hl-yellow); --cl: var(--hl-yellow-line); }
+.outline :is(.hl-chip, .hl-item)[data-c="green"] { --c: var(--hl-green); --cl: var(--hl-green-line); }
+.outline :is(.hl-chip, .hl-item)[data-c="blue"] { --c: var(--hl-blue); --cl: var(--hl-blue-line); }
+.outline :is(.hl-chip, .hl-item)[data-c="pink"] { --c: var(--hl-pink); --cl: var(--hl-pink-line); }
+.outline :is(.hl-chip, .hl-item)[data-c="orange"] { --c: var(--hl-orange); --cl: var(--hl-orange-line); }
+.outline .hl-heading { margin: 0.8em 0 0.2em 0.75em; font-size: 0.85em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.outline a.hl-item {
+  white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+  margin: 0.15em 0; border-left: 3px solid var(--cl); line-height: 1.35;
+}
 /* Narrow windows: the outline becomes a popover with its own surface. */
 .outline.popover {
   left: auto; right: 12px; top: 3rem; opacity: 1;

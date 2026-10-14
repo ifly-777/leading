@@ -42,6 +42,7 @@ warmPool()
 view.onSettingsChanged = (settings) => post({ type: 'settings', settings })
 view.onPlace = (p) => post({ type: 'place', ...p })
 view.onCanGoBack = (can) => post({ type: 'canGoBack', can })
+view.onCopyText = (text) => post({ type: 'copy', text })
 
 // The document being shown, so a heading jump that arrives with it waits for it.
 let loading: Promise<unknown> = Promise.resolve()

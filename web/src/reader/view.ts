@@ -26,6 +26,7 @@ import { FootnotePopover } from './footnote-popover'
 import { Diagrams } from './diagrams'
 import { NoteEmbeds } from './embeds'
 import { LinkPreview } from './link-preview'
+import { HighlightsList, collectHighlights, highlightsMarkdown } from './highlights-list'
 
 export interface ViewElements {
   win: HTMLElement; scroller: HTMLElement; doc: HTMLElement; layer: HTMLElement
@@ -60,7 +61,7 @@ export interface Place { s: number; dy: number }
 
 export type Command =
   | 'find' | 'findNext' | 'findPrevious' | 'toggleOutline' | 'bigger' | 'smaller' | 'actualSize'
-  | 'narrower' | 'wider' | 'cycleTheme' | 'back'
+  | 'narrower' | 'wider' | 'cycleTheme' | 'back' | 'showHighlights' | 'copyHighlights'
   | 'toggleEdit' | 'findReplace' | 'undo' | 'redo'
   | 'bold' | 'italic' | 'underline' | 'strike' | 'code' | 'link'
   | 'bulletList' | 'numberList' | 'table'
@@ -93,6 +94,10 @@ export class ReaderView {
   readonly embeds: NoteEmbeds
   /** A glance at a linked note, on hover */
   readonly preview: LinkPreview
+  /** The file's highlights, a second tab beside the outline */
+  readonly highlights: HighlightsList
+  /** Text the view wants on the clipboard (the host puts it there). */
+  onCopyText: (text: string) => void = () => {}
   /** Words before each block, for the progress mark; rebuilt when the blocks change. */
   private words: { blocks: unknown; n: number; cum: Float64Array } | null = null
   private progressFrame = 0
@@ -154,6 +159,15 @@ export class ReaderView {
     }
     this.outline.onClose = () => this.change({ outlineOpen: false })
     this.outline.beforeJump = () => this.rememberPlace()
+    this.highlights = new HighlightsList(outline)
+    this.highlights.collect = () => collectHighlights(doc, (b) => this.reader.correction(b))
+    this.highlights.onJump = (mark) => {
+      this.rememberPlace()
+      // A third of the way down the window, where the eye goes after a jump.
+      const top = mark.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+      scroller.scrollTop += top - scroller.clientHeight * 0.3
+    }
+    this.highlights.onCopy = () => this.copyHighlights()
     this.readerFind.blockY = (b) => this.reader.blockY(b, scroller)
     this.readerFind.index = () => this.reader.index
     this.readerFind.getBlock = (b, force) => this.reader.blockEl(b, force)
@@ -311,6 +325,7 @@ export class ReaderView {
     if (opts.placeAt !== undefined) this.placeAt(opts.placeAt, result)
     this.outline.updateCurrent()
     this.updateProgress(false)
+    this.highlights.invalidate()
     // Warm block geometry once the page settles, so the first Find keystroke is quick,
     // and fetch edit mode's code in the background so ⌘E is instant when it comes.
     setTimeout(() => this.reader.blockY(0, scroller), 300)
@@ -342,6 +357,22 @@ export class ReaderView {
     const el = this.topBlock()
     if (!el?.dataset.s) return null
     return { s: Number(el.dataset.s) + this.reader.correction(Number(el.dataset.b)), dy: this.els.scroller.scrollTop - topIn(el, this.els.scroller) }
+  }
+
+  /** Every highlight in the file, as Markdown, onto the clipboard. */
+  copyHighlights(): void {
+    const entries = collectHighlights(this.els.doc, (b) => this.reader.correction(b))
+    if (!entries.length) { notice(this.els.win, 'This file has no highlights yet.'); return }
+    const title = this.readerOutline.find((i) => i.depth === 1)?.text ?? null
+    this.onCopyText(highlightsMarkdown(entries, this.text, title))
+    notice(this.els.win, `Copied ${entries.length} highlight${entries.length === 1 ? '' : 's'} as Markdown.`)
+  }
+
+  /** View › Show Highlights: the margin's highlights tab, or close it if it is already showing. */
+  private toggleHighlights(): void {
+    if (this.settings.outlineOpen && this.highlights.tab === 'highlights') { void this.change({ outlineOpen: false }); return }
+    this.highlights.show('highlights')
+    if (!this.settings.outlineOpen) void this.change({ outlineOpen: true })
   }
 
   /** Before a jump within the document: remember where the reader was, for View › Back. */
@@ -590,6 +621,7 @@ export class ReaderView {
       this.tables.scan(this.els.doc)
       this.diagrams.scan()
       this.embeds.scan()
+      this.highlights.invalidate()
       this.readerFind.invalidate()
       this.find.invalidate()
     } else {
@@ -603,6 +635,8 @@ export class ReaderView {
     switch (c) {
       case 'toggleEdit': return this.toggleEdit()
       case 'back': this.goBack(); break
+      case 'showHighlights': this.toggleHighlights(); break
+      case 'copyHighlights': this.copyHighlights(); break
       case 'findReplace': if (this.mode === 'edit') this.find.open(true); else this.find.open(); break
       case 'undo': this.editor?.undo(); break
       case 'redo': this.editor?.redo(); break
@@ -618,6 +652,9 @@ export class ReaderView {
       case 'findNext': if (!this.find.isOpen) this.find.open(); this.find.step(1); break
       case 'findPrevious': if (!this.find.isOpen) this.find.open(); this.find.step(-1); break
       case 'toggleOutline':
+        // Showing highlights: ⌥⌘O turns the margin back to the outline rather than closing it.
+        if (s.outlineOpen && this.highlights.tab === 'highlights') { this.highlights.show('outline'); this.outline.focusForTyping(); break }
+        this.highlights.show('outline')
         this.change({ outlineOpen: !s.outlineOpen }).then(() => { if (this.settings.outlineOpen) this.outline.focusForTyping() })
         break
       case 'bigger': this.change({ size: Math.min(RANGES.size.max, s.size + 1) }); break

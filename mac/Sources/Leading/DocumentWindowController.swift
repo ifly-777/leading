@@ -252,6 +252,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingTable(_ sender: Any?) { command("table") }
     @objc func leadingToggleSmartTyping(_ sender: Any?) { SettingsStore.shared.settings.smartTyping.toggle() }
     @objc func leadingBack(_ sender: Any?) { command("back") }
+    @objc func leadingShowHighlights(_ sender: Any?) { command("showHighlights") }
+    @objc func leadingCopyHighlights(_ sender: Any?) { command("copyHighlights") }
     @objc func leadingToggleProgress(_ sender: Any?) { SettingsStore.shared.settings.progress.toggle() }
     @objc func leadingHighlight(_ sender: Any?) { command("highlight") }
     @objc func leadingHighlightYellow(_ sender: Any?) { command("highlightYellow") }
@@ -294,6 +296,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         case #selector(leadingToggleSmartTyping(_:)):
             item.state = SettingsStore.shared.settings.smartTyping ? .on : .off
         case #selector(leadingBack(_:)): return canGoBack
+        // The list is of the rendered page: not for plain text, and read in reading mode.
+        case #selector(leadingShowHighlights(_:)), #selector(leadingCopyHighlights(_:)):
+            return doc?.showsPlainText != true && !editing
         case #selector(leadingToggleProgress(_:)):
             item.state = SettingsStore.shared.settings.progress ? .on : .off
         default: break
