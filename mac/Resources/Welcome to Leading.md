@@ -10,12 +10,16 @@ Open a file from Finder, or drag one onto Leading in the Dock. If you said yes w
 
 The **Aa** button in the toolbar sets the font, size, line spacing, column width and theme. The settings apply to every document, so you choose them once. The button beside it shows an outline of the headings; click one to jump there.
 
+Close a file and open it again later, and it opens where you stopped. Click a footnote number and the note appears beside it, so you never lose your line.[^1] Links to other notes, `[[wikilinks]]` included, open those notes, at the heading they name.
+
 | To do this | Press |
 | --- | --- |
 | Make the text bigger or smaller | ⌘+ and ⌘− (⌘0 to reset) |
 | Narrow or widen the column | ⌥⌘[ and ⌥⌘] |
 | Change theme (auto, light, sepia, dark) | ⌥⌘T |
 | Show or hide the outline | ⌥⌘O |
+| Go back after jumping to a heading or note | ⌘[ |
+| Show how far through you are, and the time left | ⌥⌘P |
 | Find | ⌘F, then ⌘G for the next match |
 
 > [!tip] Notes from Obsidian
@@ -51,6 +55,8 @@ Open Leading with no file, or press ⌘N, and you get a blank page ready to writ
 ## Privacy
 
 Leading has no account, collects nothing and sends nothing. The only time it uses the network is to check for a new version, and only if you turned that on. Leading › Settings changes that choice, and the default app for Markdown files, at any time.
+
+[^1]: Like this. Press Esc or click anywhere else to close it; ⌥-click a number to go to the notes at the end instead.
 
 ---
 

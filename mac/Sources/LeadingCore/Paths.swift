@@ -32,8 +32,67 @@ public enum Paths {
         return classifyFile(url)
     }
 
-    private static func classifyFile(_ url: URL) -> LinkTarget {
+    /// The heading a link names after `#` (`other.md#Further reading`), if any.
+    public static func fragment(_ href: String) -> String? {
+        guard let i = href.firstIndex(of: "#") else { return nil }
+        let f = String(href[href.index(after: i)...])
+        let decoded = f.removingPercentEncoding ?? f
+        return decoded.isEmpty ? nil : decoded
+    }
+
+    public static func classifyFile(_ url: URL) -> LinkTarget {
         documentExtensions.contains(url.pathExtension.lowercased()) ? .document(url) : .otherFile(url)
+    }
+
+    /// The file a wikilink names, found the way Obsidian finds it: next to the
+    /// note; otherwise anywhere in its vault (the nearest folder above holding
+    /// `.obsidian`, or the note's own folder and those below it if there is no
+    /// vault), preferring the match nearest the vault's top. Names match without
+    /// regard to case or Unicode composition. Nil if there is no such file.
+    /// The search stops after `limit` entries, so a huge folder cannot stall a click.
+    public static func wikiTarget(_ name: String, document: URL?, home: URL = FileManager.default.homeDirectoryForCurrentUser, limit: Int = 50_000) -> URL? {
+        let fm = FileManager.default
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard let folder = document?.deletingLastPathComponent(), !trimmed.isEmpty, !trimmed.hasPrefix("/") else { return nil }
+        // "Note" means Note.md; "v1.2 plan" is a note too, but "report.pdf" names its file.
+        let ext = (trimmed as NSString).pathExtension
+        let hasExtension = !ext.isEmpty && ext.count <= 8 && ext.allSatisfy { $0.isLetter || $0.isNumber }
+        let candidates = hasExtension ? [trimmed] : ["md", "markdown"].map { "\(trimmed).\($0)" }
+
+        // 1. Beside the note (or at the path given, relative to it).
+        let norm = { (s: String) in s.precomposedStringWithCanonicalMapping.lowercased() }
+        for c in candidates {
+            let url = folder.appendingPathComponent(c).standardizedFileURL
+            guard fm.fileExists(atPath: url.path) else { continue }
+            // The disk ignores case, but the name must be spelled as on disk,
+            // or an open "Linked.md" would open again as "linked.md".
+            let dir = url.deletingLastPathComponent()
+            let name = (try? fm.contentsOfDirectory(atPath: dir.path))?.first { norm($0) == norm(url.lastPathComponent) }
+            return name.map { dir.appendingPathComponent($0) } ?? url
+        }
+
+        // 2. Anywhere in the vault.
+        var root = folder
+        var probe = folder.standardizedFileURL
+        while probe.path.count > 1, probe.path != home.standardizedFileURL.path {
+            if fm.fileExists(atPath: probe.appendingPathComponent(".obsidian").path) { root = probe; break }
+            probe = probe.deletingLastPathComponent()
+        }
+        let wanted = candidates.map(norm)
+        guard let walk = fm.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return nil }
+        var best: (url: URL, depth: Int)?
+        var seen = 0
+        for case let url as URL in walk {
+            seen += 1
+            if seen > limit { break }
+            // The file's name, or a tail of its path ("Folder/Note" matches …/Folder/Note.md).
+            // Matching the end of the full path sidesteps /var versus /private/var.
+            let path = norm(url.path)
+            guard wanted.contains(where: { path.hasSuffix("/" + $0) }) else { continue }
+            let depth = url.pathComponents.count
+            if best == nil || depth < best!.depth { best = (url.standardizedFileURL, depth) }
+        }
+        return best?.url
     }
 
     /// The file for an image request, relative to the document's folder.

@@ -104,7 +104,7 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 
 .doc a { color: var(--link); text-decoration-line: underline; text-decoration-thickness: 1px; text-underline-offset: 0.18em; text-decoration-color: color-mix(in srgb, var(--link) 40%, transparent); }
 .doc a:hover { text-decoration-color: var(--link); }
-.doc .wikilink { color: var(--link); text-decoration: underline dotted 1px color-mix(in srgb, var(--link) 60%, transparent); text-underline-offset: 0.2em; cursor: default; }
+.doc .wikilink { color: var(--link); text-decoration: underline dotted 1px color-mix(in srgb, var(--link) 60%, transparent); text-underline-offset: 0.2em; cursor: pointer; }
 .doc .wikilink.embed::before { content: "\21B3\2009"; color: var(--muted); }
 
 .doc img { display: block; max-width: 100%; height: auto; margin: 1.4em auto; border-radius: 3px; }

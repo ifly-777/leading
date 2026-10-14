@@ -12,6 +12,8 @@ protocol ReaderWebViewHost: AnyObject {
     func pageHistory(canUndo: Bool, canRedo: Bool)
     func pageMode(editing: Bool)
     func pageSavedPlace(s: Int, dy: Double)
+    func pageOpenWiki(target: String, heading: String?)
+    func pageCanGoBack(_ can: Bool)
 }
 
 /// The web view showing one document. Holds calls until its page reports it is
@@ -71,6 +73,8 @@ final class ReaderWebView: WKWebView, WKNavigationDelegate {
         case "painted": host?.pageDidPaint(message["ms"] as? Double ?? 0)
         case "loaded": host?.pageDidLoad(message["timings"] as? [String: Any] ?? [:])
         case "openLink": if let href = message["href"] as? String { host?.pageOpenLink(href) }
+        case "openWiki": if let t = message["target"] as? String { host?.pageOpenWiki(target: t, heading: message["heading"] as? String) }
+        case "canGoBack": host?.pageCanGoBack(message["can"] as? Bool ?? false)
         case "settings": if let s = message["settings"] as? [String: Any] { host?.pageChangedSettings(s) }
         case "edit": host?.pageEdited(message["edits"] as? [[String: Any]] ?? [])
         case "settled":

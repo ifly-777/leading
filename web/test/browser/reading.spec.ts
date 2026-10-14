@@ -82,3 +82,38 @@ test('a footnote number shows its note beside it, and Esc closes it', async ({ p
   await expect(pop).toBeHidden()
   expect(await page.evaluate(() => document.getElementById('scroller')!.scrollTop)).toBeGreaterThan(0)
 })
+
+const linked = ['# Contents', 'See [[#Second part]] and [the end](#the-end), or [[Other note#Its heading|elsewhere]].',
+  ...Array(25).fill('A paragraph of filler so the headings sit well apart on the page.'), '## Second part', ...Array(25).fill('More filler.'), '## The end', 'Done.'].join('\n\n')
+
+test('links to headings jump within the page, and Back returns', async ({ page }) => {
+  await open(page, linked)
+  const posted: unknown[] = []
+  await page.exposeFunction('capture', (m: unknown) => posted.push(m))
+  await page.evaluate(() => {
+    ;(window as any).webkit = { messageHandlers: { leading: { postMessage: (m: any) => (window as any).capture(m) } } }
+  })
+  const top = () => page.evaluate(() => document.getElementById('scroller')!.scrollTop)
+  const headingTop = (id: string) => page.evaluate((id) => document.getElementById(id)!.getBoundingClientRect().top, id)
+  await page.locator('#doc .wikilink').first().click()
+  expect(await top()).toBeGreaterThan(0)
+  expect(await headingTop('second-part')).toBeLessThan(300)
+  const before = await top()
+  // A script click: Playwright would scroll the link (at the top) into view first.
+  await page.evaluate(() => document.querySelector<HTMLElement>('#doc a[href="#the-end"]')!.click())
+  // The last heading cannot reach the top of the window; it is at least on screen, further down.
+  expect(await top()).toBeGreaterThan(before)
+  expect(await headingTop('the-end')).toBeLessThan(870)
+  // Back twice: to the second part, then to the very top.
+  await page.evaluate(() => (window as any).leading.command({ name: 'back' }))
+  expect(await headingTop('second-part')).toBeLessThan(300)
+  await page.evaluate(() => (window as any).leading.command({ name: 'back' }))
+  expect(await top()).toBe(0)
+  // A wikilink to another note goes to Swift with its heading.
+  await page.locator('#doc .wikilink', { hasText: 'elsewhere' }).click()
+  expect(posted).toContainEqual({ type: 'openWiki', target: 'Other note', heading: 'Its heading' })
+  expect(posted.filter((m: any) => m.type === 'canGoBack').map((m: any) => m.can)).toEqual([true, false])
+  // Swift's heading jump for a just-opened document waits for it, by text or slug.
+  expect(await page.evaluate(() => (window as any).leading.jumpToHeading({ text: 'the-end' }))).toBe(true)
+  expect(await page.evaluate(() => (window as any).leading.jumpToHeading({ text: 'No such heading' }))).toBe(false)
+})

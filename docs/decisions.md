@@ -4,6 +4,12 @@ Short notes on choices that are not obvious from the code, and what testing show
 
 ## After 1.0.0
 
+### Wikilinks are found the way Obsidian finds them
+A wikilink opens its note in Leading: first a file of that name beside the note, then anywhere in the vault (the nearest folder above holding `.obsidian`; with no vault, the note's own folder and those below it), preferring the match nearest the vault's top, which is Obsidian's rule. Names match regardless of case and Unicode composition, but the URL keeps the spelling on disk: macOS ignores case, and `linked.md` would otherwise open a second window for an open `Linked.md`. The search runs off the main thread and stops after 50,000 entries. A missing note beeps; Leading does not create notes. `[[Note#Heading]]` and `other.md#heading` open at that heading, matched by its text or its slug. The page waits for the document's text before jumping, but not for its images.
+
+### Back is per document
+View › Back (⌘[) returns to where the last jump began: an outline click, a heading link, an anchor or a footnote ⌥-click, up to 50 deep. Going back across files is left to macOS's tabs and windows, so Leading keeps no history of its own between documents. The place probe now walks down from the top of the column until it meets a block: at the very top of the page it used to land in the padding, find nothing, and so remember nothing.
+
 ### Footnotes open beside their number
 Clicking a footnote number shows the note in a card under its line, within the column, flipped above when there is no room below. Esc, a click elsewhere, or scrolling the number out of sight closes it. ⌥-click jumps to the endnotes as before, and the endnotes stay on the page. The card holds a copy of the note with its ids and source positions stripped, so nothing in it maps back into the file: a highlight is made in the endnote itself, and the card shows it there next time.
 

@@ -299,11 +299,31 @@ enum SelfTest {
                             page.callAsyncJavaScript(where_, arguments: [:], in: nil, in: .page) { r in
                                 let after = ((try? r.get()) as? NSNumber)?.intValue ?? -2
                                 check("A file opens again where the reader stopped (block at \(before) → \(after))", before > 0 && after == before)
-                                done()
+                                wikiCheck(from: reopened as? MarkdownDocument, check: check, done: done)
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+
+    /// [[Linked#Far heading]] from prose.md: the note beside it opens, at that heading.
+    private static func wikiCheck(from doc: MarkdownDocument?, check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        guard let doc, let folder = doc.fileURL?.deletingLastPathComponent(), let wc = doc.windowControllers.first as? DocumentWindowController else {
+            check("The wikilink test has a document", false); return done()
+        }
+        let filler = Array(repeating: "Filler, so the heading starts well down the page.", count: 40).joined(separator: "\n\n")
+        try? "# Linked\n\n\(filler)\n\n## Far heading\n\nHere.\n\n\(filler)\n".write(to: folder.appendingPathComponent("Linked.md"), atomically: true, encoding: .utf8)
+        wc.pageOpenWiki(target: "linked", heading: "Far heading")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            guard let page = (NSDocumentController.shared.documents.first { $0.fileURL?.lastPathComponent == "Linked.md" }?.windowControllers.first as? DocumentWindowController)?.pageForTests else {
+                check("[[linked]] opens Linked.md beside the note", false); return done()
+            }
+            let js = "const h = document.getElementById('far-heading'); const s = document.getElementById('scroller'); return s.scrollTop > 0 && h.getBoundingClientRect().top < s.clientHeight * 0.4"
+            page.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { r in
+                check("[[linked#Far heading]] opens Linked.md at that heading", (try? r.get()) as? Bool == true)
+                done()
             }
         }
     }

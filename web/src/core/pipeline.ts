@@ -71,7 +71,7 @@ const CALLOUT_ALIASES: Record<string, string> = {
 const SAFE_URL = /^(?:https?:|mailto:|#|\/|\.|[^:]*$)/i
 const REMOTE = /^[a-z][a-z0-9+.\-]*:/i
 
-function slugify(text: string): string {
+export function slugify(text: string): string {
   return text.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
     .replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'section'
 }
@@ -156,7 +156,7 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions): Handlers {
     wikilink(state, node: WikiLink) {
       return el('span', {
         className: node.embed ? ['wikilink', 'embed'] : ['wikilink'],
-        dataTarget: node.target, title: [node.target, node.heading].filter(Boolean).join(' › '), ...pos(node),
+        dataTarget: node.target, dataHeading: node.heading, title: [node.target, node.heading].filter(Boolean).join(' › '), ...pos(node),
       }, [{ type: 'text', value: node.display }])
     },
     caps(state, node: any) {

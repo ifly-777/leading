@@ -14,6 +14,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private var painted = false
     private var editing = false
     private var canUndo = false
+    private var canGoBack = false
     private var canRedo = false
     private let aaPopover = NSPopover()
     /// The outline button stays pressed while the outline is showing.
@@ -183,12 +184,44 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     func pageOpenLink(_ href: String) {
         switch Paths.linkTarget(href, document: doc?.fileURL) {
         case .external(let url): NSWorkspace.shared.open(url)
-        case .document(let url): NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, _ in }
+        case .document(let url): open(url, heading: Paths.fragment(href))
         case .otherFile(let url):
             if FileManager.default.fileExists(atPath: url.path) { NSWorkspace.shared.open(url) } else { NSSound.beep() }
         case .none: NSSound.beep()
         }
     }
+
+    /// [[Note#Heading]]: find the note in the vault, off the main thread (a big vault takes a moment).
+    func pageOpenWiki(target: String, heading: String?) {
+        let from = doc?.fileURL
+        DispatchQueue.global(qos: .userInitiated).async {
+            let found = Paths.wikiTarget(target, document: from)
+            DispatchQueue.main.async { [weak self] in
+                guard let found else { NSSound.beep(); return }
+                switch Paths.classifyFile(found) {
+                case .document(let url): self?.open(url, heading: heading)
+                default: NSWorkspace.shared.open(found)
+                }
+            }
+        }
+    }
+
+    /// Open a document in Leading (or bring it forward), then go to the heading the link named.
+    private func open(_ url: URL, heading: String?) {
+        if let mine = doc?.fileURL, mine.standardizedFileURL == url.standardizedFileURL {
+            if let heading { jumpToHeading(heading) }
+            return
+        }
+        NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { opened, _, _ in
+            guard let heading, let wc = opened?.windowControllers.first as? DocumentWindowController else { return }
+            wc.jumpToHeading(heading)
+        }
+    }
+
+    /// The page waits for its document to finish loading before it jumps.
+    func jumpToHeading(_ text: String) { web.call("jumpToHeading", ["text": text]) }
+
+    func pageCanGoBack(_ can: Bool) { canGoBack = can }
 
     // MARK: Menu commands
 
@@ -218,6 +251,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingNumberList(_ sender: Any?) { command("numberList") }
     @objc func leadingTable(_ sender: Any?) { command("table") }
     @objc func leadingToggleSmartTyping(_ sender: Any?) { SettingsStore.shared.settings.smartTyping.toggle() }
+    @objc func leadingBack(_ sender: Any?) { command("back") }
     @objc func leadingToggleProgress(_ sender: Any?) { SettingsStore.shared.settings.progress.toggle() }
     @objc func leadingHighlight(_ sender: Any?) { command("highlight") }
     @objc func leadingHighlightYellow(_ sender: Any?) { command("highlightYellow") }
@@ -259,6 +293,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             return doc?.showsPlainText != true || editing
         case #selector(leadingToggleSmartTyping(_:)):
             item.state = SettingsStore.shared.settings.smartTyping ? .on : .off
+        case #selector(leadingBack(_:)): return canGoBack
         case #selector(leadingToggleProgress(_:)):
             item.state = SettingsStore.shared.settings.progress ? .on : .off
         default: break

@@ -16,7 +16,7 @@ import type { SourceEditor } from '../editor/editor'
 import type { EditorSession } from '../editor/session'
 import { scanHeadings } from '../core/headings'
 import type { Edit } from '../core/format'
-import type { OutlineItem } from '../core/pipeline'
+import { slugify, type OutlineItem } from '../core/pipeline'
 import type { HighlightSlot } from '../core/nodes'
 import { highlightEdits } from '../core/highlight-edit'
 import { referenceDefinitions } from '../core/chunks'
@@ -57,7 +57,7 @@ export interface Place { s: number; dy: number }
 
 export type Command =
   | 'find' | 'findNext' | 'findPrevious' | 'toggleOutline' | 'bigger' | 'smaller' | 'actualSize'
-  | 'narrower' | 'wider' | 'cycleTheme'
+  | 'narrower' | 'wider' | 'cycleTheme' | 'back'
   | 'toggleEdit' | 'findReplace' | 'undo' | 'redo'
   | 'bold' | 'italic' | 'underline' | 'strike' | 'code' | 'link'
   | 'bulletList' | 'numberList' | 'table'
@@ -110,6 +110,10 @@ export class ReaderView {
   onSettingsChanged: (s: Settings) => void = () => {}
   /** Reading stopped scrolling here; the host remembers it for next time. */
   onPlace: (p: Place) => void = () => {}
+  /** Whether View › Back has somewhere to go changed. */
+  onCanGoBack: (can: boolean) => void = () => {}
+  /** Places left by jumps within the document (outline, links, footnotes), newest last. */
+  private backStack: Place[] = []
   private placeTimer = 0
   private avg = 0.5
   private avgKey = ''
@@ -136,6 +140,7 @@ export class ReaderView {
       return blk.matches('h1,h2,h3,h4,h5,h6') ? blk : blk.querySelector<HTMLElement>(`:is(h1,h2,h3,h4,h5,h6)[data-s="${item.s}"]`)
     }
     this.outline.onClose = () => this.change({ outlineOpen: false })
+    this.outline.beforeJump = () => this.rememberPlace()
     this.readerFind.blockY = (b) => this.reader.blockY(b, scroller)
     this.readerFind.index = () => this.reader.index
     this.readerFind.getBlock = (b, force) => this.reader.blockEl(b, force)
@@ -254,6 +259,11 @@ export class ReaderView {
       }
     }
     this.footnotes.hide()
+    // A different document (not a reload of this one): its jumps have nothing to go back to.
+    if (!opts.keepPlace && !opts.fromDisk && opts.placeAt === undefined && this.backStack.length) {
+      this.backStack = []
+      this.onCanGoBack(false)
+    }
     const place = opts.keepPlace ? this.placeMark() : null
     if (!opts.keepPlace && opts.placeAt === undefined && !opts.resume) scroller.scrollTop = 0
     let result: LoadResult | null
@@ -293,7 +303,13 @@ export class ReaderView {
   private topBlock(): HTMLElement | null {
     const box = this.els.frame.getBoundingClientRect()
     const x = box.left + (parseFloat(getComputedStyle(this.root).getPropertyValue('--col-left')) || box.width / 3) + 40
-    return (document.elementFromPoint(x, box.top + 8) as HTMLElement | null)?.closest('[data-b]') as HTMLElement | null
+    // The top of the page is padding, and blocks have gaps between them: look a
+    // little further down until a block is found. Its offset is then negative.
+    for (let y = 8; y < Math.min(box.height, 480); y += 16) {
+      const el = (document.elementFromPoint(x, box.top + y) as HTMLElement | null)?.closest('[data-b]') as HTMLElement | null
+      if (el) return el
+    }
+    return null
   }
 
   /** Where the reader is: the source offset of the block at the top, and how far into it. */
@@ -301,6 +317,41 @@ export class ReaderView {
     const el = this.topBlock()
     if (!el?.dataset.s) return null
     return { s: Number(el.dataset.s) + this.reader.correction(Number(el.dataset.b)), dy: this.els.scroller.scrollTop - topIn(el, this.els.scroller) }
+  }
+
+  /** Before a jump within the document: remember where the reader was, for View › Back. */
+  rememberPlace(): void {
+    const p = this.mode === 'edit' && this.editor ? { s: this.editor.topPos(), dy: 0 } : this.placeMark()
+    if (!p) return
+    this.backStack.push(p)
+    if (this.backStack.length > 50) this.backStack.shift()
+    if (this.backStack.length === 1) this.onCanGoBack(true)
+  }
+
+  /** View › Back (⌘[): return to where the last jump started. */
+  goBack(): void {
+    const p = this.backStack.pop()
+    if (!p) return
+    if (!this.backStack.length) this.onCanGoBack(false)
+    this.footnotes.hide()
+    if (this.mode === 'edit') this.editor?.scrollToPos(p.s)
+    else if (this.lastResult) this.restorePlace(p, this.lastResult)
+  }
+
+  /**
+   * Go to a heading named in a link: its text as written ("Further reading",
+   * as in [[Note#Further reading]]) or its slug ("further-reading", as in
+   * other.md#further-reading). False if the document has no such heading.
+   */
+  jumpToHeading(name: string): boolean {
+    const want = slugify(name)
+    const items = this.mode === 'edit' && this.editor ? scanHeadings(this.editor.text) : this.readerOutline
+    const item = items.find((i) => i.id === name || slugify(i.text) === want)
+    if (!item) return false
+    this.rememberPlace()
+    if (this.mode === 'edit') this.editor?.scrollToPos(item.s)
+    else this.outline.jumpTo(item)
+    return true
   }
 
   /** Redraw the progress mark, if it is on; `scrolling` also shows the time left for a moment. */
@@ -508,6 +559,7 @@ export class ReaderView {
     const s = this.settings
     switch (c) {
       case 'toggleEdit': return this.toggleEdit()
+      case 'back': this.goBack(); break
       case 'findReplace': if (this.mode === 'edit') this.find.open(true); else this.find.open(); break
       case 'undo': this.editor?.undo(); break
       case 'redo': this.editor?.redo(); break

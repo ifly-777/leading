@@ -21,6 +21,8 @@ type ToSwift =
   | { type: 'history'; undo: boolean; redo: boolean }
   | { type: 'mode'; editing: boolean }
   | { type: 'place'; s: number; dy: number }
+  | { type: 'openWiki'; target: string; heading?: string }
+  | { type: 'canGoBack'; can: boolean }
 
 const post = (m: ToSwift | { type: 'log'; text: string }) => (window as any).webkit?.messageHandlers?.leading?.postMessage(m)
 
@@ -39,6 +41,10 @@ warmPool()
 
 view.onSettingsChanged = (settings) => post({ type: 'settings', settings })
 view.onPlace = (p) => post({ type: 'place', ...p })
+view.onCanGoBack = (can) => post({ type: 'canGoBack', can })
+
+// The document being shown, so a heading jump that arrives with it waits for it.
+let loading: Promise<unknown> = Promise.resolve()
 // Editing: Swift keeps a mirror of the text and saves from it.
 view.editHost = {
   onEdit: (edits) => post({ type: 'edit', edits }),
@@ -50,18 +56,36 @@ view.reader.onFirstPaint = (ms) => post({ type: 'painted', ms })
 view.tables.onHoverChange = (over) => post({ type: 'overTable', over })
 view.tables.onCopyCSV = (text) => post({ type: 'copy', text })
 
-// Links: in-page anchors scroll here; everything else is Swift's decision
-// (web links go to the browser, other Markdown files open in Leading).
+// Links: in-page anchors and headings scroll here (and View › Back returns);
+// everything else is Swift's decision (web links go to the browser, other
+// Markdown files open in Leading, wikilinks are looked up in the vault).
 document.addEventListener('click', (e) => {
-  const a = (e.target as Element).closest?.('a[href]') as HTMLAnchorElement | null
+  const t = e.target as Element
+  const wiki = t.closest?.('#doc .wikilink') as HTMLElement | null
+  if (wiki && !window.getSelection()?.toString()) {
+    const target = wiki.dataset.target ?? ''
+    const heading = wiki.dataset.heading
+    // [[#Heading]] is a heading in this note.
+    if (!target) { if (heading) view.jumpToHeading(heading); return }
+    post({ type: 'openWiki', target, heading })
+    return
+  }
+  const a = t.closest?.('a[href]') as HTMLAnchorElement | null
   if (!a) return
   const href = a.getAttribute('href')!
   e.preventDefault()
   // A footnote number shows its note beside it; ⌥-click jumps to the endnotes as before.
   if (a.hasAttribute('data-footnote-ref') && !e.altKey && view.footnotes.toggle(a)) return
   if (href.startsWith('#')) {
-    const target = document.getElementById(decodeURIComponent(href.slice(1)))
-    target?.scrollIntoView({ block: 'start' })
+    const id = decodeURIComponent(href.slice(1))
+    const target = document.getElementById(id)
+    if (target && document.getElementById('scroller')!.contains(target)) {
+      view.rememberPlace()
+      view.footnotes.hide()
+      target.scrollIntoView({ block: 'start' })
+    } else {
+      view.jumpToHeading(id)
+    }
     return
   }
   post({ type: 'openLink', href })
@@ -70,8 +94,11 @@ document.addEventListener('click', (e) => {
 ;(window as any).leading = {
   /** Show a document (called by Swift when a file opens or changes on disk). */
   async load(args: { text?: string; textURL?: string; imageBase: string | null; plain?: boolean; keepPlace?: boolean; fromDisk?: boolean; edit?: boolean; resume?: Place }) {
+    // Heading jumps that arrive with the document wait until its text is shown.
+    let shown!: () => void
+    loading = new Promise<void>((ok) => { shown = ok })
     // Small files arrive inline; large ones are fetched from the app's private address.
-    const text = args.text ?? (await (await fetch(args.textURL!)).text())
+    const text = args.text ?? (await fetch(args.textURL!).then((r) => r.text()).catch((e) => { shown(); throw e }))
     // A new document opens straight into the editor; marking the page now
     // keeps the empty reading view from flashing up first.
     if (args.edit) document.documentElement.dataset.mode = 'edit'
@@ -81,6 +108,8 @@ document.addEventListener('click', (e) => {
     } catch (e) {
       post({ type: 'log', text: `open failed: ${(e as Error)?.stack ?? e}` })
       throw e
+    } finally {
+      shown()
     }
     if (args.edit && view.mode === 'read') await view.toggleEdit()
     if (r) {
@@ -103,6 +132,11 @@ document.addEventListener('click', (e) => {
     await view.apply()
   },
   command(args: { name: Command }) { return view.command(args.name) },
+  /** Go to a heading named in a link that opened this document (or one already open). */
+  async jumpToHeading(args: { text: string }) {
+    await loading.catch(() => {})
+    return view.jumpToHeading(args.text)
+  },
   /** The whole current text: Swift asks for it if its copy ever disagrees. */
   text() { return view.editor?.exists ? view.editor.text : null },
   /** Right-click "Copy Table as CSV": the table under the pointer. */

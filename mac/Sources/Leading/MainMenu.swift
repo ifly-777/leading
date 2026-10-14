@@ -89,6 +89,7 @@ enum MainMenu {
             item("Edit Source", #selector(ReaderActions.leadingToggleEdit(_:)), "e"),
             .separator(),
             item("Show Outline", #selector(ReaderActions.leadingToggleOutline(_:)), "o", [.command, .option]),
+            item("Back", #selector(ReaderActions.leadingBack(_:)), "["),
             .separator(),
             bigger, biggerAlias,
             item("Smaller", #selector(ReaderActions.leadingSmaller(_:)), "-"),
@@ -180,6 +181,7 @@ private extension NSMenu {
     func leadingTable(_ sender: Any?)
     func leadingToggleSmartTyping(_ sender: Any?)
     func leadingToggleProgress(_ sender: Any?)
+    func leadingBack(_ sender: Any?)
     func leadingHighlight(_ sender: Any?)
     func leadingHighlightYellow(_ sender: Any?)
     func leadingHighlightGreen(_ sender: Any?)

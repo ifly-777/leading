@@ -169,7 +169,9 @@ export class OutlinePanel {
     return found
   }
 
-  private jump(item: OutlineItem): void { this.jumpTo(item) }
+  /** Called before every jump from the outline, so the view can offer a way back. */
+  beforeJump: () => void = () => {}
+  private jump(item: OutlineItem): void { this.beforeJump(); this.jumpTo(item) }
 
   // The reading-mode behaviour, kept so edit mode can hand it back.
   private readonly readingJump = this.jumpTo
