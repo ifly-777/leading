@@ -366,6 +366,7 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .doc .note-embed > .note-embed-title::before { content: "\21B3\2009"; }
 .doc .note-embed[data-filled="missing"] > .note-embed-title::after { content: " (not found)"; font-style: italic; }
 .doc .note-embed-body > :last-child { margin-bottom: 0; }
+.doc .note-embed-body > :first-child { margin-top: 0; }
 .doc .note-embed-body :is(h1, h2, h3) { font-size: 1.1em; }
 .doc img.embed-img[width] { height: auto; }
 
