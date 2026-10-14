@@ -33,6 +33,9 @@ enum MainMenu {
             item("Move To…", #selector(NSDocument.move(_:))),
             // With autosave, AppKit turns this into the Revert To submenu (Last Opened, Browse All Versions…).
             item("Revert To Saved", #selector(NSDocument.revertToSaved(_:))),
+            .separator(),
+            item("Export as PDF…", #selector(ReaderActions.leadingExportPDF(_:))),
+            item("Print…", #selector(ReaderActions.leadingPrint(_:)), "p"),
         ])
 
         let find = NSMenu(title: "Find")
@@ -51,6 +54,7 @@ enum MainMenu {
             .separator(),
             item("Cut", #selector(NSText.cut(_:)), "x"),
             item("Copy", #selector(NSText.copy(_:)), "c"),
+            item("Copy as Quote", #selector(ReaderActions.leadingCopyQuote(_:)), "c", [.command, .shift]),
             item("Paste", #selector(NSText.paste(_:)), "v"),
             item("Select All", #selector(NSText.selectAll(_:)), "a"),
             .separator(),
@@ -73,6 +77,7 @@ enum MainMenu {
             item("Bulleted List", #selector(ReaderActions.leadingBulletList(_:)), "l"),
             item("Numbered List", #selector(ReaderActions.leadingNumberList(_:)), "l", [.command, .shift]),
             item("Table", #selector(ReaderActions.leadingTable(_:)), "t", [.command, .shift]),
+            item("Insert Page Break", #selector(ReaderActions.leadingPageBreak(_:)), "\r"),
             .separator(),
             // Highlights work while reading too; they are the one change reading mode makes.
             item("Highlight", #selector(ReaderActions.leadingHighlight(_:)), "h", [.command, .shift]),
@@ -82,6 +87,7 @@ enum MainMenu {
             item("Pink Highlight", #selector(ReaderActions.leadingHighlightPink(_:)), "4", [.command, .option]),
             item("Orange Highlight", #selector(ReaderActions.leadingHighlightOrange(_:)), "5", [.command, .option]),
             item("Remove Highlight", #selector(ReaderActions.leadingRemoveHighlight(_:)), "0", [.command, .option]),
+            item("Copy All Highlights", #selector(ReaderActions.leadingCopyHighlights(_:)), "c", [.command, .shift, .option]),
             .separator(),
             item("Smart Punctuation While Typing", #selector(ReaderActions.leadingToggleSmartTyping(_:))),
         ])
@@ -89,6 +95,7 @@ enum MainMenu {
             item("Edit Source", #selector(ReaderActions.leadingToggleEdit(_:)), "e"),
             .separator(),
             item("Show Outline", #selector(ReaderActions.leadingToggleOutline(_:)), "o", [.command, .option]),
+            item("Show Highlights", #selector(ReaderActions.leadingShowHighlights(_:)), "l", [.command, .option]),
             item("Back", #selector(ReaderActions.leadingBack(_:)), "["),
             .separator(),
             bigger, biggerAlias,
@@ -99,6 +106,8 @@ enum MainMenu {
             item("Next Theme", #selector(ReaderActions.leadingCycleTheme(_:)), "t", [.command, .option]),
             .separator(),
             item("Show Reading Progress", #selector(ReaderActions.leadingToggleProgress(_:)), "p", [.command, .option]),
+            item("Focus", #selector(ReaderActions.leadingToggleFocus(_:)), "d"),
+            item("Page by Page", #selector(ReaderActions.leadingTogglePaged(_:))),
             item("Show as Plain Text", #selector(ReaderActions.leadingTogglePlainText(_:))),
             .separator(),
             item("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]),
@@ -181,7 +190,15 @@ private extension NSMenu {
     func leadingTable(_ sender: Any?)
     func leadingToggleSmartTyping(_ sender: Any?)
     func leadingToggleProgress(_ sender: Any?)
+    func leadingToggleFocus(_ sender: Any?)
+    func leadingTogglePaged(_ sender: Any?)
     func leadingBack(_ sender: Any?)
+    func leadingShowHighlights(_ sender: Any?)
+    func leadingCopyHighlights(_ sender: Any?)
+    func leadingCopyQuote(_ sender: Any?)
+    func leadingPageBreak(_ sender: Any?)
+    func leadingPrint(_ sender: Any?)
+    func leadingExportPDF(_ sender: Any?)
     func leadingHighlight(_ sender: Any?)
     func leadingHighlightYellow(_ sender: Any?)
     func leadingHighlightGreen(_ sender: Any?)

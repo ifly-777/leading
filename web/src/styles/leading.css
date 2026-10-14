@@ -92,6 +92,9 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .doc ol > li::marker { color: var(--muted); font-variant-numeric: lining-nums tabular-nums; }
 .doc li.task-list-item { list-style: none; }
 .doc li.task-list-item > input { margin: 0 0.5em 0 -1.4em; vertical-align: 0.05em; }
+.doc li.task-list-item input[type=checkbox] { cursor: pointer; accent-color: var(--muted); }
+:root[data-read-only] .doc li.task-list-item input[type=checkbox] { pointer-events: none; }
+.doc li.task-list-item:has(> input:checked) > :not(ul, ol) { color: var(--muted); }
 
 /* ---- Quotes, rules, code ------------------------------------------------- */
 .doc blockquote {
@@ -272,6 +275,28 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .outline:hover .fold { opacity: 0.7; }
 .outline .fold.closed { transform: rotate(-90deg); opacity: 0.7; }
 .outline .empty { font-style: italic; padding-left: 0.75em; }
+/* Two tabs share the margin: the outline and the file's highlights. */
+.outline .side-tabs { display: flex; gap: 0.9em; margin: 0 0 0.6em 0.75em; }
+.outline .side-tabs button { all: unset; cursor: pointer; color: var(--muted); padding-bottom: 0.1em; border-bottom: 1px solid transparent; }
+.outline .side-tabs button[aria-pressed="true"] { color: var(--fg); border-bottom-color: color-mix(in srgb, var(--fg) 45%, transparent); }
+.outline[data-tab="highlights"] > ol, .outline[data-tab="highlights"] > input { display: none; }
+.outline:not([data-tab="highlights"]) > .hl-side { display: none; }
+.outline .hl-chips { display: flex; align-items: center; gap: 7px; margin: 0 0 0.5em 0.75em; }
+.outline .hl-chip { all: unset; width: 10px; height: 10px; border-radius: 50%; cursor: pointer; background: var(--c); box-shadow: inset 0 0 0 1px var(--cl); }
+.outline .hl-chip[hidden] { display: none; }
+.outline .hl-chip[aria-pressed="true"] { outline: 1.5px solid var(--cl); outline-offset: 2px; }
+.outline .hl-copy { all: unset; margin-left: auto; cursor: pointer; color: var(--muted); font-size: 0.9em; }
+.outline .hl-copy:hover { color: var(--fg); }
+.outline :is(.hl-chip, .hl-item)[data-c="yellow"] { --c: var(--hl-yellow); --cl: var(--hl-yellow-line); }
+.outline :is(.hl-chip, .hl-item)[data-c="green"] { --c: var(--hl-green); --cl: var(--hl-green-line); }
+.outline :is(.hl-chip, .hl-item)[data-c="blue"] { --c: var(--hl-blue); --cl: var(--hl-blue-line); }
+.outline :is(.hl-chip, .hl-item)[data-c="pink"] { --c: var(--hl-pink); --cl: var(--hl-pink-line); }
+.outline :is(.hl-chip, .hl-item)[data-c="orange"] { --c: var(--hl-orange); --cl: var(--hl-orange-line); }
+.outline .hl-heading { margin: 0.8em 0 0.2em 0.75em; font-size: 0.85em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.outline a.hl-item {
+  white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+  margin: 0.15em 0; border-left: 3px solid var(--cl); line-height: 1.35;
+}
 /* Narrow windows: the outline becomes a popover with its own surface. */
 .outline.popover {
   left: auto; right: 12px; top: 3rem; opacity: 1;
@@ -319,6 +344,55 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .fn-pop .fn-body > :last-child { margin-bottom: 0; }
 .fn-pop .fn-num { color: var(--muted); margin-right: 0.5em; font-size: 0.85em; font-variant-numeric: lining-nums; }
 [data-mode="edit"] .fn-pop { display: none; }
+/* A linked note's preview: the same card, a little taller, its headings scaled down. */
+.link-pop { max-height: 50vh; }
+.link-pop .fn-body :is(h1, h2, h3) { font-size: 1.1em; margin-top: 0.6em; }
+.link-pop .fn-body > :first-child { margin-top: 0; }
+
+/* ---- Focus (⌘D): all but the paragraph being read recede ---------------------
+   Opacity, not colour, so highlights, code and math recede with their text.
+   A list stays lit itself and dims its items, so one item can be the focus. */
+:root[data-focus="on"] .doc [data-b], :root[data-focus="on"] .doc [data-b]:is(ul, ol) > li { opacity: 0.28; transition: opacity 0.25s ease; }
+:root[data-focus="on"] .doc [data-b]:is(ul, ol) { opacity: 1; }
+:root[data-focus="on"] .doc .focus-current { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { :root[data-focus="on"] .doc :is([data-b], [data-b] > li) { transition: none; } }
+
+/* ---- Page breaks: a faint dashed rule on screen, a new page on paper -------- */
+.doc .page-break { position: relative; height: 0; margin: 1.6em 0; border-top: 1px dashed var(--rule); }
+.doc .page-break::after {
+  content: "Page break"; position: absolute; left: 50%; top: 0; transform: translate(-50%, -50%);
+  padding: 0 0.6em; background: var(--bg); color: var(--muted); font: 11px/1 -apple-system, system-ui, sans-serif; letter-spacing: 0.02em;
+}
+
+/* ---- Embeds (![[…]]) ---------------------------------------------------------
+   An embedded note sits in the column like a quotation from another file: a
+   thin rule at its side and its name above, in the muted ink. An embedded
+   picture is an ordinary image; |300 sets its width, as in Obsidian. */
+.doc .note-embed { display: block; margin: 0.4em 0 var(--para); padding: 0.1em 0 0.1em 1em; border-left: 2px solid var(--rule); }
+.doc .note-embed > .note-embed-title { display: block; font-size: 0.8em; color: var(--muted); text-decoration: none; margin-bottom: 0.4em; }
+.doc .note-embed > .note-embed-title::before { content: "\21B3\2009"; }
+.doc .note-embed[data-filled="missing"] > .note-embed-title::after { content: " (not found)"; font-style: italic; }
+.doc .note-embed-body > :last-child { margin-bottom: 0; }
+.doc .note-embed-body > :first-child { margin-top: 0; }
+.doc .note-embed-body :is(h1, h2, h3) { font-size: 1.1em; }
+.doc img.embed-img[width] { height: auto; }
+
+/* ---- Code colours (highlight.js classes) ------------------------------------
+   Quiet, ink-like hues that sit on the paper rather than glow: comments in the
+   muted ink, everything else a few desaturated colours per theme. */
+:root { --code-kw: #7A3E9D; --code-str: #3F7A3A; --code-num: #A0522D; --code-fn: #2F5F8F; --code-type: #8A6A00; --code-attr: #8C4A2F; }
+:root[data-theme="sepia"] { --code-kw: #74406B; --code-str: #53682A; --code-num: #9A4F1C; --code-fn: #3F5A86; --code-type: #7A5A00; --code-attr: #8A4B2C; }
+:root[data-theme="dark"] { --code-kw: #C9A2DC; --code-str: #A3C795; --code-num: #E3A874; --code-fn: #8FB5E0; --code-type: #D9C27E; --code-attr: #DDA184; }
+.doc .hljs-comment, .doc .hljs-quote { color: var(--muted); font-style: italic; }
+.doc :is(.hljs-keyword, .hljs-selector-tag, .hljs-doctag, .hljs-section, .hljs-name) { color: var(--code-kw); }
+.doc :is(.hljs-string, .hljs-regexp, .hljs-addition, .hljs-template-tag, .hljs-template-variable) { color: var(--code-str); }
+.doc :is(.hljs-number, .hljs-literal, .hljs-symbol, .hljs-bullet, .hljs-link) { color: var(--code-num); }
+.doc :is(.hljs-title, .hljs-title.function_, .hljs-function .hljs-title) { color: var(--code-fn); }
+.doc :is(.hljs-type, .hljs-built_in, .hljs-class .hljs-title, .hljs-title.class_, .hljs-variable.language_) { color: var(--code-type); }
+.doc :is(.hljs-attr, .hljs-attribute, .hljs-property, .hljs-selector-class, .hljs-selector-id, .hljs-meta, .hljs-params) { color: var(--code-attr); }
+.doc .hljs-deletion { color: #B3261E; }
+.doc .hljs-emphasis { font-style: italic; }
+.doc .hljs-strong { font-weight: 600; }
 
 /* ---- Math (KaTeX) -------------------------------------------------------
    A touch larger than the text, as KaTeX's fonts run small beside most body

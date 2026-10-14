@@ -59,6 +59,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             self?.outlineButton?.state = s.outlineOpen ? .on : .off
             self?.sendSettings(s)
         }
+        // The page keeps a band of paper behind the title bar, and the tab bar when there
+        // are tabs; it needs their height, which changes as tabs come and go.
+        chromeWatch = window.observe(\.contentLayoutRect, options: [.initial, .new]) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.sendChrome() }
+        }
         // AppKit attaches `document` only after this initialiser returns, so pass it in directly.
         // A new, unsaved document starts in edit mode: there is nothing to read yet.
         sendDocument(document, keepPlace: false, startEditing: document.fileURL == nil)
@@ -66,6 +71,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func documentMoved(to url: URL) {
         SchemeHandler.shared.setFolder(base: imageBase, document: url)
+        web.call("setName", ["name": url.deletingPathExtension().lastPathComponent])
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -80,6 +86,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func sendDocument(_ doc: MarkdownDocument, keepPlace: Bool, fromDisk: Bool = false, startEditing: Bool = false) {
         var args: [String: Any] = ["imageBase": imageBase, "plain": doc.showsPlainText, "keepPlace": keepPlace, "fromDisk": fromDisk, "edit": startEditing]
+        // For the link back that Copy as Quote adds: the note's name, as a wikilink names it.
+        if let url = doc.fileURL { args["name"] = url.deletingPathExtension().lastPathComponent }
         // Opening afresh: go back to where the reader stopped last time.
         if !keepPlace, !fromDisk, !startEditing, !doc.showsPlainText, let url = doc.fileURL, let place = Places.shared?.place(for: url) {
             args["resume"] = ["s": place.s, "dy": place.dy]
@@ -194,9 +202,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// [[Note#Heading]]: find the note in the vault, off the main thread (a big vault takes a moment).
     func pageOpenWiki(target: String, heading: String?) {
         let from = doc?.fileURL
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let found = Paths.wikiTarget(target, document: from)
-            DispatchQueue.main.async { [weak self] in
+            DispatchQueue.main.async {
                 guard let found else { NSSound.beep(); return }
                 switch Paths.classifyFile(found) {
                 case .document(let url): self?.open(url, heading: heading)
@@ -212,8 +220,26 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             if let heading { jumpToHeading(heading) }
             return
         }
-        NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { opened, _, _ in
-            guard let heading, let wc = opened?.windowControllers.first as? DocumentWindowController else { return }
+        // A followed link opens as a new tab beside this note, whatever macOS's own
+        // tab preference: reading on from a link is one train of thought, not a new task.
+        // A note that is already open is brought forward where it is.
+        NSDocumentController.shared.openDocument(withContentsOf: url, display: false) { [weak self] opened, alreadyOpen, error in
+            guard let opened else {
+                if let error { NSApp.presentError(error) } else { NSSound.beep() }
+                return
+            }
+            if alreadyOpen || !opened.windowControllers.isEmpty {
+                opened.showWindows()
+            } else {
+                opened.makeWindowControllers()
+                if let tab = opened.windowControllers.first?.window, let here = self?.window {
+                    here.addTabbedWindow(tab, ordered: .above)
+                    tab.makeKeyAndOrderFront(nil)
+                } else {
+                    opened.showWindows()
+                }
+            }
+            guard let heading, let wc = opened.windowControllers.first as? DocumentWindowController else { return }
             wc.jumpToHeading(heading)
         }
     }
@@ -252,7 +278,79 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingTable(_ sender: Any?) { command("table") }
     @objc func leadingToggleSmartTyping(_ sender: Any?) { SettingsStore.shared.settings.smartTyping.toggle() }
     @objc func leadingBack(_ sender: Any?) { command("back") }
+    @objc func leadingShowHighlights(_ sender: Any?) { command("showHighlights") }
+    @objc func leadingCopyHighlights(_ sender: Any?) { command("copyHighlights") }
+    @objc func leadingCopyQuote(_ sender: Any?) { command("copyQuote") }
+    @objc func leadingPageBreak(_ sender: Any?) { command("pageBreak") }
+
+    // MARK: Print and Export as PDF
+
+    @objc func leadingPrint(_ sender: Any?) { runPrint(to: nil) }
+
+    @objc func leadingExportPDF(_ sender: Any?) {
+        guard let window else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = (doc?.fileURL?.deletingPathExtension().lastPathComponent ?? doc?.displayName ?? "Untitled") + ".pdf"
+        panel.beginSheetModal(for: window) { [weak self] r in
+            guard r == .OK, let url = panel.url else { return }
+            // The panel is still closing; print once it has gone, or the next sheet cannot attach.
+            DispatchQueue.main.async { self?.runPrint(to: url) }
+        }
+    }
+
+    /// Print through WebKit, so the text is split into real pages. With `url`, the
+    /// pages go into a PDF there instead of to a printer. The page first readies
+    /// itself for paper (light theme, every diagram and image) and is put back after.
+    func runPrint(to url: URL?, done: (() -> Void)? = nil) {
+        guard let window else { return }
+        // The print sheet hangs from this window: if it is a tab behind another, bring it forward.
+        window.makeKeyAndOrderFront(nil)
+        web.callAsyncJavaScript("return window.leading.preparePrint()", arguments: [:], in: nil, in: .page) { [weak self] _ in
+            guard let self else { return }
+            let info = (self.doc?.printInfo ?? NSPrintInfo.shared).copy() as! NSPrintInfo
+            info.horizontalPagination = .fit
+            info.verticalPagination = .automatic
+            info.isHorizontallyCentered = false
+            info.isVerticallyCentered = false
+            // Margins for reading in the hand: three quarters of an inch, a little more at the foot.
+            info.topMargin = 54; info.bottomMargin = 60; info.leftMargin = 54; info.rightMargin = 54
+            if let url {
+                info.jobDisposition = .save
+                info.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = url
+            }
+            let op = self.web.printOperation(with: info)
+            op.showsPrintPanel = url == nil
+            op.showsProgressPanel = true
+            op.jobTitle = self.doc?.displayName ?? "Leading"
+            // WebKit prints blank pages unless its print view is given a size first.
+            op.view?.frame = self.web.bounds
+            self.printDone = done
+            op.runModal(for: window, delegate: self, didRun: #selector(self.printOperationDidRun(_:success:contextInfo:)), contextInfo: nil)
+        }
+    }
+
+    private var printDone: (() -> Void)?
+    private var chromeWatch: NSKeyValueObservation?
+    private var lastChrome: CGFloat = -1
+
+    /// Tell the page how tall the bars over it are (title bar, plus tab bar when tabbed).
+    private func sendChrome() {
+        guard let window else { return }
+        let top = window.frame.height - window.contentLayoutRect.maxY
+        guard top > 0, abs(top - lastChrome) > 0.5 else { return }
+        lastChrome = top
+        web.call("chrome", ["top": top])
+    }
+
+    @objc private func printOperationDidRun(_ op: NSPrintOperation, success: Bool, contextInfo: UnsafeMutableRawPointer?) {
+        web.callAsyncJavaScript("return window.leading.afterPrint()", arguments: [:], in: nil, in: .page) { _ in }
+        printDone?()
+        printDone = nil
+    }
     @objc func leadingToggleProgress(_ sender: Any?) { SettingsStore.shared.settings.progress.toggle() }
+    @objc func leadingToggleFocus(_ sender: Any?) { SettingsStore.shared.settings.focus.toggle() }
+    @objc func leadingTogglePaged(_ sender: Any?) { SettingsStore.shared.settings.paged.toggle() }
     @objc func leadingHighlight(_ sender: Any?) { command("highlight") }
     @objc func leadingHighlightYellow(_ sender: Any?) { command("highlightYellow") }
     @objc func leadingHighlightGreen(_ sender: Any?) { command("highlightGreen") }
@@ -280,7 +378,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // Formatting and Replace change the file, so they exist only while editing.
         case #selector(leadingBold(_:)), #selector(leadingItalic(_:)), #selector(leadingUnderline(_:)),
              #selector(leadingStrike(_:)), #selector(leadingCode(_:)), #selector(leadingLink(_:)),
-             #selector(leadingBulletList(_:)), #selector(leadingNumberList(_:)), #selector(leadingTable(_:)),
+             #selector(leadingBulletList(_:)), #selector(leadingNumberList(_:)), #selector(leadingTable(_:)), #selector(leadingPageBreak(_:)),
              #selector(leadingFindReplace(_:)):
             return editing
         // Highlights need the rendered Markdown (or its source); not plain text.
@@ -294,8 +392,15 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         case #selector(leadingToggleSmartTyping(_:)):
             item.state = SettingsStore.shared.settings.smartTyping ? .on : .off
         case #selector(leadingBack(_:)): return canGoBack
+        // The list is of the rendered page: not for plain text, and read in reading mode.
+        case #selector(leadingShowHighlights(_:)), #selector(leadingCopyHighlights(_:)):
+            return doc?.showsPlainText != true && !editing
         case #selector(leadingToggleProgress(_:)):
             item.state = SettingsStore.shared.settings.progress ? .on : .off
+        case #selector(leadingToggleFocus(_:)):
+            item.state = SettingsStore.shared.settings.focus ? .on : .off
+        case #selector(leadingTogglePaged(_:)):
+            item.state = SettingsStore.shared.settings.paged ? .on : .off
         default: break
         }
         return true

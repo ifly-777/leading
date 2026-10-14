@@ -59,7 +59,7 @@ test('a footnote number shows its note beside it, and Esc closes it', async ({ p
   await open(page, notes)
   const ref = page.locator('#doc a[data-footnote-ref]').first()
   await ref.click()
-  const pop = page.locator('.fn-pop')
+  const pop = page.locator('.fn-pop:not(.link-pop)')
   await expect(pop).toBeVisible()
   await expect(pop).toContainText('The support, with a link.')
   // A copy: no back-link, no ids, nothing that maps into the file.

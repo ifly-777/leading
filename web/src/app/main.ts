@@ -42,6 +42,7 @@ warmPool()
 view.onSettingsChanged = (settings) => post({ type: 'settings', settings })
 view.onPlace = (p) => post({ type: 'place', ...p })
 view.onCanGoBack = (can) => post({ type: 'canGoBack', can })
+view.onCopyText = (text) => post({ type: 'copy', text })
 
 // The document being shown, so a heading jump that arrives with it waits for it.
 let loading: Promise<unknown> = Promise.resolve()
@@ -93,7 +94,10 @@ document.addEventListener('click', (e) => {
 
 ;(window as any).leading = {
   /** Show a document (called by Swift when a file opens or changes on disk). */
-  async load(args: { text?: string; textURL?: string; imageBase: string | null; plain?: boolean; keepPlace?: boolean; fromDisk?: boolean; edit?: boolean; resume?: Place }) {
+  async load(args: { text?: string; textURL?: string; imageBase: string | null; plain?: boolean; keepPlace?: boolean; fromDisk?: boolean; edit?: boolean; resume?: Place; name?: string; preview?: boolean }) {
+    view.docName = args.name ?? null
+    view.readOnly = !!args.preview
+    if (view.readOnly) document.documentElement.dataset.readOnly = ''
     // Heading jumps that arrive with the document wait until its text is shown.
     let shown!: () => void
     loading = new Promise<void>((ok) => { shown = ok })
@@ -104,7 +108,7 @@ document.addEventListener('click', (e) => {
     if (args.edit) document.documentElement.dataset.mode = 'edit'
     let r
     try {
-      r = await view.open(text, { imageBase: args.imageBase, plain: args.plain, keepPlace: args.keepPlace, fromDisk: args.fromDisk, resume: args.resume })
+      r = await view.open(text, { imageBase: args.imageBase, vaultEmbeds: !args.preview, plain: args.plain, keepPlace: args.keepPlace, fromDisk: args.fromDisk, resume: args.resume })
     } catch (e) {
       post({ type: 'log', text: `open failed: ${(e as Error)?.stack ?? e}` })
       throw e
@@ -132,6 +136,20 @@ document.addEventListener('click', (e) => {
     await view.apply()
   },
   command(args: { name: Command }) { return view.command(args.name) },
+  /** File › Print and Export as PDF: get the page ready for paper, then put it back. */
+  preparePrint() { return view.preparePrint() },
+  afterPrint() { return view.afterPrint() },
+  /**
+   * The height of the window's own bars over the page: the title bar, and the
+   * tab bar when there are tabs. The band of paper behind them grows to match,
+   * so macOS's translucent tab bar sits on the theme's paper, not on text.
+   */
+  chrome(args: { top: number }) {
+    if (args.top > 0) document.documentElement.style.setProperty('--sticky-top', `${Math.round(args.top)}px`)
+    view.relayout()
+  },
+  /** The file was saved under a new name, or moved. */
+  setName(args: { name: string | null }) { view.docName = args.name },
   /** Go to a heading named in a link that opened this document (or one already open). */
   async jumpToHeading(args: { text: string }) {
     await loading.catch(() => {})

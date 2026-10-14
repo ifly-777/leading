@@ -28,6 +28,16 @@ if [ -d "$APP/Contents/Frameworks" ]; then
     done
 fi
 
+# App extensions next: each must be sandboxed, so each is signed with its entitlements.
+ENTITLEMENTS="$(cd "$(dirname "$0")/.." && pwd)/mac/Resources/Preview.entitlements"
+if [ -d "$APP/Contents/PlugIns" ]; then
+  for ext in "$APP"/Contents/PlugIns/*.appex; do
+    [ -d "$ext" ] || continue
+    if [ "$IDENTITY" = "-" ]; then codesign --force --sign - --entitlements "$ENTITLEMENTS" "$ext"
+    else codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$ext"; fi
+  done
+fi
+
 if [ "$IDENTITY" = "-" ]; then
   codesign --force --sign - --identifier "$BUNDLE_ID" "$APP"
 else

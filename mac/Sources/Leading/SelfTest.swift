@@ -1,4 +1,5 @@
 import AppKit
+import PDFKit
 
 /// LEADING_SELFTEST=1: after the first document paints, send the View and
 /// Find menu commands through the normal responder chain, then ask the page
@@ -317,8 +318,17 @@ enum SelfTest {
         try? "# Linked\n\n\(filler)\n\n## Far heading\n\nHere.\n\n\(filler)\n".write(to: folder.appendingPathComponent("Linked.md"), atomically: true, encoding: .utf8)
         wc.pageOpenWiki(target: "linked", heading: "Far heading")
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-            guard let page = (NSDocumentController.shared.documents.first { $0.fileURL?.lastPathComponent == "Linked.md" }?.windowControllers.first as? DocumentWindowController)?.pageForTests else {
+            guard let linked = NSDocumentController.shared.documents.first(where: { $0.fileURL?.lastPathComponent == "Linked.md" })?.windowControllers.first as? DocumentWindowController,
+                  let linkedWindow = linked.window else {
                 check("[[linked]] opens Linked.md beside the note", false); return done()
+            }
+            check("[[linked]] opens as a new tab beside the note it came from", wc.window?.tabbedWindows?.contains(linkedWindow) == true)
+            let page = linked.pageForTests
+            // With tabs, the bars over the page are taller: the band of paper behind them must cover the tab bar too.
+            let bars = linkedWindow.frame.height - linkedWindow.contentLayoutRect.maxY
+            page.callAsyncJavaScript("return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sticky-top'))", arguments: [:], in: nil, in: .page) { r in
+                let band = ((try? r.get()) as? NSNumber)?.doubleValue ?? 0
+                check("In a tab, the paper behind the title and tab bars covers both (\(Int(band)) of \(Int(bars)) pt)", bars > 50 && abs(band - bars) < 1.5)
             }
             let js = "const h = document.getElementById('far-heading'); const s = document.getElementById('scroller'); return s.scrollTop > 0 && h.getBoundingClientRect().top < s.clientHeight * 0.4"
             page.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { r in
@@ -343,7 +353,83 @@ enum SelfTest {
                     let v = (try? r.get()) as? [Any] ?? []
                     check("A formula is typeset in KaTeX's fonts, and a price stays prose", (v.first as? Int) == 1 && (v.count > 2 && v[2] as? Bool == true))
                     check("A Mermaid diagram is drawn", (v.count > 1 ? v[1] as? Int : nil) == 1)
-                    done()
+                    embedCheck(folder: folder, check: check, done: done)
+                }
+            }
+        }
+    }
+
+    /// ![[Linked#Far heading]] and ![[dot.png]] found on disk and shown; a task ticked while reading reaches the file.
+    private static func embedCheck(folder: URL, check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        let url = folder.appendingPathComponent("Embeds.md")
+        // A 2×2 PNG, in a subfolder, so it is found by searching rather than beside the note.
+        let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGP8z8DwnwEJMDKgCQAAhgQB/0FqBv4AAAAASUVORK5CYII=")!
+        try? FileManager.default.createDirectory(at: folder.appendingPathComponent("attachments"), withIntermediateDirectories: true)
+        try? png.write(to: folder.appendingPathComponent("attachments/dot.png"))
+        try? "# Embeds\n\n![[Linked#Far heading]]\n\n![[dot.png|40]]\n\n- [ ] Walkaround\n".write(to: url, atomically: true, encoding: .utf8)
+        NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { opened, _, _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                guard let doc = opened as? MarkdownDocument, let page = (doc.windowControllers.first as? DocumentWindowController)?.pageForTests else {
+                    check("Embeds.md opens", false); return done()
+                }
+                let js = "const e = document.querySelector('#doc .note-embed'); const i = document.querySelector('#doc img.embed-img'); const t = e?.textContent ?? ''; return [e?.dataset.filled === 'yes' && t.includes('Far heading') && t.indexOf('Here.') < t.indexOf('Filler'), i ? i.naturalWidth : -1, e?.dataset.filled ?? 'none']"
+                page.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { r in
+                    let v = (try? r.get()) as? [Any] ?? []
+                    // The section starts at its heading, so the filler before it is left out.
+                    check("![[Linked#Far heading]] shows that section of the note, found on disk (\(v.count > 2 ? v[2] : "?"))", v.first as? Bool == true)
+                    check("![[dot.png]] shows the picture, found in a subfolder", (v.count > 1 ? v[1] as? Int : nil) == 2)
+                    page.callAsyncJavaScript("document.querySelector('#doc li.task-list-item input').click(); return true", arguments: [:], in: nil, in: .page) { _ in
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            check("Ticking a task while reading writes [x] into the file", doc.text.contains("- [x] Walkaround"))
+                            pdfCheck(check: check, done: done)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// File › Export as PDF: real pages, with the text on them.
+    private static func pdfCheck(check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        guard let wc = NSDocumentController.shared.documents.first(where: { $0.fileURL?.lastPathComponent == "prose.md" })?.windowControllers.first as? DocumentWindowController else {
+            check("The PDF test has prose.md open", false); return done()
+        }
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent("leading-selftest-\(UUID().uuidString).pdf")
+        wc.runPrint(to: out) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                let pdf = PDFDocument(url: out)
+                let pages = pdf?.pageCount ?? 0
+                let text = pdf?.string ?? ""
+                check("Export as PDF writes the whole file as pages (\(pages) pages)", pages >= 2 && text.contains("typographer"))
+                // LEADING_SELFTEST_PDF=<path> keeps the PDF there, to look at.
+                if let keep = ProcessInfo.processInfo.environment["LEADING_SELFTEST_PDF"] {
+                    try? FileManager.default.removeItem(atPath: keep)
+                    try? FileManager.default.moveItem(at: out, to: URL(fileURLWithPath: keep))
+                } else {
+                    try? FileManager.default.removeItem(at: out)
+                }
+                pageBreakCheck(check: check, done: done)
+            }
+        }
+    }
+
+    /// Page breaks in the three forms notes use: four short paragraphs print on exactly four pages.
+    private static func pageBreakCheck(check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("leading-breaks-\(UUID().uuidString).md")
+        try? "One.\n\n\\newpage\n\nTwo.\n\n<!-- pagebreak -->\n\nThree.\n\n<div style=\"page-break-after: always;\"></div>\n\nFour.\n".write(to: url, atomically: true, encoding: .utf8)
+        NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { opened, _, _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                guard let wc = opened?.windowControllers.first as? DocumentWindowController else { check("The page-break note opens", false); return done() }
+                let out = FileManager.default.temporaryDirectory.appendingPathComponent("leading-breaks-\(UUID().uuidString).pdf")
+                wc.runPrint(to: out) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        let pdf = PDFDocument(url: out)
+                        let pages = (0..<(pdf?.pageCount ?? 0)).map { pdf?.page(at: $0)?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+                        check("Page breaks start new pages, and leave no mark (\(pages))", pages == ["One.", "Two.", "Three.", "Four."])
+                        try? FileManager.default.removeItem(at: out)
+                        opened?.close()
+                        done()
+                    }
                 }
             }
         }

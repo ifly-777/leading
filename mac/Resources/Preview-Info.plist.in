@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The Quick Look extension inside Leading.app (built by scripts/build-app.sh). -->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key><string>en</string>
+	<key>CFBundleDisplayName</key><string>@APP_NAME@ Preview</string>
+	<key>CFBundleExecutable</key><string>LeadingPreview</string>
+	<key>CFBundleIdentifier</key><string>@BUNDLE_ID@.preview</string>
+	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+	<key>CFBundleName</key><string>LeadingPreview</string>
+	<key>CFBundlePackageType</key><string>XPC!</string>
+	<key>CFBundleShortVersionString</key><string>@VERSION@</string>
+	<key>CFBundleVersion</key><string>@BUILD@</string>
+	<key>LSMinimumSystemVersion</key><string>@MIN_MACOS@</string>
+	<key>NSHumanReadableCopyright</key><string>MIT licence</string>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPointIdentifier</key><string>com.apple.quicklook.preview</string>
+		<key>NSExtensionPrincipalClass</key><string>PreviewViewController</string>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<key>QLSupportedContentTypes</key>
+			<array><string>net.daringfireball.markdown</string></array>
+			<key>QLSupportsSearchableItems</key><false/>
+		</dict>
+	</dict>
+</dict>
+</plist>

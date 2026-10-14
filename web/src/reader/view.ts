@@ -24,6 +24,11 @@ import { ReaderPalette, pointToSource, notice, type PaletteTarget } from './high
 import { ProgressMark, cumulativeWords, progressAt } from './progress'
 import { FootnotePopover } from './footnote-popover'
 import { Diagrams } from './diagrams'
+import { NoteEmbeds } from './embeds'
+import { LinkPreview } from './link-preview'
+import { HighlightsList, collectHighlights, highlightsMarkdown } from './highlights-list'
+import { Focus } from './focus'
+import { Paging } from './paging'
 
 export interface ViewElements {
   win: HTMLElement; scroller: HTMLElement; doc: HTMLElement; layer: HTMLElement
@@ -58,7 +63,7 @@ export interface Place { s: number; dy: number }
 
 export type Command =
   | 'find' | 'findNext' | 'findPrevious' | 'toggleOutline' | 'bigger' | 'smaller' | 'actualSize'
-  | 'narrower' | 'wider' | 'cycleTheme' | 'back'
+  | 'narrower' | 'wider' | 'cycleTheme' | 'back' | 'showHighlights' | 'copyHighlights' | 'copyQuote' | 'pageBreak'
   | 'toggleEdit' | 'findReplace' | 'undo' | 'redo'
   | 'bold' | 'italic' | 'underline' | 'strike' | 'code' | 'link'
   | 'bulletList' | 'numberList' | 'table'
@@ -87,6 +92,18 @@ export class ReaderView {
   readonly footnotes: FootnotePopover
   /** Mermaid diagrams, drawn on the page after it renders */
   readonly diagrams: Diagrams
+  /** Notes embedded with ![[Note]], filled in after the page renders */
+  readonly embeds: NoteEmbeds
+  /** A glance at a linked note, on hover */
+  readonly preview: LinkPreview
+  /** The file's highlights, a second tab beside the outline */
+  readonly highlights: HighlightsList
+  /** Dims all but the paragraph being read, when on */
+  readonly focus: Focus
+  /** A screen at a time, when on */
+  readonly paging: Paging
+  /** Text the view wants on the clipboard (the host puts it there). */
+  onCopyText: (text: string) => void = () => {}
   /** Words before each block, for the progress mark; rebuilt when the blocks change. */
   private words: { blocks: unknown; n: number; cum: Float64Array } | null = null
   private progressFrame = 0
@@ -134,8 +151,15 @@ export class ReaderView {
     this.progress = new ProgressMark(win)
     this.footnotes = new FootnotePopover(win, scroller)
     this.diagrams = new Diagrams(doc, scroller)
+    this.embeds = new NoteEmbeds(doc)
+    this.embeds.onFilled = () => this.diagrams.scan()
+    this.embeds.currentText = () => this.text
+    this.preview = new LinkPreview(win, scroller, doc, this.embeds)
+    this.focus = new Focus(doc, scroller, document.documentElement)
+    this.paging = new Paging(scroller, doc)
+    this.paging.active = () => this.mode === 'read'
     // Plain text shows the file unrendered: there is no Markdown to place a highlight in.
-    this.palette.active = () => this.mode === 'read' && !this.lastOpen.plain
+    this.palette.active = () => this.mode === 'read' && !this.lastOpen.plain && !this.readOnly
     this.palette.onPick = (slot, target) => { void this.highlightInReader(slot, false, target) }
     this.outline.locate = (item, force) => {
       const blk = this.reader.blockEl(item.b, force)
@@ -145,14 +169,30 @@ export class ReaderView {
     }
     this.outline.onClose = () => this.change({ outlineOpen: false })
     this.outline.beforeJump = () => this.rememberPlace()
+    this.highlights = new HighlightsList(outline)
+    this.highlights.collect = () => collectHighlights(doc, (b) => this.reader.correction(b))
+    this.highlights.onJump = (mark) => {
+      this.rememberPlace()
+      // A third of the way down the window, where the eye goes after a jump.
+      const top = mark.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+      scroller.scrollTop += top - scroller.clientHeight * 0.3
+    }
+    this.highlights.onCopy = () => this.copyHighlights()
     this.readerFind.blockY = (b) => this.reader.blockY(b, scroller)
     this.readerFind.index = () => this.reader.index
     this.readerFind.getBlock = (b, force) => this.reader.blockEl(b, force)
     this.readerFind.onLayoutShift = () => this.reader.invalidateGeometry()
     this.readerFind.onRedraw = () => this.find.draw()
     this.reader.onIndexGrew = () => { this.readerFind.invalidate(); if (this.mode === 'read') this.find.invalidate() }
-    this.reader.onBlocksAdded = () => { this.reader.invalidateGeometry(); this.diagrams.scan() }
+    this.reader.onBlocksAdded = () => { this.reader.invalidateGeometry(); this.diagrams.scan(); this.embeds.scan() }
 
+    // Ticking a task while reading changes its [ ] in the file.
+    doc.addEventListener('click', (e) => {
+      const box = (e.target as Element).closest?.('li.task-list-item input[type=checkbox]') as HTMLInputElement | null
+      if (!box) return
+      e.preventDefault() // the box shows the file's state once the change is made
+      void this.toggleTask(box)
+    })
     // Report the place once scrolling has settled, not on every frame.
     scroller.addEventListener('scroll', () => {
       clearTimeout(this.placeTimer)
@@ -216,6 +256,8 @@ export class ReaderView {
     if (this.editor?.exists) this.editor.setSmartTyping(s.smartTyping)
     this.relayout()
     this.diagrams.restyle()
+    this.focus.enabled = s.focus && this.mode === 'read'
+    this.paging.enabled = s.paged
   }
 
   /** Change some settings from inside the view, apply them, and tell the host. */
@@ -264,6 +306,8 @@ export class ReaderView {
       }
     }
     this.footnotes.hide()
+    this.preview.hide()
+    this.embeds.setDocument(opts.imageBase)
     // A different document (not a reload of this one): its jumps have nothing to go back to.
     if (!opts.keepPlace && !opts.fromDisk && opts.placeAt === undefined && this.backStack.length) {
       this.backStack = []
@@ -284,6 +328,7 @@ export class ReaderView {
     if (this.mode === 'read') this.outline.setItems(result.outline)
     this.tables.scan(doc)
     this.diagrams.scan()
+    this.embeds.scan()
     this.tables.recheckAll(doc)
     this.readerFind.invalidate()
     if (this.mode === 'read') this.find.invalidate()
@@ -292,6 +337,8 @@ export class ReaderView {
     if (opts.placeAt !== undefined) this.placeAt(opts.placeAt, result)
     this.outline.updateCurrent()
     this.updateProgress(false)
+    this.highlights.invalidate()
+    this.focus.schedule()
     // Warm block geometry once the page settles, so the first Find keystroke is quick,
     // and fetch edit mode's code in the background so ⌘E is instant when it comes.
     setTimeout(() => this.reader.blockY(0, scroller), 300)
@@ -323,6 +370,88 @@ export class ReaderView {
     const el = this.topBlock()
     if (!el?.dataset.s) return null
     return { s: Number(el.dataset.s) + this.reader.correction(Number(el.dataset.b)), dy: this.els.scroller.scrollTop - topIn(el, this.els.scroller) }
+  }
+
+  private themeBeforePrint: Settings['theme'] | null = null
+
+  /**
+   * Before printing: the light theme (dark paper never reaches a printer), every
+   * diagram drawn and every image loaded, since paper shows the whole file at once.
+   */
+  async preparePrint(): Promise<void> {
+    if (this.mode === 'edit') await this.toggleEdit()
+    this.footnotes.hide()
+    this.preview.hide()
+    if (this.theme !== 'light') {
+      this.themeBeforePrint = this.settings.theme
+      this.settings = { ...this.settings, theme: 'light' }
+      await this.apply()
+    }
+    const imgs = Array.from(this.els.doc.querySelectorAll<HTMLImageElement>('img'))
+    const loaded = Promise.all(imgs.map((i) => {
+      if (i.complete) return null
+      i.loading = 'eager'
+      return new Promise((ok) => { i.addEventListener('load', ok, { once: true }); i.addEventListener('error', ok, { once: true }) })
+    }))
+    await Promise.all([this.diagrams.drawAll(), Promise.race([loaded, new Promise((ok) => setTimeout(ok, 3000))]), document.fonts.ready])
+  }
+
+  /** Printing is over: the reader's own theme again. */
+  async afterPrint(): Promise<void> {
+    if (this.themeBeforePrint === null) return
+    this.settings = { ...this.settings, theme: this.themeBeforePrint }
+    this.themeBeforePrint = null
+    await this.apply()
+  }
+
+  /** A preview with nowhere to save (Quick Look): no highlighting, no ticking, no editing. */
+  readOnly = false
+
+  /** The file's name, for the link a quotation carries back to it (set by the host). */
+  docName: string | null = null
+
+  /**
+   * Edit › Copy as Quote: the selection as a Markdown quotation, written as in
+   * the file, with a wikilink back to the section it came from.
+   */
+  copyQuote(): void {
+    const text = this.text
+    let range: [number, number] | null = null
+    let anchor: Node | null = null
+    if (this.mode === 'edit') {
+      range = this.editor?.selectionRange ?? null
+    } else {
+      const sel = window.getSelection()
+      if (sel && !sel.isCollapsed && sel.rangeCount && this.els.doc.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+        const span = this.spanOf({ kind: 'selection', range: sel.getRangeAt(0) })
+        if (span) { range = [span.from, span.to]; anchor = sel.getRangeAt(0).startContainer }
+      }
+    }
+    if (!range) { notice(this.els.win, 'Select some text to quote.'); return }
+    range = balanceMarkers(text, range[0], range[1])
+    const body = text.slice(range[0], range[1]).replace(/\s+$/, '')
+    const lines = body.split('\n').map((l) => (l.trim() ? `> ${l}` : '>'))
+    // The section the quotation starts in: the nearest heading above it.
+    const heading = this.mode === 'edit' ? nearestHeadingAt(scanHeadings(text), range[0]) : nearestHeadingBefore(this.els.doc, anchor)
+    if (this.docName) lines.push('>', `> — [[${this.docName}${heading ? '#' + heading : ''}]]`)
+    this.onCopyText(lines.join('\n') + '\n')
+    notice(this.els.win, 'Copied as a quotation.')
+  }
+
+  /** Every highlight in the file, as Markdown, onto the clipboard. */
+  copyHighlights(): void {
+    const entries = collectHighlights(this.els.doc, (b) => this.reader.correction(b))
+    if (!entries.length) { notice(this.els.win, 'This file has no highlights yet.'); return }
+    const title = this.readerOutline.find((i) => i.depth === 1)?.text ?? null
+    this.onCopyText(highlightsMarkdown(entries, this.text, title))
+    notice(this.els.win, `Copied ${entries.length} highlight${entries.length === 1 ? '' : 's'} as Markdown.`)
+  }
+
+  /** View › Show Highlights: the margin's highlights tab, or close it if it is already showing. */
+  private toggleHighlights(): void {
+    if (this.settings.outlineOpen && this.highlights.tab === 'highlights') { void this.change({ outlineOpen: false }); return }
+    this.highlights.show('highlights')
+    if (!this.settings.outlineOpen) void this.change({ outlineOpen: true })
   }
 
   /** Before a jump within the document: remember where the reader was, for View › Back. */
@@ -433,6 +562,8 @@ export class ReaderView {
       this.find.setEngine(session.find, view.scrollDOM)
       this.progress.hide()
       this.footnotes.hide()
+      this.preview.hide()
+      this.focus.enabled = false
       ed.focus()
       ed.scrollToPos(pos)
     } else {
@@ -452,6 +583,7 @@ export class ReaderView {
       }
       scroller.focus({ preventScroll: true })
       this.updateProgress(false)
+      this.focus.enabled = this.settings.focus
     }
     this.editHost.onMode(this.mode === 'edit')
   }
@@ -495,7 +627,7 @@ export class ReaderView {
   }
 
   async highlightInReader(slot: HighlightSlot | null, toggle: boolean, target?: PaletteTarget): Promise<void> {
-    if (this.lastOpen.plain) return
+    if (this.lastOpen.plain || this.readOnly) return
     let t = target ?? null
     let match = false
     if (!t) {
@@ -537,6 +669,21 @@ export class ReaderView {
     if (span) this.find.step(1)
   }
 
+  /** Tick or untick a task: "- [ ]" becomes "- [x]" in the file, and back. One edit, so ⌘Z undoes it. */
+  async toggleTask(box: HTMLInputElement): Promise<void> {
+    const li = box.closest<HTMLElement>('li.task-list-item')
+    if (!li) return
+    const blk = li.closest<HTMLElement>('[data-b]')
+    if (this.mode !== 'read' || this.lastOpen.plain || this.readOnly || !li.dataset.s || !blk) return
+    const s = Number(li.dataset.s) + this.reader.correction(Number(blk.dataset.b))
+    const text = this.text
+    // The item starts at its bullet: "- [ ] ", "* [x] ", "12. [ ] ", after any indent.
+    const m = /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+\[([ xX])\]/.exec(text.slice(s, s + 40))
+    if (!m) return
+    const at = s + m[0].length - 2
+    await this.applyFromReader([{ from: at, to: at + 1, insert: m[1] === ' ' ? 'x' : ' ' }])
+  }
+
   /** Apply edits made while reading: they go through the editor, so ⌘Z undoes them. */
   private async applyFromReader(edits: Edit[]): Promise<void> {
     const session = await this.loadEditor()
@@ -554,6 +701,9 @@ export class ReaderView {
       // every table now would lay out the whole page (seconds at 5 MB).
       this.tables.scan(this.els.doc)
       this.diagrams.scan()
+      this.embeds.scan()
+      this.highlights.invalidate()
+      this.focus.schedule()
       this.readerFind.invalidate()
       this.find.invalidate()
     } else {
@@ -565,8 +715,13 @@ export class ReaderView {
   command(c: Command): Promise<void> | void {
     const s = this.settings
     switch (c) {
-      case 'toggleEdit': return this.toggleEdit()
+      case 'toggleEdit': return this.readOnly ? undefined : this.toggleEdit()
       case 'back': this.goBack(); break
+      case 'showHighlights': this.toggleHighlights(); break
+      case 'copyHighlights': this.copyHighlights(); break
+      case 'copyQuote': this.copyQuote(); break
+      // Obsidian's and Typora's form, so the break holds when the note is printed there too.
+      case 'pageBreak': if (this.mode === 'edit') this.editor?.insertBlock('<div style="page-break-after: always;"></div>'); break
       case 'findReplace': if (this.mode === 'edit') this.find.open(true); else this.find.open(); break
       case 'undo': this.editor?.undo(); break
       case 'redo': this.editor?.redo(); break
@@ -582,6 +737,9 @@ export class ReaderView {
       case 'findNext': if (!this.find.isOpen) this.find.open(); this.find.step(1); break
       case 'findPrevious': if (!this.find.isOpen) this.find.open(); this.find.step(-1); break
       case 'toggleOutline':
+        // Showing highlights: ⌥⌘O turns the margin back to the outline rather than closing it.
+        if (s.outlineOpen && this.highlights.tab === 'highlights') { this.highlights.show('outline'); this.outline.focusForTyping(); break }
+        this.highlights.show('outline')
         this.change({ outlineOpen: !s.outlineOpen }).then(() => { if (this.settings.outlineOpen) this.outline.focusForTyping() })
         break
       case 'bigger': this.change({ size: Math.min(RANGES.size.max, s.size + 1) }); break
@@ -592,4 +750,49 @@ export class ReaderView {
       case 'cycleTheme': this.change({ theme: THEMES[(THEMES.indexOf(this.theme) + 1) % THEMES.length] }); break
     }
   }
+}
+
+/** The text of the last heading at or before source offset `pos`. */
+function nearestHeadingAt(items: OutlineItem[], pos: number): string | null {
+  let h: string | null = null
+  for (const i of items) { if (i.s > pos) break; h = i.text }
+  return h
+}
+
+/** The text of the last heading on the page before `node` (outside embedded notes). */
+function nearestHeadingBefore(doc: HTMLElement, node: Node | null): string | null {
+  if (!node) return null
+  let h: string | null = null
+  for (const el of doc.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')) {
+    if (el.closest('.note-embed')) continue
+    // Stop at the first heading that comes after the node.
+    if (node.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING && !el.contains(node)) break
+    h = (el.textContent ?? '').trim()
+  }
+  return h
+}
+
+/**
+ * Widen a source range so emphasis it cuts through stays paired: a selection
+ * starting inside *italics* would otherwise quote as "woods*". A marker left
+ * unpaired is taken in from just outside the range, where there is one.
+ */
+export function balanceMarkers(text: string, from: number, to: number): [number, number] {
+  for (let round = 0; round < 8; round++) {
+    let changed = false
+    for (const ch of ['*', '_', '=', '~', '`']) {
+      // Count runs, not characters: "**" and "==" are one marker each.
+      const slice = text.slice(from, to)
+      let n = 0
+      for (let i = 0; i < slice.length; i++) {
+        if (slice[i] === ch && slice[i - 1] !== ch && slice[i - 1] !== '\\') n++
+      }
+      if (n % 2 === 0) continue
+      // Take in the whole run just outside the range.
+      if (text[from - 1] === ch) { while (text[from - 1] === ch) from--; changed = true }
+      else if (text[to] === ch) { while (text[to] === ch) to++; changed = true }
+    }
+    if (!changed) break
+  }
+  return [from, to]
 }

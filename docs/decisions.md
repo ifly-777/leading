@@ -2,6 +2,44 @@
 
 Short notes on choices that are not obvious from the code, and what testing showed. Newest first.
 
+## Leading 1.3
+
+### Code is coloured in the workers, and only when the block names its language
+highlight.js grammars, through lowlight, return a hast tree, so colouring happens with the rest of the block in the parsing workers and arrives with the first paint. Only the 31 languages that turn up in notes are bundled. Guessing a language for unlabelled blocks is slow and often wrong, so those stay plain. The block's text is unchanged, trailing newline included, so Find counts the same matches. Blocks over 100,000 characters stay plain.
+
+### Embeds are found by the app and served by kind
+`![[picture.png]]` becomes an image whose address the app's scheme handler resolves the way a wikilink is resolved (beside the note, then the vault, shortest path first). `![[Note]]` is fetched as text from the page's own origin and rendered on the page. The handler serves an embed only as its kind (images as images, notes as text), so an embed can never reach any other file. An embedded note is a copy with its positions, ids and nested embeds removed: highlights and edits cannot land in it, Find leaves it out, and two notes embedding each other cannot loop. Embeds are opt-in (`vaultEmbeds`), so the developer prototype, which has no app behind it, shows them as links rather than requesting files nothing serves.
+
+### Page breaks in the forms notes already use
+Leading honours Obsidian's and Typora's `<div style="page-break-after: always"></div>` (and `break-after: page`), Pandoc's `\newpage` and `\pagebreak`, and the invisible `<!-- pagebreak -->`, so a note prints the same here as where it was written. On screen a break is a faint dashed rule; on paper it starts a new page and leaves no mark. Format › Insert Page Break (⌘↩) writes the Obsidian form. The print stylesheet breaks before the next block as well as after the marker, which holds even where WebKit ignores a break on an empty box. The self-test prints four paragraphs on exactly four pages.
+
+### Tabs on the theme's paper
+In macOS 26 the tab bar is translucent glass over whatever lies beneath, which in Leading is the page scrolling up under the title bar. The page kept a band of paper only behind the title bar (38 pt), so beneath the tab bar the glass showed text, and read as grey in every theme. AppKit offers no way to colour the tab bar, and its views are private, so instead the window tells the page how tall its bars are (title bar, plus tab bar when there are tabs: 76 pt), watching `contentLayoutRect` as tabs come and go, and the band, the text's starting point, the find bar and the outline follow. The glass then sits on sepia paper in sepia, and on dark paper in dark.
+
+### No ligatures on paper
+Checking that test's text showed that WebKit writes Literata's "Th" ligature into PDFs with no letters behind it: "The" copied or searched as "!e". It is a common ligature, not a contextual alternate (turning those off did not help), so printing sets letters without ligatures. Text that copies correctly matters more than an fi joined; the screen keeps its ligatures.
+
+### Links open as tabs, and previews cover this note's own sections
+A followed link opens its note as a new tab beside the note it came from, whatever macOS's own tab preference says: reading on from a link is one train of thought, not a new task. A note that is already open is brought forward where it is. The first version followed the system preference, which by default meant a new window each time. Previews first covered only links to other notes. In a note that links mostly to its own sections, as a contents list does, most links showed nothing but the browser's title tooltip, so `[[#Heading]]` and `[text](#heading)` now preview the section, and the tooltip is gone. A heading that is not there shows no card, never the whole note. Printing brings its window forward first, since a print sheet on a tab behind another never appears.
+
+### Reading-mode edits all go through the editor
+Ticking a task, like a highlight, is applied through the source editor, so ⌘Z undoes either, and Swift's copy of the text and the autosave see one stream of edits. The tick finds the `[ ]` from the list item's source position, in tight and loose lists alike (a loose list puts the box inside the item's first paragraph).
+
+### Highlights are listed from the page, by page order
+The highlights tab reads the page's own `<mark class="hl">` elements, so it always matches what the reader sees. Each highlight's section is found from page order, not source offsets: the outline's offsets date from the last full render, and an earlier version filed a highlight under the wrong heading after a new one was made above it. Copy writes each highlight exactly as in the file, so colours survive a paste into Obsidian.
+
+### Quotations keep their emphasis paired
+Copy as Quote takes the selection's source. A selection starting inside `*italics*` or `**bold**` would leave a stray marker, so unpaired marker runs at either end are taken in from just outside. Runs are counted, not characters: `**` and `==` are one marker each, which a first version got wrong.
+
+### Focus dims blocks, and list items within lists
+The block under a reading line a third of the way down the window stays at full strength; in a list, the top-level item. Opacity is used, not colour, so highlights, code and math recede with their text. A nested item cannot be brighter than its parent, which is why only top-level items are singled out.
+
+### Printing switches to light paper
+The window scrolls inside a fixed frame, so a print stylesheet lets the document flow onto pages, hides everything but the text, and sets the reader's typeface at 11 pt across the full measure. Before printing, the page switches to the light theme, draws every diagram and loads every image; afterwards it switches back. WebKit prints blank pages unless its print view is given a frame first.
+
+### Quick Look: the page lives in the extension
+App extensions must be sandboxed, and a sandboxed extension cannot read its containing app's Resources (first tried; "you don't have permission to view it"). So the page is copied once, into the extension's bundle, and the app reaches it through a relative link in its own Resources. WebKit also refuses to start its page process in a sandbox without `com.apple.security.network.client`, even for a page that never uses the network. The preview has that entitlement and makes no connection: the page's CSP forbids every request, and its scheme handler serves only its own folder. The preview is read-only (no highlighting, ticking or editing), and shows no pictures beside the file, since Quick Look grants access to the one file only.
+
 ## Leading 1.2
 
 ### Math is typeset while the file is parsed

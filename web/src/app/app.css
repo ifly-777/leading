@@ -6,12 +6,45 @@ html, body { height: 100%; overflow: hidden; }
 /* Leave room under the window's title bar, which the page extends beneath;
    pinned table headers stop below it too. */
 :root { --sticky-top: 38px; }
-.doc { padding-top: calc(4.5em + 12px); }
-.findbar { top: 40px; }
-.outline { top: calc(4.5rem + 12px); }
+/* The app sets --sticky-top to the height of its title bar, and of the tab bar
+   too when a window has tabs (leading.chrome), so everything below moves with it. */
+.doc { padding-top: calc(4.5em + var(--sticky-top) - 26px); }
+.findbar { top: calc(var(--sticky-top) + 2px); }
+.outline { top: calc(4.5rem + var(--sticky-top) - 26px); }
 /* A band of paper behind the title bar, so text scrolling up never runs
    through the window title. Pinned table headers stop just below it. */
 #window::before {
   content: ""; position: absolute; top: 0; left: 0; right: 0; height: var(--sticky-top);
   background: var(--bg); z-index: 9; pointer-events: none;
+}
+
+/* ---- Print and Export as PDF ----------------------------------------------
+   The window scrolls inside a fixed frame; on paper the document flows from
+   page to page instead. Only the text prints: no outline, bars or cards. The
+   app switches the page to the light theme while printing (view.preparePrint),
+   so dark paper never reaches a printer. Type is set for paper: the reader's
+   font and spacing, at a size for reading in the hand, across the full width
+   between the margins the print settings give. */
+@media print {
+  html, body, #window, #scroller { height: auto !important; overflow: visible !important; contain: none !important; position: static !important; }
+  #window::before, #outline, #editor, #frame, .findbar, .scroll-ticks, .search-layer, .progress-rule, .progress-left, .fn-pop, .format-popover, .notice { display: none !important; }
+  :root { --size: 11pt !important; --col-w: auto !important; --col-left: 0 !important; }
+  .doc { width: auto !important; margin: 0 !important; padding: 0 !important; }
+  /* Long documents skip laying out far-away parts on screen; paper needs every part. */
+  :root[data-large="true"] .doc > section.cv { content-visibility: visible !important; }
+  .doc :is(h1, h2, h3, h4, h5, h6) { break-after: avoid; }
+  .doc :is(pre, table, figure, img, .math.display, .callout, blockquote, .note-embed) { break-inside: avoid; }
+  .doc p { orphans: 3; widows: 3; }
+  /* WebKit writes Literata's "Th" ligature into PDFs with no letters behind it:
+     copied or searched, "The" became "!e". Turning off contextual alternates did
+     not help (it is a common ligature), so paper sets letters without ligatures;
+     text that can be copied matters more than an fi joined. The screen keeps them. */
+  .doc, .doc * { font-variant-ligatures: none !important; }
+  .doc .table-scroll, .doc .math.display, .doc figure.diagram .diagram-svg { overflow: visible !important; }
+  :root[data-focus="on"] .doc :is([data-b], [data-b] > li) { opacity: 1 !important; }
+  /* A page break starts a new page and leaves no mark. Breaking before the next
+     block as well as after the marker holds even where WebKit ignores a break on an empty box. */
+  .doc .page-break { border: 0; margin: 0; break-after: page; }
+  .doc .page-break::after { display: none; }
+  .doc .page-break + * { break-before: page; }
 }

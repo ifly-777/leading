@@ -76,6 +76,8 @@ struct AaPanel: View {
                     }.pickerStyle(.segmented)
                     Toggle("Shade alternate table rows", isOn: s.zebra)
                     Toggle("Show reading progress", isOn: s.progress)
+                    Toggle("Focus on the paragraph being read", isOn: s.focus)
+                    Toggle("Move a screen at a time", isOn: s.paged)
                 }
                 .padding(.top, 6)
             }

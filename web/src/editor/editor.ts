@@ -374,7 +374,22 @@ export class SourceEditor {
     this.view?.dispatch({ changes: edits as ChangeSpec[], userEvent: 'input.highlight', annotations: isolateHistory.of('full') })
   }
 
+  /** Put a block of its own after the line holding the cursor (Format › Insert Page Break), and move past it. */
+  insertBlock(block: string): void {
+    const v = this.view
+    if (!v) return
+    const line = v.state.doc.lineAt(v.state.selection.main.head)
+    const insert = (line.text.trim() ? '\n\n' : '\n') + block + '\n\n'
+    v.dispatch({ changes: { from: line.to, insert }, selection: { anchor: line.to + insert.length }, scrollIntoView: true, userEvent: 'input' })
+    v.focus()
+  }
+
   get selectionEmpty(): boolean { return !this.view || this.view.state.selection.main.empty }
+  /** The main selection's source range, or null when nothing is selected. */
+  get selectionRange(): [number, number] | null {
+    const m = this.view?.state.selection.main
+    return m && !m.empty ? [m.from, m.to] : null
+  }
 
   /**
    * Highlight the selection (or `span`) in `slot`, or remove highlights there.

@@ -20,6 +20,11 @@ Close a file and open it again later, and it opens where you stopped. Click a fo
 | Show or hide the outline | ⌥⌘O |
 | Go back after jumping to a heading or note | ⌘[ |
 | Show how far through you are, and the time left | ⌥⌘P |
+| Dim all but the paragraph you are reading | ⌘D |
+| List your highlights beside the text | ⌥⌘L |
+| Copy the selection as a quotation, with a link back | ⇧⌘C |
+| Print, or File › Export as PDF | ⌘P |
+| Start a new page there, when printed (while editing) | ⌘↩ |
 | Find | ⌘F, then ⌘G for the next match |
 
 > [!tip] Notes from Obsidian
@@ -30,6 +35,13 @@ Math is typeset as Obsidian writes it: $e^{i\pi} + 1 = 0$ between single dollars
 $$
 \int_0^1 x^2\,dx = \frac{1}{3}
 $$
+
+Code is coloured when its block names the language, and tasks tick while you read:
+
+- [ ] Tick me
+- [ ] And me
+
+Notes from your vault can be embedded with `![[Note]]`, pictures with `![[picture.png]]`; rest the pointer on a link to another note to glance at it. In Finder, select a Markdown file and press Space to see it set as Leading sets it.
 
 Mermaid diagrams are drawn in the page’s colours:
 

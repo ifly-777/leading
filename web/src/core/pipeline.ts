@@ -16,6 +16,7 @@ import { toHtml } from 'hast-util-to-html'
 import { trimLines } from 'trim-lines'
 import YAML from 'yaml'
 import katex from 'katex'
+import { highlightCode } from './code-highlight'
 import type { Root } from 'mdast'
 import type { Element, ElementContent, Root as HastRoot, Properties } from 'hast'
 import './nodes'
@@ -41,6 +42,8 @@ export interface RenderOptions {
   /** URL prefix for local images, relative to the document. Null: show alt text only.
    *  Plain data (not a function) so options can cross into a Web Worker. */
   imageBase?: string | null
+  /** ![[file]] embeds are looked up in the vault by the app (SchemeHandler __wiki). Without the app, they stay links. */
+  vaultEmbeds?: boolean
 }
 
 export function parse(src: string): Root {
@@ -73,6 +76,10 @@ const CALLOUT_ALIASES: Record<string, string> = {
   missing: 'failure', error: 'danger', cite: 'quote',
 }
 
+// File kinds an embed can show; anything else stays a link. (Paths.swift has the same lists.)
+const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'heic', 'heif', 'avif', 'tif', 'tiff', 'bmp'])
+const NOTE_EXT = new Set(['md', 'markdown', 'mdown', 'mkd', 'mkdn', 'txt', 'text'])
+
 const SAFE_URL = /^(?:https?:|mailto:|#|\/|\.|[^:]*$)/i
 const REMOTE = /^[a-z][a-z0-9+.\-]*:/i
 
@@ -104,6 +111,24 @@ function typeset(html: string, tex: string[]): string {
   })
 }
 
+/**
+ * Page breaks, in the forms notes already use, so a file prints the same here
+ * as in the app it came from: Obsidian's and Typora's
+ * <div style="page-break-after: always"></div> (or break-after: page), the
+ * invisible <!-- pagebreak -->, and Pandoc's \newpage or \pagebreak (see the
+ * paragraph handler). On screen a faint rule; on paper, a new page.
+ */
+const PAGE_BREAK_DIV = /^<div\b[^>]*\bstyle\s*=\s*["'][^"']*(?:page-break-(?:after|before)\s*:\s*always|break-(?:after|before)\s*:\s*page)[^"']*["'][^>]*>\s*<\/div>$/i
+const PAGE_BREAK_COMMENT = /^<!--\s*(?:page[\s-]?break|new[\s-]?page)\s*-->$/i
+export function isPageBreakHtml(html: string): boolean {
+  const t = html.trim()
+  return PAGE_BREAK_DIV.test(t) || PAGE_BREAK_COMMENT.test(t)
+}
+
+function pageBreak(node: any): Element {
+  return el('div', { className: ['page-break'], role: 'separator', ariaLabel: 'Page break', ...pos(node) }, [])
+}
+
 function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]): Handlers {
   const slugs = new Map<string, number>()
   return {
@@ -122,7 +147,14 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]
       outline.push({ depth: node.depth, text, id, s: node.position?.start.offset ?? 0, b: 0 })
       return e
     },
+    html(state, node: any, parent) {
+      // A page break written as HTML, on its own between blocks (not inside a paragraph).
+      if (parent?.type !== 'paragraph' && isPageBreakHtml(node.value)) return pageBreak(node)
+      return defaultHandlers.html(state, node)
+    },
     paragraph(state, node) {
+      // \newpage or \pagebreak alone in a paragraph: Pandoc's page break.
+      if (node.children.length === 1 && node.children[0].type === 'text' && /^\\(newpage|pagebreak)$/.test(node.children[0].value.trim())) return pageBreak(node)
       const e = defaultHandlers.paragraph(state, node) as Element
       e.properties.dir = 'auto' // Arabic, Hebrew and other RTL paragraphs flow correctly
       return e
@@ -146,6 +178,28 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]
       }
       const e = defaultHandlers.code(state, node)
       Object.assign(e.properties, pos(node))
+      // Colour: the <code> inside gets highlight.js's spans in place of plain text.
+      const code = e.children[0]
+      const coloured = highlightCode(node.lang, node.value)
+      if (coloured && code?.type === 'element') {
+        // The plain block ends with a newline; keep it, so the text Find sees is unchanged.
+        code.children = [...coloured, { type: 'text', value: '\n' }]
+        code.properties.className = [...((code.properties.className as string[]) ?? []), 'hljs']
+      }
+      return e
+    },
+    listItem(state, node, parent) {
+      const e = defaultHandlers.listItem(state, node, parent)
+      // A task can be ticked while reading (view.ts toggleTask): the box is live, and
+      // the item carries its source position so the page can find its [ ] in the file.
+      if (typeof node.checked === 'boolean') {
+        Object.assign(e.properties, pos(node))
+        // Tight lists put the box in the item; loose ones (blank lines between items) in its first paragraph.
+        const isBox = (c: ElementContent): c is Element => c.type === 'element' && c.tagName === 'input'
+        const first = e.children.find((c): c is Element => c.type === 'element')
+        const box = e.children.find(isBox) ?? (first?.tagName === 'p' ? first.children.find(isBox) : undefined)
+        if (box) { delete box.properties.disabled; box.properties.ariaLabel = 'Done' }
+      }
       return e
     },
     inlineCode(state, node) {
@@ -198,9 +252,27 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]
       return el('mark', { className: ['hl'], dataC: node.slot, dataSyntax: node.syntax, dataHex: node.hex, ...pos(node) }, state.all(node as any))
     },
     wikilink(state, node: WikiLink) {
+      // ![[picture.png]] and ![[Note]]: the app finds the file in the vault (SchemeHandler, __wiki).
+      if (node.embed && opts.vaultEmbeds && opts.imageBase != null) {
+        const ext = /\.([a-z0-9]+)$/i.exec(node.target)?.[1]?.toLowerCase()
+        if (ext && IMAGE_EXT.has(ext)) {
+          // Obsidian sizes an image with |300 or |300x200.
+          const size = /^(\d+)(?:x(\d+))?$/.exec(node.alias ?? '')
+          return el('img', {
+            className: ['embed-img'], src: opts.imageBase + '__wiki/' + encodeURIComponent(node.target), alt: node.target,
+            loading: 'lazy', decoding: 'async', ...(size ? { width: size[1], ...(size[2] ? { height: size[2] } : {}) } : {}), ...pos(node),
+          }, [])
+        }
+        if (!ext || NOTE_EXT.has(ext)) {
+          // The page fetches the note and sets it here (reader/embeds.ts); until then, its name.
+          const title = el('span', { className: ['wikilink', 'note-embed-title'], dataTarget: node.target, dataHeading: node.heading }, [{ type: 'text', value: node.display }])
+          return el('span', { className: ['note-embed'], dataTarget: node.target, dataHeading: node.heading, ...pos(node) }, [title])
+        }
+      }
       return el('span', {
         className: node.embed ? ['wikilink', 'embed'] : ['wikilink'],
-        dataTarget: node.target, dataHeading: node.heading, title: [node.target, node.heading].filter(Boolean).join(' › '), ...pos(node),
+        // No title tooltip: resting on a link shows the note itself (reader/link-preview.ts).
+        dataTarget: node.target, dataHeading: node.heading, ...pos(node),
       }, [{ type: 'text', value: node.display }])
     },
     caps(state, node: any) {

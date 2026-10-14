@@ -1,0 +1,44 @@
+import { expect, test } from 'vitest'
+import { renderMarkdown } from '../../src/core/pipeline'
+
+const base = 'leading://doc/abc/'
+
+test('an embedded picture is an image the app finds in the vault, sized as Obsidian sizes it', () => {
+  const [p] = renderMarkdown('![[Pasted image 2024.png]]', { imageBase: base, vaultEmbeds: true }).blocks
+  expect(p.html).toContain('<img class="embed-img" src="leading://doc/abc/__wiki/Pasted%20image%202024.png" alt="Pasted image 2024.png"')
+  expect(renderMarkdown('![[pic.jpg|300]]', { imageBase: base, vaultEmbeds: true }).blocks[0].html).toContain('width="300"')
+  expect(renderMarkdown('![[pic.jpg|300x200]]', { imageBase: base, vaultEmbeds: true }).blocks[0].html).toMatch(/width="300" height="200"/)
+})
+
+test('an embedded note waits as a placeholder; other files stay links', () => {
+  const [p] = renderMarkdown('![[Reading list#Books]]', { imageBase: base, vaultEmbeds: true }).blocks
+  expect(p.html).toContain('<span class="note-embed" data-target="Reading list" data-heading="Books"')
+  expect(p.html).toContain('class="wikilink note-embed-title"')
+  expect(p.text).toBe('') // not searched
+  expect(renderMarkdown('![[paper.pdf]]', { imageBase: base, vaultEmbeds: true }).blocks[0].html).toContain('class="wikilink embed"')
+  // With no document folder (a new page), there is nowhere to look: a link.
+  expect(renderMarkdown('![[pic.png]]', { imageBase: null, vaultEmbeds: true }).blocks[0].html).toContain('class="wikilink embed"')
+  // Without the app to search the vault (the prototype, tests), embeds stay links.
+  expect(renderMarkdown('![[pic.png]]', { imageBase: base }).blocks[0].html).toContain('class="wikilink embed"')
+})
+
+import { balanceMarkers } from '../../src/reader/view'
+
+test('a quotation keeps its emphasis paired', () => {
+  const t = 'I went to the *woods* because ==I wished== to `live`, **bold** and on.'
+  const q = (a: string, z: string) => { const s = t.indexOf(a); const [f, e] = balanceMarkers(t, s, t.indexOf(z, s) + z.length); return t.slice(f, e) }
+  expect(q('woods', 'because')).toBe('*woods* because')
+  expect(q('I wished', 'to')).toBe('==I wished== to')
+  expect(q('bold', 'and')).toBe('**bold** and')
+  expect(q('went', 'live')).toBe('went to the *woods* because ==I wished== to `live`')
+})
+
+test('page breaks in the forms Obsidian, Typora and Pandoc write; nothing else', () => {
+  const kinds = (s: string) => renderMarkdown(s).blocks.map((b) => (b.html.includes('page-break') ? 'break' : 'other'))
+  expect(kinds('A\n\n<div style="page-break-after: always;"></div>\n\nB')).toEqual(['other', 'break', 'other'])
+  expect(kinds('A\n\n<div style="break-before: page"></div>\n\nB')).toEqual(['other', 'break', 'other'])
+  expect(kinds('A\n\n\\newpage\n\nB\n\n\\pagebreak\n\nC')).toEqual(['other', 'break', 'other', 'break', 'other'])
+  expect(kinds('A\n\n<!-- pagebreak -->\n\nB')).toEqual(['other', 'break', 'other'])
+  expect(kinds('A <!-- pagebreak --> B')).toEqual(['other'])
+  expect(kinds('A\n\n<div style="color: red"></div>\n\nB')).toEqual(['other', 'other', 'other'])
+})

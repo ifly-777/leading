@@ -69,24 +69,32 @@ export class FootnotePopover {
   private place(): void {
     const ref = this.ref
     if (!ref || this.el.hidden) return
-    const win = this.win.getBoundingClientRect()
-    const view = this.scroller.getBoundingClientRect()
-    const r = ref.getBoundingClientRect()
-    // Scrolled out of sight, or the page was re-rendered under it: close.
-    if (!ref.isConnected || r.bottom < view.top || r.top > view.bottom) { this.hide(); return }
-    const css = getComputedStyle(document.documentElement)
-    const colLeft = parseFloat(css.getPropertyValue('--col-left')) || 0
-    const colW = parseFloat(css.getPropertyValue('--col-w')) || view.width
-    const w = Math.min(colW, 34 * parseFloat(getComputedStyle(this.body).fontSize))
-    this.el.style.width = `${w}px`
-    const left = Math.max(colLeft, Math.min(r.left - win.left - w / 2, colLeft + colW - w))
-    this.el.style.left = `${left}px`
-    // The line box, not the superscript, so the card clears the whole line.
-    const line = ref.closest('p, li, td, th, dd, blockquote, h1, h2, h3, h4, h5, h6') ?? ref
-    const lineHeight = parseFloat(getComputedStyle(line).lineHeight) || r.height
-    const below = r.bottom - win.top + lineHeight * 0.35
-    const h = this.el.offsetHeight
-    const top = below + h > win.height - 12 ? r.top - win.top - lineHeight * 0.35 - h : below
-    this.el.style.top = `${Math.max(0, top)}px`
+    if (!placeCard(this.el, this.body, ref, this.win, this.scroller)) this.hide()
   }
+}
+
+/**
+ * Put a card under the line holding `ref`, within the reading column, or above
+ * the line when there is no room below. False when `ref` has scrolled out of
+ * sight or left the page, so the caller can close the card.
+ */
+export function placeCard(card: HTMLElement, body: HTMLElement, ref: Element, win: HTMLElement, scroller: HTMLElement): boolean {
+  const box = win.getBoundingClientRect()
+  const view = scroller.getBoundingClientRect()
+  const r = ref.getBoundingClientRect()
+  if (!ref.isConnected || r.bottom < view.top || r.top > view.bottom) return false
+  const css = getComputedStyle(document.documentElement)
+  const colLeft = parseFloat(css.getPropertyValue('--col-left')) || 0
+  const colW = parseFloat(css.getPropertyValue('--col-w')) || view.width
+  const w = Math.min(colW, 34 * parseFloat(getComputedStyle(body).fontSize))
+  card.style.width = `${w}px`
+  card.style.left = `${Math.max(colLeft, Math.min(r.left - box.left - w / 2, colLeft + colW - w))}px`
+  // The line box, not the superscript, so the card clears the whole line.
+  const line = ref.closest('p, li, td, th, dd, blockquote, h1, h2, h3, h4, h5, h6') ?? ref
+  const lineHeight = parseFloat(getComputedStyle(line).lineHeight) || r.height
+  const below = r.bottom - box.top + lineHeight * 0.35
+  const h = card.offsetHeight
+  const top = below + h > box.height - 12 ? r.top - box.top - lineHeight * 0.35 - h : below
+  card.style.top = `${Math.max(0, top)}px`
+  return true
 }
