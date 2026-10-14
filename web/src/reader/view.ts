@@ -61,7 +61,7 @@ export interface Place { s: number; dy: number }
 
 export type Command =
   | 'find' | 'findNext' | 'findPrevious' | 'toggleOutline' | 'bigger' | 'smaller' | 'actualSize'
-  | 'narrower' | 'wider' | 'cycleTheme' | 'back' | 'showHighlights' | 'copyHighlights'
+  | 'narrower' | 'wider' | 'cycleTheme' | 'back' | 'showHighlights' | 'copyHighlights' | 'copyQuote'
   | 'toggleEdit' | 'findReplace' | 'undo' | 'redo'
   | 'bold' | 'italic' | 'underline' | 'strike' | 'code' | 'link'
   | 'bulletList' | 'numberList' | 'table'
@@ -359,6 +359,37 @@ export class ReaderView {
     return { s: Number(el.dataset.s) + this.reader.correction(Number(el.dataset.b)), dy: this.els.scroller.scrollTop - topIn(el, this.els.scroller) }
   }
 
+  /** The file's name, for the link a quotation carries back to it (set by the host). */
+  docName: string | null = null
+
+  /**
+   * Edit › Copy as Quote: the selection as a Markdown quotation, written as in
+   * the file, with a wikilink back to the section it came from.
+   */
+  copyQuote(): void {
+    const text = this.text
+    let range: [number, number] | null = null
+    let anchor: Node | null = null
+    if (this.mode === 'edit') {
+      range = this.editor?.selectionRange ?? null
+    } else {
+      const sel = window.getSelection()
+      if (sel && !sel.isCollapsed && sel.rangeCount && this.els.doc.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+        const span = this.spanOf({ kind: 'selection', range: sel.getRangeAt(0) })
+        if (span) { range = [span.from, span.to]; anchor = sel.getRangeAt(0).startContainer }
+      }
+    }
+    if (!range) { notice(this.els.win, 'Select some text to quote.'); return }
+    range = balanceMarkers(text, range[0], range[1])
+    const body = text.slice(range[0], range[1]).replace(/\s+$/, '')
+    const lines = body.split('\n').map((l) => (l.trim() ? `> ${l}` : '>'))
+    // The section the quotation starts in: the nearest heading above it.
+    const heading = this.mode === 'edit' ? nearestHeadingAt(scanHeadings(text), range[0]) : nearestHeadingBefore(this.els.doc, anchor)
+    if (this.docName) lines.push('>', `> — [[${this.docName}${heading ? '#' + heading : ''}]]`)
+    this.onCopyText(lines.join('\n') + '\n')
+    notice(this.els.win, 'Copied as a quotation.')
+  }
+
   /** Every highlight in the file, as Markdown, onto the clipboard. */
   copyHighlights(): void {
     const entries = collectHighlights(this.els.doc, (b) => this.reader.correction(b))
@@ -637,6 +668,7 @@ export class ReaderView {
       case 'back': this.goBack(); break
       case 'showHighlights': this.toggleHighlights(); break
       case 'copyHighlights': this.copyHighlights(); break
+      case 'copyQuote': this.copyQuote(); break
       case 'findReplace': if (this.mode === 'edit') this.find.open(true); else this.find.open(); break
       case 'undo': this.editor?.undo(); break
       case 'redo': this.editor?.redo(); break
@@ -665,4 +697,44 @@ export class ReaderView {
       case 'cycleTheme': this.change({ theme: THEMES[(THEMES.indexOf(this.theme) + 1) % THEMES.length] }); break
     }
   }
+}
+
+/** The text of the last heading at or before source offset `pos`. */
+function nearestHeadingAt(items: OutlineItem[], pos: number): string | null {
+  let h: string | null = null
+  for (const i of items) { if (i.s > pos) break; h = i.text }
+  return h
+}
+
+/** The text of the last heading on the page before `node` (outside embedded notes). */
+function nearestHeadingBefore(doc: HTMLElement, node: Node | null): string | null {
+  if (!node) return null
+  let h: string | null = null
+  for (const el of doc.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')) {
+    if (el.closest('.note-embed')) continue
+    // Stop at the first heading that comes after the node.
+    if (node.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING && !el.contains(node)) break
+    h = (el.textContent ?? '').trim()
+  }
+  return h
+}
+
+/**
+ * Widen a source range so emphasis it cuts through stays paired: a selection
+ * starting inside *italics* would otherwise quote as "woods*". A marker left
+ * unpaired is taken in from just outside the range, where there is one.
+ */
+export function balanceMarkers(text: string, from: number, to: number): [number, number] {
+  for (let round = 0; round < 8; round++) {
+    let changed = false
+    for (const ch of ['*', '_', '=', '~', '`']) {
+      const slice = text.slice(from, to)
+      let n = 0
+      for (let i = 0; i < slice.length; i++) if (slice[i] === ch && slice[i - 1] !== '\\') n++
+      if (n % 2 === 0) continue
+      if (text[from - 1] === ch) { from--; changed = true } else if (text[to] === ch) { to++; changed = true }
+    }
+    if (!changed) break
+  }
+  return [from, to]
 }

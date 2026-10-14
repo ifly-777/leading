@@ -375,6 +375,11 @@ export class SourceEditor {
   }
 
   get selectionEmpty(): boolean { return !this.view || this.view.state.selection.main.empty }
+  /** The main selection's source range, or null when nothing is selected. */
+  get selectionRange(): [number, number] | null {
+    const m = this.view?.state.selection.main
+    return m && !m.empty ? [m.from, m.to] : null
+  }
 
   /**
    * Highlight the selection (or `span`) in `slot`, or remove highlights there.

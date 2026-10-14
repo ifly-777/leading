@@ -94,7 +94,8 @@ document.addEventListener('click', (e) => {
 
 ;(window as any).leading = {
   /** Show a document (called by Swift when a file opens or changes on disk). */
-  async load(args: { text?: string; textURL?: string; imageBase: string | null; plain?: boolean; keepPlace?: boolean; fromDisk?: boolean; edit?: boolean; resume?: Place }) {
+  async load(args: { text?: string; textURL?: string; imageBase: string | null; plain?: boolean; keepPlace?: boolean; fromDisk?: boolean; edit?: boolean; resume?: Place; name?: string }) {
+    view.docName = args.name ?? null
     // Heading jumps that arrive with the document wait until its text is shown.
     let shown!: () => void
     loading = new Promise<void>((ok) => { shown = ok })
@@ -133,6 +134,8 @@ document.addEventListener('click', (e) => {
     await view.apply()
   },
   command(args: { name: Command }) { return view.command(args.name) },
+  /** The file was saved under a new name, or moved. */
+  setName(args: { name: string | null }) { view.docName = args.name },
   /** Go to a heading named in a link that opened this document (or one already open). */
   async jumpToHeading(args: { text: string }) {
     await loading.catch(() => {})

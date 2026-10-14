@@ -19,3 +19,13 @@ test('an embedded note waits as a placeholder; other files stay links', () => {
   // With no document folder (a new page), there is nowhere to look: a link.
   expect(renderMarkdown('![[pic.png]]', { imageBase: null }).blocks[0].html).toContain('class="wikilink embed"')
 })
+
+import { balanceMarkers } from '../../src/reader/view'
+
+test('a quotation keeps its emphasis paired', () => {
+  const t = 'I went to the *woods* because ==I wished== to `live`.'
+  const q = (a: string, z: string) => { const s = t.indexOf(a); const [f, e] = balanceMarkers(t, s, t.indexOf(z, s) + z.length); return t.slice(f, e) }
+  expect(q('woods', 'because')).toBe('*woods* because')
+  expect(q('I wished', 'to')).toBe('==I wished== to')
+  expect(q('went', 'live')).toBe('went to the *woods* because ==I wished== to `live`')
+})

@@ -51,6 +51,7 @@ enum MainMenu {
             .separator(),
             item("Cut", #selector(NSText.cut(_:)), "x"),
             item("Copy", #selector(NSText.copy(_:)), "c"),
+            item("Copy as Quote", #selector(ReaderActions.leadingCopyQuote(_:)), "c", [.command, .shift]),
             item("Paste", #selector(NSText.paste(_:)), "v"),
             item("Select All", #selector(NSText.selectAll(_:)), "a"),
             .separator(),
@@ -186,6 +187,7 @@ private extension NSMenu {
     func leadingBack(_ sender: Any?)
     func leadingShowHighlights(_ sender: Any?)
     func leadingCopyHighlights(_ sender: Any?)
+    func leadingCopyQuote(_ sender: Any?)
     func leadingHighlight(_ sender: Any?)
     func leadingHighlightYellow(_ sender: Any?)
     func leadingHighlightGreen(_ sender: Any?)

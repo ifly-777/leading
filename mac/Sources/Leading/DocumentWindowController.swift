@@ -66,6 +66,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func documentMoved(to url: URL) {
         SchemeHandler.shared.setFolder(base: imageBase, document: url)
+        web.call("setName", ["name": url.deletingPathExtension().lastPathComponent])
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -80,6 +81,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func sendDocument(_ doc: MarkdownDocument, keepPlace: Bool, fromDisk: Bool = false, startEditing: Bool = false) {
         var args: [String: Any] = ["imageBase": imageBase, "plain": doc.showsPlainText, "keepPlace": keepPlace, "fromDisk": fromDisk, "edit": startEditing]
+        // For the link back that Copy as Quote adds: the note's name, as a wikilink names it.
+        if let url = doc.fileURL { args["name"] = url.deletingPathExtension().lastPathComponent }
         // Opening afresh: go back to where the reader stopped last time.
         if !keepPlace, !fromDisk, !startEditing, !doc.showsPlainText, let url = doc.fileURL, let place = Places.shared?.place(for: url) {
             args["resume"] = ["s": place.s, "dy": place.dy]
@@ -254,6 +257,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingBack(_ sender: Any?) { command("back") }
     @objc func leadingShowHighlights(_ sender: Any?) { command("showHighlights") }
     @objc func leadingCopyHighlights(_ sender: Any?) { command("copyHighlights") }
+    @objc func leadingCopyQuote(_ sender: Any?) { command("copyQuote") }
     @objc func leadingToggleProgress(_ sender: Any?) { SettingsStore.shared.settings.progress.toggle() }
     @objc func leadingHighlight(_ sender: Any?) { command("highlight") }
     @objc func leadingHighlightYellow(_ sender: Any?) { command("highlightYellow") }
