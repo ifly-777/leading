@@ -357,6 +357,13 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 :root[data-focus="on"] .doc .focus-current { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { :root[data-focus="on"] .doc :is([data-b], [data-b] > li) { transition: none; } }
 
+/* ---- Page breaks: a faint dashed rule on screen, a new page on paper -------- */
+.doc .page-break { position: relative; height: 0; margin: 1.6em 0; border-top: 1px dashed var(--rule); }
+.doc .page-break::after {
+  content: "Page break"; position: absolute; left: 50%; top: 0; transform: translate(-50%, -50%);
+  padding: 0 0.6em; background: var(--bg); color: var(--muted); font: 11px/1 -apple-system, system-ui, sans-serif; letter-spacing: 0.02em;
+}
+
 /* ---- Embeds (![[…]]) ---------------------------------------------------------
    An embedded note sits in the column like a quotation from another file: a
    thin rule at its side and its name above, in the muted ink. An embedded

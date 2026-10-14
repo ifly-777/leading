@@ -111,6 +111,24 @@ function typeset(html: string, tex: string[]): string {
   })
 }
 
+/**
+ * Page breaks, in the forms notes already use, so a file prints the same here
+ * as in the app it came from: Obsidian's and Typora's
+ * <div style="page-break-after: always"></div> (or break-after: page), the
+ * invisible <!-- pagebreak -->, and Pandoc's \newpage or \pagebreak (see the
+ * paragraph handler). On screen a faint rule; on paper, a new page.
+ */
+const PAGE_BREAK_DIV = /^<div\b[^>]*\bstyle\s*=\s*["'][^"']*(?:page-break-(?:after|before)\s*:\s*always|break-(?:after|before)\s*:\s*page)[^"']*["'][^>]*>\s*<\/div>$/i
+const PAGE_BREAK_COMMENT = /^<!--\s*(?:page[\s-]?break|new[\s-]?page)\s*-->$/i
+export function isPageBreakHtml(html: string): boolean {
+  const t = html.trim()
+  return PAGE_BREAK_DIV.test(t) || PAGE_BREAK_COMMENT.test(t)
+}
+
+function pageBreak(node: any): Element {
+  return el('div', { className: ['page-break'], role: 'separator', ariaLabel: 'Page break', ...pos(node) }, [])
+}
+
 function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]): Handlers {
   const slugs = new Map<string, number>()
   return {
@@ -129,7 +147,14 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]
       outline.push({ depth: node.depth, text, id, s: node.position?.start.offset ?? 0, b: 0 })
       return e
     },
+    html(state, node: any, parent) {
+      // A page break written as HTML, on its own between blocks (not inside a paragraph).
+      if (parent?.type !== 'paragraph' && isPageBreakHtml(node.value)) return pageBreak(node)
+      return defaultHandlers.html(state, node)
+    },
     paragraph(state, node) {
+      // \newpage or \pagebreak alone in a paragraph: Pandoc's page break.
+      if (node.children.length === 1 && node.children[0].type === 'text' && /^\\(newpage|pagebreak)$/.test(node.children[0].value.trim())) return pageBreak(node)
       const e = defaultHandlers.paragraph(state, node) as Element
       e.properties.dir = 'auto' // Arabic, Hebrew and other RTL paragraphs flow correctly
       return e

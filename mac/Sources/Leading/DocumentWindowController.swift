@@ -276,6 +276,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingShowHighlights(_ sender: Any?) { command("showHighlights") }
     @objc func leadingCopyHighlights(_ sender: Any?) { command("copyHighlights") }
     @objc func leadingCopyQuote(_ sender: Any?) { command("copyQuote") }
+    @objc func leadingPageBreak(_ sender: Any?) { command("pageBreak") }
 
     // MARK: Print and Export as PDF
 
@@ -361,7 +362,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // Formatting and Replace change the file, so they exist only while editing.
         case #selector(leadingBold(_:)), #selector(leadingItalic(_:)), #selector(leadingUnderline(_:)),
              #selector(leadingStrike(_:)), #selector(leadingCode(_:)), #selector(leadingLink(_:)),
-             #selector(leadingBulletList(_:)), #selector(leadingNumberList(_:)), #selector(leadingTable(_:)),
+             #selector(leadingBulletList(_:)), #selector(leadingNumberList(_:)), #selector(leadingTable(_:)), #selector(leadingPageBreak(_:)),
              #selector(leadingFindReplace(_:)):
             return editing
         // Highlights need the rendered Markdown (or its source); not plain text.

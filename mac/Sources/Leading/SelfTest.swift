@@ -402,7 +402,29 @@ enum SelfTest {
                 } else {
                     try? FileManager.default.removeItem(at: out)
                 }
-                done()
+                pageBreakCheck(check: check, done: done)
+            }
+        }
+    }
+
+    /// Page breaks in the three forms notes use: four short paragraphs print on exactly four pages.
+    private static func pageBreakCheck(check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("leading-breaks-\(UUID().uuidString).md")
+        try? "One.\n\n\\newpage\n\nTwo.\n\n<!-- pagebreak -->\n\nThree.\n\n<div style=\"page-break-after: always;\"></div>\n\nFour.\n".write(to: url, atomically: true, encoding: .utf8)
+        NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { opened, _, _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                guard let wc = opened?.windowControllers.first as? DocumentWindowController else { check("The page-break note opens", false); return done() }
+                let out = FileManager.default.temporaryDirectory.appendingPathComponent("leading-breaks-\(UUID().uuidString).pdf")
+                wc.runPrint(to: out) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        let pdf = PDFDocument(url: out)
+                        let pages = (0..<(pdf?.pageCount ?? 0)).map { pdf?.page(at: $0)?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+                        check("Page breaks start new pages, and leave no mark (\(pages))", pages == ["One.", "Two.", "Three.", "Four."])
+                        try? FileManager.default.removeItem(at: out)
+                        opened?.close()
+                        done()
+                    }
+                }
             }
         }
     }

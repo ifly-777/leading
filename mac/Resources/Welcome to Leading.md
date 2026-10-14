@@ -24,6 +24,7 @@ Close a file and open it again later, and it opens where you stopped. Click a fo
 | List your highlights beside the text | ⌥⌘L |
 | Copy the selection as a quotation, with a link back | ⇧⌘C |
 | Print, or File › Export as PDF | ⌘P |
+| Start a new page there, when printed (while editing) | ⌘↩ |
 | Find | ⌘F, then ⌘G for the next match |
 
 > [!tip] Notes from Obsidian

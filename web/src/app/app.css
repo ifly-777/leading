@@ -33,6 +33,16 @@ html, body { height: 100%; overflow: hidden; }
   .doc :is(h1, h2, h3, h4, h5, h6) { break-after: avoid; }
   .doc :is(pre, table, figure, img, .math.display, .callout, blockquote, .note-embed) { break-inside: avoid; }
   .doc p { orphans: 3; widows: 3; }
+  /* WebKit writes Literata's "Th" ligature into PDFs with no letters behind it:
+     copied or searched, "The" became "!e". Turning off contextual alternates did
+     not help (it is a common ligature), so paper sets letters without ligatures;
+     text that can be copied matters more than an fi joined. The screen keeps them. */
+  .doc, .doc * { font-variant-ligatures: none !important; }
   .doc .table-scroll, .doc .math.display, .doc figure.diagram .diagram-svg { overflow: visible !important; }
   :root[data-focus="on"] .doc :is([data-b], [data-b] > li) { opacity: 1 !important; }
+  /* A page break starts a new page and leaves no mark. Breaking before the next
+     block as well as after the marker holds even where WebKit ignores a break on an empty box. */
+  .doc .page-break { border: 0; margin: 0; break-after: page; }
+  .doc .page-break::after { display: none; }
+  .doc .page-break + * { break-before: page; }
 }

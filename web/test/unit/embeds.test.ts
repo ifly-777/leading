@@ -32,3 +32,13 @@ test('a quotation keeps its emphasis paired', () => {
   expect(q('bold', 'and')).toBe('**bold** and')
   expect(q('went', 'live')).toBe('went to the *woods* because ==I wished== to `live`')
 })
+
+test('page breaks in the forms Obsidian, Typora and Pandoc write; nothing else', () => {
+  const kinds = (s: string) => renderMarkdown(s).blocks.map((b) => (b.html.includes('page-break') ? 'break' : 'other'))
+  expect(kinds('A\n\n<div style="page-break-after: always;"></div>\n\nB')).toEqual(['other', 'break', 'other'])
+  expect(kinds('A\n\n<div style="break-before: page"></div>\n\nB')).toEqual(['other', 'break', 'other'])
+  expect(kinds('A\n\n\\newpage\n\nB\n\n\\pagebreak\n\nC')).toEqual(['other', 'break', 'other', 'break', 'other'])
+  expect(kinds('A\n\n<!-- pagebreak -->\n\nB')).toEqual(['other', 'break', 'other'])
+  expect(kinds('A <!-- pagebreak --> B')).toEqual(['other'])
+  expect(kinds('A\n\n<div style="color: red"></div>\n\nB')).toEqual(['other', 'other', 'other'])
+})

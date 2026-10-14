@@ -63,7 +63,7 @@ export interface Place { s: number; dy: number }
 
 export type Command =
   | 'find' | 'findNext' | 'findPrevious' | 'toggleOutline' | 'bigger' | 'smaller' | 'actualSize'
-  | 'narrower' | 'wider' | 'cycleTheme' | 'back' | 'showHighlights' | 'copyHighlights' | 'copyQuote'
+  | 'narrower' | 'wider' | 'cycleTheme' | 'back' | 'showHighlights' | 'copyHighlights' | 'copyQuote' | 'pageBreak'
   | 'toggleEdit' | 'findReplace' | 'undo' | 'redo'
   | 'bold' | 'italic' | 'underline' | 'strike' | 'code' | 'link'
   | 'bulletList' | 'numberList' | 'table'
@@ -720,6 +720,8 @@ export class ReaderView {
       case 'showHighlights': this.toggleHighlights(); break
       case 'copyHighlights': this.copyHighlights(); break
       case 'copyQuote': this.copyQuote(); break
+      // Obsidian's and Typora's form, so the break holds when the note is printed there too.
+      case 'pageBreak': if (this.mode === 'edit') this.editor?.insertBlock('<div style="page-break-after: always;"></div>'); break
       case 'findReplace': if (this.mode === 'edit') this.find.open(true); else this.find.open(); break
       case 'undo': this.editor?.undo(); break
       case 'redo': this.editor?.redo(); break

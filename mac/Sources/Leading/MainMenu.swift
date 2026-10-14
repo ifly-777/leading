@@ -77,6 +77,7 @@ enum MainMenu {
             item("Bulleted List", #selector(ReaderActions.leadingBulletList(_:)), "l"),
             item("Numbered List", #selector(ReaderActions.leadingNumberList(_:)), "l", [.command, .shift]),
             item("Table", #selector(ReaderActions.leadingTable(_:)), "t", [.command, .shift]),
+            item("Insert Page Break", #selector(ReaderActions.leadingPageBreak(_:)), "\r"),
             .separator(),
             // Highlights work while reading too; they are the one change reading mode makes.
             item("Highlight", #selector(ReaderActions.leadingHighlight(_:)), "h", [.command, .shift]),
@@ -195,6 +196,7 @@ private extension NSMenu {
     func leadingShowHighlights(_ sender: Any?)
     func leadingCopyHighlights(_ sender: Any?)
     func leadingCopyQuote(_ sender: Any?)
+    func leadingPageBreak(_ sender: Any?)
     func leadingPrint(_ sender: Any?)
     func leadingExportPDF(_ sender: Any?)
     func leadingHighlight(_ sender: Any?)
