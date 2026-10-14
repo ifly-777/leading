@@ -318,9 +318,12 @@ enum SelfTest {
         try? "# Linked\n\n\(filler)\n\n## Far heading\n\nHere.\n\n\(filler)\n".write(to: folder.appendingPathComponent("Linked.md"), atomically: true, encoding: .utf8)
         wc.pageOpenWiki(target: "linked", heading: "Far heading")
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-            guard let page = (NSDocumentController.shared.documents.first { $0.fileURL?.lastPathComponent == "Linked.md" }?.windowControllers.first as? DocumentWindowController)?.pageForTests else {
+            guard let linked = NSDocumentController.shared.documents.first(where: { $0.fileURL?.lastPathComponent == "Linked.md" })?.windowControllers.first as? DocumentWindowController,
+                  let linkedWindow = linked.window else {
                 check("[[linked]] opens Linked.md beside the note", false); return done()
             }
+            check("[[linked]] opens as a new tab beside the note it came from", wc.window?.tabbedWindows?.contains(linkedWindow) == true)
+            let page = linked.pageForTests
             let js = "const h = document.getElementById('far-heading'); const s = document.getElementById('scroller'); return s.scrollTop > 0 && h.getBoundingClientRect().top < s.clientHeight * 0.4"
             page.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { r in
                 check("[[linked#Far heading]] opens Linked.md at that heading", (try? r.get()) as? Bool == true)

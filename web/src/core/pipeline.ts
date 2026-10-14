@@ -246,7 +246,8 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]
       }
       return el('span', {
         className: node.embed ? ['wikilink', 'embed'] : ['wikilink'],
-        dataTarget: node.target, dataHeading: node.heading, title: [node.target, node.heading].filter(Boolean).join(' › '), ...pos(node),
+        // No title tooltip: resting on a link shows the note itself (reader/link-preview.ts).
+        dataTarget: node.target, dataHeading: node.heading, ...pos(node),
       }, [{ type: 'text', value: node.display }])
     },
     caps(state, node: any) {

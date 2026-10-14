@@ -60,3 +60,26 @@ test('resting on a link to a note shows its opening, or the section it names', a
   await page.waitForTimeout(800)
   await expect(card).toBeHidden()
 })
+
+test('links to a section of this note preview that section, and footnote numbers keep their own card', async ({ page }) => {
+  await page.setViewportSize({ width: 920, height: 870 })
+  await page.goto('/app.html')
+  await page.waitForFunction(() => (window as any).leading)
+  const text = ['# Note', 'See [[#Minima]], [the go-around](#go-around), [[#Nowhere]] and a note.[^1]', ...Array(20).fill('Filler.'),
+    '## Minima', 'Decision altitude 200 ft.', '## Go-around', 'Press TOGA.', '[^1]: The footnote.'].join('\n\n')
+  await page.evaluate(async (t) => { await (window as any).leading.load({ text: t, imageBase: '/doc/abc/' }) }, text)
+  const card = page.locator('.link-pop')
+  await page.locator('#doc .wikilink', { hasText: 'Minima' }).hover()
+  await expect(card).toContainText('Decision altitude 200 ft.')
+  await expect(card).not.toContainText('Press TOGA')
+  expect(await page.locator('#doc .wikilink').first().getAttribute('title')).toBeNull()
+  await page.locator('#doc a', { hasText: 'the go-around' }).hover()
+  await expect(card).toContainText('Press TOGA.')
+  // A heading that is not there: no card (and never the whole note).
+  await page.locator('#doc .wikilink', { hasText: 'Nowhere' }).hover()
+  await page.waitForTimeout(800)
+  await expect(card).toBeHidden()
+  await page.locator('#doc a[data-footnote-ref]').hover()
+  await page.waitForTimeout(800)
+  await expect(card).toBeHidden()
+})

@@ -153,6 +153,7 @@ export class ReaderView {
     this.diagrams = new Diagrams(doc, scroller)
     this.embeds = new NoteEmbeds(doc)
     this.embeds.onFilled = () => this.diagrams.scan()
+    this.embeds.currentText = () => this.text
     this.preview = new LinkPreview(win, scroller, doc, this.embeds)
     this.focus = new Focus(doc, scroller, document.documentElement)
     this.paging = new Paging(scroller, doc)

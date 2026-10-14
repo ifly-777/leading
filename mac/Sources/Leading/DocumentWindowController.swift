@@ -215,8 +215,26 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             if let heading { jumpToHeading(heading) }
             return
         }
-        NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { opened, _, _ in
-            guard let heading, let wc = opened?.windowControllers.first as? DocumentWindowController else { return }
+        // A followed link opens as a new tab beside this note, whatever macOS's own
+        // tab preference: reading on from a link is one train of thought, not a new task.
+        // A note that is already open is brought forward where it is.
+        NSDocumentController.shared.openDocument(withContentsOf: url, display: false) { [weak self] opened, alreadyOpen, error in
+            guard let opened else {
+                if let error { NSApp.presentError(error) } else { NSSound.beep() }
+                return
+            }
+            if alreadyOpen || !opened.windowControllers.isEmpty {
+                opened.showWindows()
+            } else {
+                opened.makeWindowControllers()
+                if let tab = opened.windowControllers.first?.window, let here = self?.window {
+                    here.addTabbedWindow(tab, ordered: .above)
+                    tab.makeKeyAndOrderFront(nil)
+                } else {
+                    opened.showWindows()
+                }
+            }
+            guard let heading, let wc = opened.windowControllers.first as? DocumentWindowController else { return }
             wc.jumpToHeading(heading)
         }
     }
@@ -280,6 +298,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     /// itself for paper (light theme, every diagram and image) and is put back after.
     func runPrint(to url: URL?, done: (() -> Void)? = nil) {
         guard let window else { return }
+        // The print sheet hangs from this window: if it is a tab behind another, bring it forward.
+        window.makeKeyAndOrderFront(nil)
         web.callAsyncJavaScript("return window.leading.preparePrint()", arguments: [:], in: nil, in: .page) { [weak self] _ in
             guard let self else { return }
             let info = (self.doc?.printInfo ?? NSPrintInfo.shared).copy() as! NSPrintInfo

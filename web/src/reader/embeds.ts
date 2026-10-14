@@ -36,8 +36,16 @@ export class NoteEmbeds {
     }
   }
 
-  /** Another note, or one section of it, rendered as a copy (see `noteCopy`). Null if it cannot be found. */
+  /** This document's text, for previews of its own sections (set by the view). */
+  currentText: () => string = () => ''
+
+  /**
+   * Another note, or one section of it, rendered as a copy (see `noteCopy`).
+   * An empty target means this note: [[#Heading]] previews its own section.
+   * Null if it cannot be found.
+   */
   note(target: string, heading?: string, maxBlocks = Infinity): Promise<HTMLElement | null> {
+    if (!target) return Promise.resolve(heading ? renderCopy(this.currentText(), this.imageBase, heading, maxBlocks, true) : null)
     return this.docId ? noteCopy(this.docId, this.imageBase, target, heading, maxBlocks) : Promise.resolve(null)
   }
 
@@ -63,12 +71,21 @@ export async function noteCopy(docId: string, imageBase: string | null, target: 
     if (r.ok) text = await r.text()
   } catch { /* not found */ }
   if (text === null) return null
+  return renderCopy(text, imageBase, heading, maxBlocks, false)
+}
+
+/**
+ * Render text as a copy, or one section of it. With `sectionOnly`, a heading
+ * that is not there gives null rather than the whole text (a preview of this
+ * note's own section should never show the whole note).
+ */
+function renderCopy(text: string, imageBase: string | null, heading: string | undefined, maxBlocks: number, sectionOnly: boolean): HTMLElement | null {
   const body = document.createElement('div')
   const blocks = renderMarkdown(text, { imageBase, vaultEmbeds: true }).blocks
   // A section is cut from the whole note; a preview needs only the opening.
   body.innerHTML = (heading ? blocks : blocks.slice(0, maxBlocks)).map((b) => b.html).join('')
   if (heading) {
-    keepSection(body, heading)
+    if (!keepSection(body, heading) && sectionOnly) return null
     while (body.children.length > maxBlocks) body.lastElementChild!.remove()
   }
   unplace(body)
@@ -76,11 +93,11 @@ export async function noteCopy(docId: string, imageBase: string | null, target: 
 }
 
 /** Keep only the section under the named heading: from it to the next heading at its level or above. */
-function keepSection(body: HTMLElement, name: string): void {
+function keepSection(body: HTMLElement, name: string): boolean {
   const want = slugify(name)
   const headings = Array.from(body.querySelectorAll<HTMLElement>(':scope > :is(h1,h2,h3,h4,h5,h6)'))
   const h = headings.find((x) => x.id === want || slugify(x.textContent ?? '') === want)
-  if (!h) return
+  if (!h) return false
   const level = Number(h.tagName[1])
   const keep: Element[] = [h]
   for (let n = h.nextElementSibling; n; n = n.nextElementSibling) {
@@ -88,6 +105,7 @@ function keepSection(body: HTMLElement, name: string): void {
     keep.push(n)
   }
   body.replaceChildren(...keep)
+  return true
 }
 
 /** Remove everything that ties the copy to a file or the page: positions, ids, nested embeds. */
