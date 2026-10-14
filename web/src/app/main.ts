@@ -32,6 +32,20 @@ window.addEventListener('error', (e) => post({ type: 'log', text: `error: ${e.me
 window.addEventListener('unhandledrejection', (e) => post({ type: 'log', text: `unhandled: ${String(e.reason?.stack ?? e.reason)}` }))
 const $ = (id: string) => document.getElementById(id)!
 
+// When a window opens, AppKit hands the page focus as if by Tab, and WebKit on
+// macOS 14 and 15 then focuses the first link or fold on the page, drawing a
+// ring round it that nobody asked for. Until the reader has clicked or pressed
+// a key in the page, give such focus back. Text fields are left alone, since
+// Find focuses its field from a menu command that the page never sees.
+let touched = false
+const touch = () => { touched = true }
+document.addEventListener('pointerdown', touch, true)
+document.addEventListener('keydown', touch, true)
+document.addEventListener('focusin', (e) => {
+  const t = e.target
+  if (!touched && t instanceof HTMLElement && t.matches('a, summary, button, input[type=checkbox]')) t.blur()
+}, true)
+
 const view = new ReaderView({
   win: $('window'), scroller: $('scroller'), doc: $('doc'), layer: $('layer'), ticks: $('ticks'), frame: $('frame'), outline: $('outline'), editor: $('editor'),
 })

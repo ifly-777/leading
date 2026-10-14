@@ -42,10 +42,6 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         shouldCascadeWindows = true
         window.delegate = self
         window.contentView = web
-        // Hand the page focus directly. Left to the key-view loop, AppKit selects it
-        // as if by Tab, and WebKit on macOS 14 and 15 then focuses the first control
-        // on the page, drawing a focus ring round the Properties header.
-        window.initialFirstResponder = web
         window.center()
         let toolbar = NSToolbar(identifier: "reader")
         toolbar.delegate = self
