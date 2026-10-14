@@ -6,7 +6,7 @@ Leading is a free Mac app for reading Markdown. It sets a note as a well-made pa
 
 <p align="center"><img src="docs/screenshots/reading.png" alt="Leading showing a passage from Thoreau's Walden in Literata on warm light paper, with one sentence highlighted in yellow" width="880"></p>
 
-<p align="center"><img src="docs/video/film.webp" alt="A 25-second film of Leading: Marcus Aurelius set in Literata, a sentence highlighted, five typefaces, light, sepia and dark, editing and the outline" width="880"><br><sub>Leading in 25 seconds. Download the film: <a href="https://github.com/ifly-777/leading/raw/main/docs/video/leading.mp4">wide</a> · <a href="https://github.com/ifly-777/leading/raw/main/docs/video/leading-square.mp4">square</a></sub></p>
+<p align="center"><img src="docs/video/film.webp" alt="A 28-second film of Leading: Marcus Aurelius set in Literata, a sentence highlighted, five typefaces, light, sepia and dark, a vault note with an embed and its highlights listed, math, a diagram and code, editing and the outline" width="880"><br><sub>Leading in 28 seconds. Download the film: <a href="https://github.com/ifly-777/leading/raw/main/docs/video/leading.mp4">wide</a> · <a href="https://github.com/ifly-777/leading/raw/main/docs/video/leading-square.mp4">square</a></sub></p>
 
 ## Install
 

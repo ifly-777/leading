@@ -1,10 +1,10 @@
 #!/bin/bash
-# Makes the 25-second film of Leading: docs/video/leading.mp4 (wide),
+# Makes the 28-second film of Leading: docs/video/leading.mp4 (wide),
 # leading-square.mp4 (for X) and film.webp (for the README). Every picture of the app is drawn by build/Leading.app itself
 # (see lib/snapshot.sh); the film around them is docs/video/film.html, a page
 # that draws any moment on request, captured frame by frame in WebKit and
-# encoded with ffmpeg. The text is public domain: Marcus Aurelius, in George
-# Long's 1862 translation, from docs/video/sources/.
+# encoded with ffmpeg. The text is public domain (Marcus Aurelius, in George
+# Long's 1862 translation) or written for the film, in docs/video/sources/.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/scripts/lib/snapshot.sh"
@@ -32,10 +32,14 @@ snapshot "$STILLS/sepia.png"   "$BOOK" '{"theme":"sepia"}' $SIZE
 snapshot "$STILLS/dark.png"    "$BOOK" '{"theme":"dark"}' $SIZE
 snapshot "$STILLS/edit.png"    "$BOOK" '{"theme":"dark"}' $SIZE 1
 snapshot "$STILLS/outline.png" "$SRC/Meditations.md" '{"theme":"dark","outlineOpen":true}' $SIZE
+# A vault note: a section embedded from Meditations.md beside it, and its highlights listed in the margin.
+snapshot "$STILLS/vault.png"   "$SRC/Reading Marcus.md" '{"theme":"dark"}' $SIZE 0 showHighlights
+# Math, a Mermaid diagram and coloured code.
+snapshot "$STILLS/technical.png" "$SRC/Lift and Range.md" '{"theme":"dark"}' $SIZE
 python3 "$ROOT/scripts/lib/columns.py" "$STILLS"/font-*.png > "$STILLS/columns.json"
 python3 "$ROOT/scripts/lib/highlight_lines.py" "$STILLS/plain.png" "$STILLS/font-literata.png" > "$STILLS/highlight.json"
 
-SECONDS_LONG=25
+SECONDS_LONG=28
 FPS=30
 PORT=8766
 python3 -m http.server $PORT --bind 127.0.0.1 --directory "$ROOT" >/dev/null 2>&1 &
@@ -58,7 +62,7 @@ film leading-square 1080x1080   # for X: a square fills a phone's width
 
 # For the README: GitHub will not play a video kept in the repository, but it
 # shows an animated WebP like any picture, playing silently on a loop. Half
-# size and 15 frames a second keep it near 7 MB.
+# size and 15 frames a second keep it near 8 MB.
 python3 - "$WORK/frames-leading" "$ROOT/docs/video/film.webp" <<'PY'
 import glob, sys
 from PIL import Image

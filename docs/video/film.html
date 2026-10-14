@@ -43,6 +43,8 @@
   <img id="font-quattro" src="../../build/video/stills/font-quattro.png">
   <img id="sepia" src="../../build/video/stills/sepia.png">
   <img id="dark-page" src="../../build/video/stills/dark.png">
+  <img id="vault" src="../../build/video/stills/vault.png">
+  <img id="technical" src="../../build/video/stills/technical.png">
   <img id="edit" src="../../build/video/stills/edit.png">
   <img id="outline" src="../../build/video/stills/outline.png">
 </div>
@@ -54,6 +56,8 @@
 <div id="c4" class="caption">Light, sepia or dark.</div>
 <div id="c5" class="caption">⌘E, and you are editing the Markdown itself.</div>
 <div id="c6" class="caption">An outline for long texts.</div>
+<div id="c7" class="caption">Made for your Obsidian vault.<small>Embeds, links and previews, every highlight listed</small></div>
+<div id="c8" class="caption">Math, diagrams and code, set with the text.<small>LaTeX, Mermaid and thirty-one languages</small></div>
 
 <div id="end" class="card">
   <img src="../icon/icon.png" alt="">
@@ -74,7 +78,7 @@ const op = (id, v) => { $(id).style.opacity = v }
 
 const fonts = [['font-literata', 'Literata'], ['font-newyork', 'New York'], ['font-charter', 'Charter'],
                ['font-atkinson', 'Atkinson Hyperlegible Next'], ['font-quattro', 'iA Writer Quattro']]
-const FONT0 = 8.0, FONT_STEP = 0.75                                          // one face every 0.75 s
+const FONT0 = 8.0, FONT_STEP = 0.6                                           // one face every 0.6 s
 
 let sweeps = [], columns = {}
 async function setup() {
@@ -125,8 +129,10 @@ function camera(t, id) {
   // Wide shows the whole window: keep its top edge (at y 80) clear of the frame.
   else open.y = Math.min(open.y, 40 + ((H - BAND) / 2 + 12) / open.s)
   let c = mixCam(open, closeOn(id), ramp(t, 3.0, 4.8))
-  c = mixCam(c, cams.outline, ramp(t, 19.0, 19.8))
-  c.s *= 1 + 0.025 * ramp(t, 5.1, 22.6)   // a slow drift closer throughout
+  // Back far enough to see the margin: the vault's list of highlights, and later the outline.
+  c = mixCam(c, cams.outline, ramp(t, 14.0, 14.6) - ramp(t, 17.6, 18.2))
+  c = mixCam(c, cams.outline, ramp(t, 23.9, 24.7))
+  c.s *= 1 + 0.025 * ramp(t, 5.1, 27.4)   // a slow drift closer throughout
   return c
 }
 
@@ -136,10 +142,10 @@ function camera(t, id) {
 const LEAD = 3
 function render(t) {
   t += LEAD
-  op('end', ramp(t, 22.6, 23.4))
+  op('end', ramp(t, 27.4, 28.2))
 
-  // The app, from 3 s to 23 s, drifting slowly closer the whole time.
-  const app = 1 - ramp(t, 22.6, 23.2)
+  // The app, from 3 s to 28 s, drifting slowly closer the whole time.
+  const app = 1 - ramp(t, 27.4, 28.0)
   // Each typeface is framed on its own column; everything else on Literata's.
   const fiNow = Math.floor((t - FONT0) / FONT_STEP)
   const framed = t >= FONT0 && fiNow >= 0 && fiNow < fonts.length ? fonts[fiNow][0] : 'font-literata'
@@ -159,16 +165,21 @@ function render(t) {
   const fi = Math.floor((t - FONT0) / FONT_STEP)
   fonts.forEach(([id], i) => { show[id] = (t >= FONT0 && fi === i && t < FONT0 + fonts.length * FONT_STEP) ? 1 : 0 })
   if (t >= FONT0 && fi >= 0 && fi < fonts.length) $('fontname').textContent = fonts[fi][1]
-  // Themes: back to Literata at 11.75 s, then sepia, then dark.
-  show['font-literata'] = Math.max(show['font-literata'], t >= 11.75 && t < 15.6 ? 1 : 0)
-  show.sepia = t < 15.6 ? ramp(t, 12.4, 12.9) : 0
-  show['dark-page'] = t < 19 ? ramp(t, 13.6, 14.1) : 0
+  // Themes: back to Literata at 11 s, then sepia, then dark; the film stays dark from here.
+  const fontsEnd = FONT0 + fonts.length * FONT_STEP
+  show['font-literata'] = Math.max(show['font-literata'], t >= fontsEnd && t < 14.6 ? 1 : 0)
+  show.sepia = t < 14.6 ? ramp(t, 11.4, 11.9) : 0
+  show['dark-page'] = t < 14.6 ? ramp(t, 12.5, 13.0) : 0
+  // A vault note: an embedded section, three highlights, and the list of them in the margin.
+  show.vault = t < 18.2 ? ramp(t, 14.1, 14.5) : 0
+  // Math, a diagram and coloured code.
+  show.technical = t < 21.5 ? ramp(t, 17.7, 18.1) : 0
   // ⌘E: the page becomes its source, and back is the same key.
-  show.edit = t < 19.5 ? ramp(t, 16.0, 16.35) : 0
+  show.edit = t < 24.5 ? ramp(t, 21.1, 21.45) : 0
   // The outline, on the longer text.
-  show.outline = ramp(t, 19.0, 19.5)
+  show.outline = ramp(t, 23.9, 24.4)
   for (const [id, v] of Object.entries(show)) op(id, v)
-  const dk = ramp(t, 13.6, 14.1) * (1 - ramp(t, 22.6, 23.4))
+  const dk = ramp(t, 12.5, 13.0) * (1 - ramp(t, 27.4, 28.2))
   op('dark', dk)
   // The caption band: the background colour, fading up from the picture.
   const bg = `rgb(${Math.round(0xEF + (0x12 - 0xEF) * dk)}, ${Math.round(0xE8 + (0x11 - 0xE8) * dk)}, ${Math.round(0xDC + (0x10 - 0xDC) * dk)})`
@@ -176,10 +187,11 @@ function render(t) {
   $('band').style.opacity = app
 
   // Captions, each in the colour of what lies behind it.
-  const caps = [['c1', 3.15, 5.3], ['c2', 5.4, 7.9], ['c3', 8.0, 11.7], ['c4', 11.8, 15.4], ['c5', 15.6, 18.9], ['c6', 19.0, 22.6]]
+  const caps = [['c1', 3.15, 5.3], ['c2', 5.4, 7.9], ['c3', 8.0, 10.95], ['c4', 11.05, 14.0], ['c7', 14.1, 17.6],
+                ['c8', 17.7, 21.0], ['c5', 21.1, 23.8], ['c6', 23.9, 27.4]]
   for (const [id, a, b] of caps) op(id, window_(t, a, b, 0.35))
   // The ink turns light as the background turns dark.
-  const d = ramp(t, 13.6, 14.1) * (1 - ramp(t, 22.6, 23.4))
+  const d = ramp(t, 12.5, 13.0) * (1 - ramp(t, 27.4, 28.2))
   const mix = (a, b) => Math.round(a + (b - a) * d)
   const ink = `rgb(${mix(0x2B, 0xE6)}, ${mix(0x28, 0xDF)}, ${mix(0x24, 0xD3)})`
   document.querySelectorAll('.caption').forEach(c => c.style.color = ink)
