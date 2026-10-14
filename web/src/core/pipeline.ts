@@ -74,6 +74,10 @@ const CALLOUT_ALIASES: Record<string, string> = {
   missing: 'failure', error: 'danger', cite: 'quote',
 }
 
+// File kinds an embed can show; anything else stays a link. (Paths.swift has the same lists.)
+const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'heic', 'heif', 'avif', 'tif', 'tiff', 'bmp'])
+const NOTE_EXT = new Set(['md', 'markdown', 'mdown', 'mkd', 'mkdn', 'txt', 'text'])
+
 const SAFE_URL = /^(?:https?:|mailto:|#|\/|\.|[^:]*$)/i
 const REMOTE = /^[a-z][a-z0-9+.\-]*:/i
 
@@ -207,6 +211,23 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]
       return el('mark', { className: ['hl'], dataC: node.slot, dataSyntax: node.syntax, dataHex: node.hex, ...pos(node) }, state.all(node as any))
     },
     wikilink(state, node: WikiLink) {
+      // ![[picture.png]] and ![[Note]]: the app finds the file in the vault (SchemeHandler, __wiki).
+      if (node.embed && opts.imageBase != null) {
+        const ext = /\.([a-z0-9]+)$/i.exec(node.target)?.[1]?.toLowerCase()
+        if (ext && IMAGE_EXT.has(ext)) {
+          // Obsidian sizes an image with |300 or |300x200.
+          const size = /^(\d+)(?:x(\d+))?$/.exec(node.alias ?? '')
+          return el('img', {
+            className: ['embed-img'], src: opts.imageBase + '__wiki/' + encodeURIComponent(node.target), alt: node.target,
+            loading: 'lazy', decoding: 'async', ...(size ? { width: size[1], ...(size[2] ? { height: size[2] } : {}) } : {}), ...pos(node),
+          }, [])
+        }
+        if (!ext || NOTE_EXT.has(ext)) {
+          // The page fetches the note and sets it here (reader/embeds.ts); until then, its name.
+          const title = el('span', { className: ['wikilink', 'note-embed-title'], dataTarget: node.target, dataHeading: node.heading }, [{ type: 'text', value: node.display }])
+          return el('span', { className: ['note-embed'], dataTarget: node.target, dataHeading: node.heading, ...pos(node) }, [title])
+        }
+      }
       return el('span', {
         className: node.embed ? ['wikilink', 'embed'] : ['wikilink'],
         dataTarget: node.target, dataHeading: node.heading, title: [node.target, node.heading].filter(Boolean).join(' › '), ...pos(node),

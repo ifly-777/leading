@@ -24,6 +24,7 @@ import { ReaderPalette, pointToSource, notice, type PaletteTarget } from './high
 import { ProgressMark, cumulativeWords, progressAt } from './progress'
 import { FootnotePopover } from './footnote-popover'
 import { Diagrams } from './diagrams'
+import { NoteEmbeds } from './embeds'
 
 export interface ViewElements {
   win: HTMLElement; scroller: HTMLElement; doc: HTMLElement; layer: HTMLElement
@@ -87,6 +88,8 @@ export class ReaderView {
   readonly footnotes: FootnotePopover
   /** Mermaid diagrams, drawn on the page after it renders */
   readonly diagrams: Diagrams
+  /** Notes embedded with ![[Note]], filled in after the page renders */
+  readonly embeds: NoteEmbeds
   /** Words before each block, for the progress mark; rebuilt when the blocks change. */
   private words: { blocks: unknown; n: number; cum: Float64Array } | null = null
   private progressFrame = 0
@@ -134,6 +137,8 @@ export class ReaderView {
     this.progress = new ProgressMark(win)
     this.footnotes = new FootnotePopover(win, scroller)
     this.diagrams = new Diagrams(doc, scroller)
+    this.embeds = new NoteEmbeds(doc)
+    this.embeds.onFilled = () => this.diagrams.scan()
     // Plain text shows the file unrendered: there is no Markdown to place a highlight in.
     this.palette.active = () => this.mode === 'read' && !this.lastOpen.plain
     this.palette.onPick = (slot, target) => { void this.highlightInReader(slot, false, target) }
@@ -151,7 +156,7 @@ export class ReaderView {
     this.readerFind.onLayoutShift = () => this.reader.invalidateGeometry()
     this.readerFind.onRedraw = () => this.find.draw()
     this.reader.onIndexGrew = () => { this.readerFind.invalidate(); if (this.mode === 'read') this.find.invalidate() }
-    this.reader.onBlocksAdded = () => { this.reader.invalidateGeometry(); this.diagrams.scan() }
+    this.reader.onBlocksAdded = () => { this.reader.invalidateGeometry(); this.diagrams.scan(); this.embeds.scan() }
 
     // Report the place once scrolling has settled, not on every frame.
     scroller.addEventListener('scroll', () => {
@@ -264,6 +269,7 @@ export class ReaderView {
       }
     }
     this.footnotes.hide()
+    this.embeds.setDocument(opts.imageBase)
     // A different document (not a reload of this one): its jumps have nothing to go back to.
     if (!opts.keepPlace && !opts.fromDisk && opts.placeAt === undefined && this.backStack.length) {
       this.backStack = []
@@ -284,6 +290,7 @@ export class ReaderView {
     if (this.mode === 'read') this.outline.setItems(result.outline)
     this.tables.scan(doc)
     this.diagrams.scan()
+    this.embeds.scan()
     this.tables.recheckAll(doc)
     this.readerFind.invalidate()
     if (this.mode === 'read') this.find.invalidate()
@@ -554,6 +561,7 @@ export class ReaderView {
       // every table now would lay out the whole page (seconds at 5 MB).
       this.tables.scan(this.els.doc)
       this.diagrams.scan()
+      this.embeds.scan()
       this.readerFind.invalidate()
       this.find.invalidate()
     } else {

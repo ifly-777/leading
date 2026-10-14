@@ -18,8 +18,9 @@ export const TEXT_BREAK_TAGS = new Set([
 /**
  * Formulas and diagrams are left out of Find: their source is not what the
  * page shows, and what KaTeX and Mermaid draw is not text a reader searches.
+ * Embedded notes too: their text belongs to another file, and arrives later.
  */
-export const UNSEARCHED_CLASSES = ['math', 'diagram']
+export const UNSEARCHED_CLASSES = ['math', 'diagram', 'note-embed']
 /** For a hast className (array or string) or a DOM classList. */
 export function isUnsearched(className: unknown): boolean {
   if (!className) return false

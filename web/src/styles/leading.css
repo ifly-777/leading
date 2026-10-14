@@ -320,6 +320,18 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .fn-pop .fn-num { color: var(--muted); margin-right: 0.5em; font-size: 0.85em; font-variant-numeric: lining-nums; }
 [data-mode="edit"] .fn-pop { display: none; }
 
+/* ---- Embeds (![[…]]) ---------------------------------------------------------
+   An embedded note sits in the column like a quotation from another file: a
+   thin rule at its side and its name above, in the muted ink. An embedded
+   picture is an ordinary image; |300 sets its width, as in Obsidian. */
+.doc .note-embed { display: block; margin: 0.4em 0 var(--para); padding: 0.1em 0 0.1em 1em; border-left: 2px solid var(--rule); }
+.doc .note-embed > .note-embed-title { display: block; font-size: 0.8em; color: var(--muted); text-decoration: none; margin-bottom: 0.4em; }
+.doc .note-embed > .note-embed-title::before { content: "\21B3\2009"; }
+.doc .note-embed[data-filled="missing"] > .note-embed-title::after { content: " (not found)"; font-style: italic; }
+.doc .note-embed-body > :last-child { margin-bottom: 0; }
+.doc .note-embed-body :is(h1, h2, h3) { font-size: 1.1em; }
+.doc img.embed-img[width] { height: auto; }
+
 /* ---- Code colours (highlight.js classes) ------------------------------------
    Quiet, ink-like hues that sit on the paper rather than glow: comments in the
    muted ink, everything else a few desaturated colours per theme. */
