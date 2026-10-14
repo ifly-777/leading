@@ -11,6 +11,7 @@ protocol ReaderWebViewHost: AnyObject {
     func pageSettled(length: Int, hash: UInt32)
     func pageHistory(canUndo: Bool, canRedo: Bool)
     func pageMode(editing: Bool)
+    func pageSavedPlace(s: Int, dy: Double)
 }
 
 /// The web view showing one document. Holds calls until its page reports it is
@@ -76,6 +77,8 @@ final class ReaderWebView: WKWebView, WKNavigationDelegate {
             host?.pageSettled(length: (message["length"] as? NSNumber)?.intValue ?? -1, hash: (message["hash"] as? NSNumber)?.uint32Value ?? 0)
         case "history": host?.pageHistory(canUndo: message["undo"] as? Bool ?? false, canRedo: message["redo"] as? Bool ?? false)
         case "mode": host?.pageMode(editing: message["editing"] as? Bool ?? false)
+        case "place":
+            if let s = (message["s"] as? NSNumber)?.intValue { host?.pageSavedPlace(s: s, dy: (message["dy"] as? NSNumber)?.doubleValue ?? 0) }
         case "log": NSLog("Leading page: %@", message["text"] as? String ?? "")
         case "overTable": overTable = message["over"] as? Bool ?? false
         case "copy":

@@ -4,6 +4,9 @@ Short notes on choices that are not obvious from the code, and what testing show
 
 ## After 1.0.0
 
+### The reader's place is kept outside the file
+Each file reopens where the reader stopped. The place is the source offset of the block at the top of the window plus pixels into it, the same mark ⌘E already carries across modes, so a file edited elsewhere still reopens near the right paragraph. Places live in `~/Library/Application Support/Leading/places.json`, keyed by resolved path, at most 1,000 files, oldest dropped first. An extended attribute on the file was rejected: autosave writes atomically and would drop it, and sync tools would see a change on every scroll. The page reports its place half a second after scrolling stops; the store is written on window close, on quit and every 10 s while dirty. README pictures always open at the top; the self-test keeps its places in a temporary folder.
+
 ### A highlight must not move text, so the marker is not cloned
 Adding a highlight could make a whole paragraph re-break. The cause was `box-decoration-break: clone` on the marker style. WebKit drops `text-wrap: pretty` for any paragraph that holds a cloned inline box and lays it out line by line instead: with a cloned mark, the paragraph broke exactly as `text-wrap: wrap` would at 79 of 84 widths tested, against 9 of 84 when unmarked. Padding cancelled by negative margin, border radius and the background do not matter; a cloned box with no padding at all still reflowed the paragraph.
 

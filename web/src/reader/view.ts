@@ -46,7 +46,12 @@ export interface OpenOptions extends RenderOptions {
   placeAt?: number
   /** The text came from disk, not from the editor: replace the editor's text and history too */
   fromDisk?: boolean
+  /** Where the reader stopped last time this file was open (from the host's memory) */
+  resume?: Place
 }
+
+/** A place in the document: the source offset of the block at the top, and how far into it (px). */
+export interface Place { s: number; dy: number }
 
 export type Command =
   | 'find' | 'findNext' | 'findPrevious' | 'toggleOutline' | 'bigger' | 'smaller' | 'actualSize'
@@ -95,6 +100,9 @@ export class ReaderView {
   layout: LayoutResult | null = null
   /** The view changed a setting itself (a shortcut, or Esc closing the outline); the host should save it. */
   onSettingsChanged: (s: Settings) => void = () => {}
+  /** Reading stopped scrolling here; the host remembers it for next time. */
+  onPlace: (p: Place) => void = () => {}
+  private placeTimer = 0
   private avg = 0.5
   private avgKey = ''
   private dark = matchMedia('(prefers-color-scheme: dark)')
@@ -126,6 +134,11 @@ export class ReaderView {
     this.reader.onIndexGrew = () => { this.readerFind.invalidate(); if (this.mode === 'read') this.find.invalidate() }
     this.reader.onBlocksAdded = () => this.reader.invalidateGeometry()
 
+    // Report the place once scrolling has settled, not on every frame.
+    scroller.addEventListener('scroll', () => {
+      clearTimeout(this.placeTimer)
+      this.placeTimer = window.setTimeout(() => this.reportPlace(), 500)
+    }, { passive: true })
     new ResizeObserver(() => this.relayout()).observe(scroller)
     this.dark.addEventListener('change', () => this.apply())
   }
@@ -214,7 +227,7 @@ export class ReaderView {
   async open(src: string, opts: OpenOptions = {}): Promise<LoadResult | null> {
     const { scroller, doc } = this.els
     this.source = src
-    this.lastOpen = { ...opts, keepPlace: false, placeAt: undefined, fromDisk: false }
+    this.lastOpen = { ...opts, keepPlace: false, placeAt: undefined, fromDisk: false, resume: undefined }
     if (opts.fromDisk && this.editor?.exists) {
       // The file changed on disk or a version was restored: the editor starts again from it.
       const top = this.editor.topPos()
@@ -227,7 +240,7 @@ export class ReaderView {
       }
     }
     const place = opts.keepPlace ? this.placeMark() : null
-    if (!opts.keepPlace && opts.placeAt === undefined) scroller.scrollTop = 0
+    if (!opts.keepPlace && opts.placeAt === undefined && !opts.resume) scroller.scrollTop = 0
     let result: LoadResult | null
     if (opts.plain) {
       result = this.reader.showPlain(src)
@@ -244,6 +257,7 @@ export class ReaderView {
     this.readerFind.invalidate()
     if (this.mode === 'read') this.find.invalidate()
     if (place) this.restorePlace(place, result)
+    else if (opts.resume && !opts.plain) this.restorePlace(opts.resume, result)
     if (opts.placeAt !== undefined) this.placeAt(opts.placeAt, result)
     this.outline.updateCurrent()
     // Warm block geometry once the page settles, so the first Find keystroke is quick,
@@ -253,8 +267,14 @@ export class ReaderView {
     return result
   }
 
+  private reportPlace(): void {
+    if (this.mode !== 'read' || this.lastOpen.plain) return
+    const p = this.placeMark()
+    if (p) this.onPlace({ s: p.s, dy: Math.round(p.dy) })
+  }
+
   /** Where the reader is: the source offset of the block at the top, and how far into it. */
-  private placeMark(): { s: number; dy: number } | null {
+  private placeMark(): Place | null {
     const box = this.els.frame.getBoundingClientRect()
     const x = box.left + (parseFloat(getComputedStyle(this.root).getPropertyValue('--col-left')) || box.width / 3) + 40
     const el = (document.elementFromPoint(x, box.top + 8) as HTMLElement | null)?.closest('[data-b]') as HTMLElement | null
@@ -262,7 +282,7 @@ export class ReaderView {
     return { s: Number(el.dataset.s) + this.reader.correction(Number(el.dataset.b)), dy: this.els.scroller.scrollTop - topIn(el, this.els.scroller) }
   }
 
-  private restorePlace(place: { s: number; dy: number }, result: LoadResult): void {
+  private restorePlace(place: Place, result: LoadResult): void {
     // The first block starting at or after the old one (the file may have changed around it).
     let b = result.blocks.findIndex((x) => x.s >= place.s)
     if (b < 0) b = result.blocks.length - 1

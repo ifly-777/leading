@@ -34,6 +34,7 @@ final class MarkdownDocument: NSDocument {
     override var fileURL: URL? {
         didSet {
             guard let url = fileURL, url != oldValue else { return }
+            if let oldValue { Places.shared?.move(from: oldValue, to: url) }
             for wc in windowControllers { (wc as? DocumentWindowController)?.documentMoved(to: url) }
         }
     }

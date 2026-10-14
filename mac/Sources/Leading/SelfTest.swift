@@ -267,6 +267,38 @@ enum SelfTest {
                                 check("Cancel keeps the new document open, text intact", stillOpen && doc.text == "A new thought.")
                                 doc.updateChangeCount(.changeCleared)
                                 doc.close()
+                                placeCheck(check: check, done: done)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Reading place: scroll the second window halfway, close it, open the file
+    /// again, and it comes back at the same block.
+    private static func placeCheck(check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        guard let doc = NSDocumentController.shared.documents.first(where: { $0.fileURL?.lastPathComponent == "prose.md" }) as? MarkdownDocument,
+              let url = doc.fileURL, let wc = doc.windowControllers.first as? DocumentWindowController else {
+            check("The place test has prose.md open", false); return done()
+        }
+        let scroll = "const s = document.getElementById('scroller'); s.scrollTop = s.scrollHeight / 2; return true"
+        let where_ = "return window.leading.view['placeMark']()?.s ?? -1"
+        wc.pageForTests.callAsyncJavaScript(scroll, arguments: [:], in: nil, in: .page) { _ in
+            // Past the half-second pause after which the page reports its place.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                wc.pageForTests.callAsyncJavaScript(where_, arguments: [:], in: nil, in: .page) { r in
+                    let before = ((try? r.get()) as? NSNumber)?.intValue ?? -1
+                    doc.close()
+                    NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { reopened, _, _ in
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            guard let page = (reopened?.windowControllers.first as? DocumentWindowController)?.pageForTests else {
+                                check("prose.md opens again", false); return done()
+                            }
+                            page.callAsyncJavaScript(where_, arguments: [:], in: nil, in: .page) { r in
+                                let after = ((try? r.get()) as? NSNumber)?.intValue ?? -2
+                                check("A file opens again where the reader stopped (block at \(before) → \(after))", before > 0 && after == before)
                                 done()
                             }
                         }

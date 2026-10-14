@@ -79,6 +79,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     private func sendDocument(_ doc: MarkdownDocument, keepPlace: Bool, fromDisk: Bool = false, startEditing: Bool = false) {
         var args: [String: Any] = ["imageBase": imageBase, "plain": doc.showsPlainText, "keepPlace": keepPlace, "fromDisk": fromDisk, "edit": startEditing]
+        // Opening afresh: go back to where the reader stopped last time.
+        if !keepPlace, !fromDisk, !startEditing, !doc.showsPlainText, let url = doc.fileURL, let place = Places.shared?.place(for: url) {
+            args["resume"] = ["s": place.s, "dy": place.dy]
+        }
         let text = doc.text
         // Small files travel inline with the call (quickest). Large ones are
         // fetched by the page instead: passing megabytes as a script argument
@@ -169,6 +173,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func pageMode(editing: Bool) {
         self.editing = editing
+    }
+
+    func pageSavedPlace(s: Int, dy: Double) {
+        guard let url = doc?.fileURL else { return }
+        Places.shared?.set(Place(s: s, dy: dy), for: url)
     }
 
     func pageOpenLink(_ href: String) {
@@ -302,6 +311,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func windowWillClose(_ notification: Notification) {
         SchemeHandler.shared.forget(base: imageBase)
+        Places.shared?.save()
     }
 
     func windowDidEndLiveResize(_ notification: Notification) {

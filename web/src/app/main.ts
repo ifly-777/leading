@@ -2,7 +2,7 @@
 // this page owns rendering. They talk through `window.leading` (Swift → page)
 // and the "leading" message handler (page → Swift).
 
-import { ReaderView, type Command } from '../reader/view'
+import { ReaderView, type Command, type Place } from '../reader/view'
 import { warmPool } from '../reader/render'
 import { tableToCSV } from '../reader/tables'
 import type { Settings, Tuning } from '../core/settings'
@@ -20,6 +20,7 @@ type ToSwift =
   | { type: 'settled'; length: number; hash: number }
   | { type: 'history'; undo: boolean; redo: boolean }
   | { type: 'mode'; editing: boolean }
+  | { type: 'place'; s: number; dy: number }
 
 const post = (m: ToSwift | { type: 'log'; text: string }) => (window as any).webkit?.messageHandlers?.leading?.postMessage(m)
 
@@ -37,6 +38,7 @@ const view = new ReaderView({
 warmPool()
 
 view.onSettingsChanged = (settings) => post({ type: 'settings', settings })
+view.onPlace = (p) => post({ type: 'place', ...p })
 // Editing: Swift keeps a mirror of the text and saves from it.
 view.editHost = {
   onEdit: (edits) => post({ type: 'edit', edits }),
@@ -65,7 +67,7 @@ document.addEventListener('click', (e) => {
 
 ;(window as any).leading = {
   /** Show a document (called by Swift when a file opens or changes on disk). */
-  async load(args: { text?: string; textURL?: string; imageBase: string | null; plain?: boolean; keepPlace?: boolean; fromDisk?: boolean; edit?: boolean }) {
+  async load(args: { text?: string; textURL?: string; imageBase: string | null; plain?: boolean; keepPlace?: boolean; fromDisk?: boolean; edit?: boolean; resume?: Place }) {
     // Small files arrive inline; large ones are fetched from the app's private address.
     const text = args.text ?? (await (await fetch(args.textURL!)).text())
     // A new document opens straight into the editor; marking the page now
@@ -73,7 +75,7 @@ document.addEventListener('click', (e) => {
     if (args.edit) document.documentElement.dataset.mode = 'edit'
     let r
     try {
-      r = await view.open(text, { imageBase: args.imageBase, plain: args.plain, keepPlace: args.keepPlace, fromDisk: args.fromDisk })
+      r = await view.open(text, { imageBase: args.imageBase, plain: args.plain, keepPlace: args.keepPlace, fromDisk: args.fromDisk, resume: args.resume })
     } catch (e) {
       post({ type: 'log', text: `open failed: ${(e as Error)?.stack ?? e}` })
       throw e
