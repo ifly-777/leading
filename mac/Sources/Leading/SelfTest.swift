@@ -26,18 +26,35 @@ enum SelfTest {
         }
         window.makeKeyAndOrderFront(nil)
 
-        // Each step: send a menu command, give the page a moment, then look.
-        let steps: [(String, () -> Void)] = [
-            ("leadingToggleOutline", { check("Show Outline turns the outline on and saves it", store.settings.outlineOpen != before.outlineOpen) }),
-            ("leadingBigger", { check("Bigger raises the size by 1 px", store.settings.size == before.size + 1) }),
-            ("leadingNarrower", { check("Narrower Column steps the line width down", store.settings.measure != before.measure || before.measure == "narrow") }),
-            ("leadingCycleTheme", { check("Next Theme changes the theme", store.settings.theme != before.theme) }),
-            ("leadingFind", {}),
+        // Each step: send a menu command, then poll the settings store until the
+        // check passes or 3 s go by. The page → Swift settings round trip can take
+        // well over half a second on a slow machine (GitHub's macOS 14/15 runners),
+        // so a fixed wait flakes. Find changes no setting; inspectPage checks it.
+        let steps: [(action: String, name: String, ok: () -> Bool)] = [
+            ("leadingToggleOutline", "Show Outline turns the outline on and saves it", { store.settings.outlineOpen != before.outlineOpen }),
+            ("leadingBigger", "Bigger raises the size by 1 px", { store.settings.size == before.size + 1 }),
+            ("leadingNarrower", "Narrower Column steps the line width down", { store.settings.measure != before.measure || before.measure == "narrow" }),
+            ("leadingCycleTheme", "Next Theme changes the theme", { store.settings.theme != before.theme }),
         ]
         func step(_ i: Int) {
-            guard i < steps.count else { return inspectPage() }
-            send(steps[i].0)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { steps[i].1(); step(i + 1) }
+            guard i < steps.count else {
+                send("leadingFind")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: inspectPage)
+                return
+            }
+            send(steps[i].action)
+            let deadline = Date().addingTimeInterval(3)
+            func poll() {
+                let passed = steps[i].ok()
+                // Not there yet and still time: look again in 0.1 s.
+                if !passed && Date() < deadline {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: poll)
+                    return
+                }
+                check(steps[i].name, passed)
+                step(i + 1)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: poll)
         }
         func inspectPage() {
             let js = """
