@@ -320,6 +320,23 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .fn-pop .fn-num { color: var(--muted); margin-right: 0.5em; font-size: 0.85em; font-variant-numeric: lining-nums; }
 [data-mode="edit"] .fn-pop { display: none; }
 
+/* ---- Code colours (highlight.js classes) ------------------------------------
+   Quiet, ink-like hues that sit on the paper rather than glow: comments in the
+   muted ink, everything else a few desaturated colours per theme. */
+:root { --code-kw: #7A3E9D; --code-str: #3F7A3A; --code-num: #A0522D; --code-fn: #2F5F8F; --code-type: #8A6A00; --code-attr: #8C4A2F; }
+:root[data-theme="sepia"] { --code-kw: #74406B; --code-str: #53682A; --code-num: #9A4F1C; --code-fn: #3F5A86; --code-type: #7A5A00; --code-attr: #8A4B2C; }
+:root[data-theme="dark"] { --code-kw: #C9A2DC; --code-str: #A3C795; --code-num: #E3A874; --code-fn: #8FB5E0; --code-type: #D9C27E; --code-attr: #DDA184; }
+.doc .hljs-comment, .doc .hljs-quote { color: var(--muted); font-style: italic; }
+.doc :is(.hljs-keyword, .hljs-selector-tag, .hljs-doctag, .hljs-section, .hljs-name) { color: var(--code-kw); }
+.doc :is(.hljs-string, .hljs-regexp, .hljs-addition, .hljs-template-tag, .hljs-template-variable) { color: var(--code-str); }
+.doc :is(.hljs-number, .hljs-literal, .hljs-symbol, .hljs-bullet, .hljs-link) { color: var(--code-num); }
+.doc :is(.hljs-title, .hljs-title.function_, .hljs-function .hljs-title) { color: var(--code-fn); }
+.doc :is(.hljs-type, .hljs-built_in, .hljs-class .hljs-title, .hljs-title.class_, .hljs-variable.language_) { color: var(--code-type); }
+.doc :is(.hljs-attr, .hljs-attribute, .hljs-property, .hljs-selector-class, .hljs-selector-id, .hljs-meta, .hljs-params) { color: var(--code-attr); }
+.doc .hljs-deletion { color: #B3261E; }
+.doc .hljs-emphasis { font-style: italic; }
+.doc .hljs-strong { font-weight: 600; }
+
 /* ---- Math (KaTeX) -------------------------------------------------------
    A touch larger than the text, as KaTeX's fonts run small beside most body
    faces; the text colour, whatever the theme. Display math that is wider

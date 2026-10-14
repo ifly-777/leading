@@ -16,6 +16,7 @@ import { toHtml } from 'hast-util-to-html'
 import { trimLines } from 'trim-lines'
 import YAML from 'yaml'
 import katex from 'katex'
+import { highlightCode } from './code-highlight'
 import type { Root } from 'mdast'
 import type { Element, ElementContent, Root as HastRoot, Properties } from 'hast'
 import './nodes'
@@ -146,6 +147,14 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]
       }
       const e = defaultHandlers.code(state, node)
       Object.assign(e.properties, pos(node))
+      // Colour: the <code> inside gets highlight.js's spans in place of plain text.
+      const code = e.children[0]
+      const coloured = highlightCode(node.lang, node.value)
+      if (coloured && code?.type === 'element') {
+        // The plain block ends with a newline; keep it, so the text Find sees is unchanged.
+        code.children = [...coloured, { type: 'text', value: '\n' }]
+        code.properties.className = [...((code.properties.className as string[]) ?? []), 'hljs']
+      }
       return e
     },
     inlineCode(state, node) {

@@ -26,6 +26,7 @@
     "hast-util-sanitize": "^5.0.2",
     "hast-util-to-html": "^9.0.5",
     "katex": "0.19.0",
+    "lowlight": "3.3.0",
     "mdast-util-from-markdown": "^2.1.0",
     "mdast-util-frontmatter": "^2.0.1",
     "mdast-util-gfm": "^3.1.0",
