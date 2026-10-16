@@ -61,14 +61,15 @@ async function select(page: Page, a: string, b: string, nth = 0) {
 const palette = (page: Page) => page.locator('.hl-palette')
 
 test('select across bold and a link, pick a colour, undo', async ({ page }) => {
-  const src = 'A **bold** idea and [a link](https://example.com) here.\n\nSecond “quoted” paragraph.\n'
+  // Whole words, partly covering the bold and the link (a drag inside a word would be widened to it).
+  const src = 'A **very bold** idea and [a fine link](https://example.com) here.\n\nSecond “quoted” paragraph.\n'
   await openApp(page, src)
-  await select(page, 'old', 'a li')
+  await select(page, 'bold', 'a fine')
   await expect(palette(page)).toBeVisible()
   await expect(palette(page).locator('.hl-remove')).toBeHidden() // nothing to remove yet
   await palette(page).locator('.hl-dot[data-c="green"]').dispatchEvent('mousedown')
   const G = '<mark style="background: #BBFABBA6;">'
-  await expect.poll(() => mirror(page, src)).toBe(`A **b${G}old</mark>** ${G}idea and</mark> [${G}a li</mark>nk](https://example.com) here.\n\nSecond “quoted” paragraph.\n`)
+  await expect.poll(() => mirror(page, src)).toBe(`A **very ${G}bold</mark>** ${G}idea and</mark> [${G}a fine</mark> link](https://example.com) here.\n\nSecond “quoted” paragraph.\n`)
   await expect(page.locator('#doc mark.hl[data-c="green"]')).toHaveCount(3)
   await expect(palette(page)).toBeHidden()
   // The palette remembers green for ⇧⌘H.
@@ -77,6 +78,30 @@ test('select across bold and a link, pick a colour, undo', async ({ page }) => {
   await cmd(page, 'undo')
   await expect.poll(() => mirror(page, src)).toBe(src)
   await expect(page.locator('#doc mark.hl')).toHaveCount(0)
+})
+
+test('a drag that starts or ends inside a word highlights the whole word, through formatting and links', async ({ page }) => {
+  const src = 'An **of**fice in [Lon](https://x.y)don, “so it goes,” said the long-term tenant.\n\n私は日本語を勉強しています\n'
+  await openApp(page, src)
+  // From inside "fice" (after the bold "of") to inside "Lon" (a link).
+  await select(page, 'fic', 'Lo')
+  await cmd(page, 'highlightYellow')
+  await expect.poll(() => mirror(page, src)).toBe('An ==**of**fice in [Lon](https://x.y)don,== “so it goes,” said the long-term tenant.\n\n私は日本語を勉強しています\n')
+  await cmd(page, 'undo')
+  // Inside the quotation: its opening and closing marks come along, as far as the spaces.
+  await select(page, 'o it', 'goe')
+  await cmd(page, 'highlightGreen')
+  await expect.poll(() => mirror(page, src)).toContain(' <mark style="background: #BBFABBA6;">“so it goes,”</mark> said')
+  await cmd(page, 'undo')
+  // Part of a hyphenated word: the hyphen is a word's edge, so "term" alone.
+  await select(page, 'er', 'er')
+  await cmd(page, 'highlightYellow')
+  await expect.poll(() => mirror(page, src)).toContain('long-==term== tenant')
+  await cmd(page, 'undo')
+  // Japanese, written without spaces: the word 日本語, not just 本語.
+  await select(page, '本', '語')
+  await cmd(page, 'highlightYellow')
+  await expect.poll(() => mirror(page, src)).toContain('私は==日本語==を')
 })
 
 test('click a highlight to change its colour or remove it', async ({ page }) => {
@@ -103,6 +128,7 @@ test('Find, then ⇧⌘H highlights each match in turn', async ({ page }) => {
   await cmd(page, 'highlight')
   await cmd(page, 'highlight')
   await cmd(page, 'highlight')
+  // A match is highlighted exactly as found, not widened to the word: "cafe" in "cafeteria".
   await expect.poll(() => mirror(page, src)).toBe('The ==cafe== opens. A ==café== is not a ==cafe==teria.\n\nCafe society.\n')
 })
 

@@ -9,6 +9,7 @@
 // one piece each.
 
 import { align } from '../core/sourcemap'
+import { snapToWords, OBJECT } from '../core/snap'
 import { SLOTS } from '../core/highlight-colors'
 import type { HighlightSlot } from '../core/nodes'
 
@@ -96,6 +97,70 @@ export function pointToSource(node: Node, offset: number, end: boolean, text: st
   }
   // Code, a wikilink, an image: one piece, taken whole.
   return { b, offset: end ? e : s }
+}
+
+// ---------------------------------------------------------------------------
+// Snapping a selection to whole words
+
+// Elements that start a new run of text: words never join across them.
+const BLOCKISH = /^(?:P|LI|TD|TH|H[1-6]|DT|DD|DIV|BLOCKQUOTE|PRE|SUMMARY|DETAILS|UL|OL|TABLE|TR|FIGURE|FIGCAPTION|SECTION|BR)$/
+// Things taken whole, whose own text (KaTeX's, a checkbox's) is not words in the line.
+const WHOLE = '.math, img, input'
+
+/**
+ * The text of a block as one string, with each text node's place in it.
+ * Line and cell boundaries become a newline, a formula or picture one
+ * object character, so words are cut where the reader sees them cut.
+ */
+function flatten(block: Element): { text: string; nodes: Text[]; at: number[] } {
+  let text = ''
+  const nodes: Text[] = []
+  const at: number[] = []
+  const walk = (n: Node) => {
+    for (let c = n.firstChild; c; c = c.nextSibling) {
+      if (c.nodeType === 3) { nodes.push(c as Text); at.push(text.length); text += (c as Text).data; continue }
+      if (c.nodeType !== 1) continue
+      const el = c as Element
+      if (el.matches(WHOLE)) { text += OBJECT; continue }
+      if (BLOCKISH.test(el.tagName)) text += '\n'
+      walk(el)
+    }
+  }
+  walk(block)
+  return { text, nodes, at }
+}
+
+/**
+ * A selection widened to word edges (see core/snap.ts), or the same Range
+ * object, untouched, when its edges already sit where they should.
+ */
+export function snapRange(range: Range, lang: string): Range {
+  const a = textPoint(range.startContainer, range.startOffset, false)
+  const z = textPoint(range.endContainer, range.endOffset, true)
+  if (!a || !z) return range
+  // Each edge is snapped within its own block; a selection can span several.
+  const blockOf = (t: Text) => t.parentElement?.closest('[data-b]') ?? null
+  const ba = blockOf(a[0]), bz = blockOf(z[0])
+  if (!ba || !bz) return range
+  const fa = flatten(ba)
+  const fz = bz === ba ? fa : flatten(bz)
+  const ia = fa.nodes.indexOf(a[0]), iz = fz.nodes.indexOf(z[0])
+  if (ia < 0 || iz < 0) return range // inside a formula: taken whole anyway
+  const s0 = fa.at[ia] + a[1], e0 = fz.at[iz] + z[1]
+  const s = ba === bz ? snapToWords(fa.text, s0, e0, lang)[0] : snapToWords(fa.text, s0, fa.text.length, lang)[0]
+  const e = ba === bz ? snapToWords(fz.text, s0, e0, lang)[1] : snapToWords(fz.text, 0, e0, lang)[1]
+  if (s === s0 && e === e0) return range
+  // Back to (node, offset): a start goes in the node holding the character
+  // after it, an end in the node holding the character before it.
+  const place = (f: ReturnType<typeof flatten>, i: number, end: boolean): [Text, number] => {
+    let k = f.nodes.length - 1
+    while (k > 0 && (end ? f.at[k] >= i : f.at[k] > i)) k--
+    return [f.nodes[k], Math.min(i - f.at[k], f.nodes[k].data.length)]
+  }
+  const r = range.cloneRange()
+  if (s !== s0) r.setStart(...place(fa, s, false))
+  if (e !== e0) r.setEnd(...place(fz, e, true))
+  return r
 }
 
 // ---------------------------------------------------------------------------

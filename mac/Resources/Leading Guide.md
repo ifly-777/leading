@@ -305,7 +305,7 @@ Leading writes highlights the way Obsidian and its Highlightr plugin do, so the 
 
 ## Highlighting and quoting
 
-Select some text and press ⇧⌘H to highlight it in the colour you used last, or choose one: ⌥⌘1 yellow, ⌥⌘2 green, ⌥⌘3 blue, ⌥⌘4 pink, ⌥⌘5 orange. ⌥⌘0 removes a highlight. Yellow is written as `==text==`, the others as Highlightr’s `<mark>`. ⌘Z undoes a highlight.
+Select some text and press ⇧⌘H to highlight it in the colour you used last, or choose one: ⌥⌘1 yellow, ⌥⌘2 green, ⌥⌘3 blue, ⌥⌘4 pink, ⌥⌘5 orange. ⌥⌘0 removes a highlight. Yellow is written as `==text==`, the others as Highlightr’s `<mark>`. ⌘Z undoes a highlight. A highlight takes whole words: a selection that starts or ends partway through a word takes in all of it, with any punctuation attached, so the text never shifts. To highlight part of a word, select it in edit mode (⌘E).
 
 **Show Highlights** (⌥⌘L) lists every highlight in the margin, by section; click one to go there. **Copy All Highlights** (⌥⇧⌘C) puts them on the clipboard as Markdown, colours included.
 
