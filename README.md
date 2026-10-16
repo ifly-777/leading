@@ -40,7 +40,7 @@ The disk image has the same steps, with pictures, as *If macOS blocks Leading.pd
 
 ### A page worth reading
 
-Five typefaces, three bundled and two from macOS: Literata, Atkinson Hyperlegible Next, iA Writer Quattro, New York and Charter. You can also use any font you have. You set the size, line spacing, column width, paragraph style and justification, in light, sepia or dark. The defaults were chosen with a typography prototype that ships with the source, and the page passes WCAG’s text-spacing test.
+Five typefaces, three bundled and two from macOS: Literata, Atkinson Hyperlegible Next, iA Writer Quattro, New York and Charter. You can also use any font you have. You set the size, line spacing, column width, paragraph style and justification, in light, sepia or dark. A note set in another language hyphenates by that language’s rules: add `lang: de`, or any language code, to its properties. The defaults were chosen with a typography prototype that ships with the source, and the page passes WCAG’s text-spacing test.
 
 Leading remembers where you stopped in every file. An outline of the headings sits in the margin. Footnotes open beside their number, so you never leave the line. Three optional aids help with long reads: a hairline that shows how far through you are and the time left, **Focus** (⌘D), which dims all but the paragraph you are reading, and **Page by Page**, which moves a screen at a time.
 
@@ -75,7 +75,7 @@ All of it is bundled with the app, so nothing is fetched from the internet.
 
 ### Mark it up, take it with you
 
-- **Highlight** with ⇧⌘H, or ⌥⌘1 to ⌥⌘5 for five colours. Each highlight is written into the file.
+- **Highlight** with ⇧⌘H, or ⌥⌘1 to ⌥⌘5 for five colours. Each highlight is written into the file. A careless drag still takes whole words, so marking a passage never shifts the text around it.
 - **Show Highlights** (⌥⌘L) lists every highlight beside the text, by section. Click one to go there. Copy puts them all on the clipboard as Markdown, colours included.
 - **Copy as Quote** (⇧⌘C) copies the selection as a Markdown quotation, with a link back to the note and section it came from.
 - **Tick tasks** while reading. ⌘Z undoes a tick, as it undoes a highlight.
