@@ -20,7 +20,7 @@ import { slugify, type OutlineItem } from '../core/pipeline'
 import type { HighlightSlot } from '../core/nodes'
 import { highlightEdits } from '../core/highlight-edit'
 import { referenceDefinitions } from '../core/chunks'
-import { ReaderPalette, pointToSource, notice, type PaletteTarget } from './highlights'
+import { ReaderPalette, pointToSource, snapRange, notice, type PaletteTarget } from './highlights'
 import { ProgressMark, cumulativeWords, progressAt } from './progress'
 import { FootnotePopover } from './footnote-popover'
 import { Diagrams } from './diagrams'
@@ -324,6 +324,8 @@ export class ReaderView {
     }
     this.renderedText = src
     this.lastResult = result
+    // The editor checks spelling in the note's language too (it takes effect from the next render).
+    this.els.editor.lang = result.lang
     this.readerOutline = result.outline
     if (this.mode === 'read') this.outline.setItems(result.outline)
     this.tables.scan(doc)
@@ -646,6 +648,9 @@ export class ReaderView {
       }
     }
     if (!t) return
+    // A reader's selection is widened to whole words, so no edge falls inside
+    // one (docs/decisions.md). A Find match is highlighted exactly as found.
+    if (t.kind === 'selection' && !match) t = { kind: 'selection', range: snapRange(t.range, this.els.doc.lang || 'en') }
     const span = this.spanOf(t)
     this.palette.hide()
     if (!span) return

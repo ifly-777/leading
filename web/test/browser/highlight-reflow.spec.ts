@@ -48,13 +48,9 @@ function source(): string {
   return out.join('\n\n') + '\n'
 }
 
-test('a highlight never changes where lines break', async ({ page }) => {
-  await openApp(page, source())
-  const per = SPANS.length + 1
-  expect(await page.locator('#doc p').count()).toBe(PARAS.length * per)
-  expect(await page.locator('#doc mark.hl').count()).toBe(PARAS.length * SPANS.length)
-
-  const failures = await page.evaluate(({ per }) => {
+/** Paragraphs whose line breaks differ from the unmarked paragraph before them, every `per` paragraphs. */
+async function breakFailures(page: Page, per: number): Promise<string[]> {
+  return page.evaluate(({ per }) => {
     const root = document.documentElement
     const ps = [...document.querySelectorAll<HTMLElement>('#doc p')]
     // The line each visible character sits on, by the top of its own box. Line
@@ -88,7 +84,80 @@ test('a highlight never changes where lines break', async ({ page }) => {
     }
     return out
   }, { per })
-  expect(failures).toEqual([])
+}
+
+test('a highlight never changes where lines break', async ({ page }) => {
+  await openApp(page, source())
+  const per = SPANS.length + 1
+  expect(await page.locator('#doc p').count()).toBe(PARAS.length * per)
+  expect(await page.locator('#doc mark.hl').count()).toBe(PARAS.length * SPANS.length)
+  expect(await breakFailures(page, per)).toEqual([])
+})
+
+// Sloppy drags: each starts a few letters into one word and ends a few letters
+// short of the end of another, as [first word, letters in, last word, letters
+// short]. One lies within a single word.
+const DRAGS: [number, number, number, number][] = [[6, 2, 6, 2], [0, 1, 2, 1], [16, 3, 21, 2], [3, 2, 40, 3], [30, 1, 31, 1], [44, 2, 60, 2]]
+
+/** A drag's character offsets in the paragraph: always inside words, never at a space. */
+function dragOffsets(p: string, [i, di, j, dj]: [number, number, number, number]): [number, number] {
+  const w = words(p)
+  const [a0, a1] = w.at(i)!, [b0, b1] = w.at(j)!
+  return [a0 + Math.min(di, a1 - a0 - 1), b1 - Math.min(dj, b1 - b0 - 1)]
+}
+
+test('a highlight dragged from inside a word is widened to the word, and moves no line break', async ({ page }) => {
+  const per = DRAGS.length + 1
+
+  // Before: the same drags marked exactly where they fall, edges inside words.
+  const raw: string[] = []
+  for (const p of PARAS) {
+    raw.push(p)
+    for (const d of DRAGS) { const [a, b] = dragOffsets(p, d); raw.push(p.slice(0, a) + '<mark>' + p.slice(a, b) + '</mark>' + p.slice(b)) }
+  }
+  await openApp(page, raw.join('\n\n') + '\n')
+  const before = await breakFailures(page, per)
+  const cases = PARAS.length * DRAGS.length * 56 * 2 // per style: 56 widths, ragged and justified
+  const perStyle = (f: string[], s: string) => f.filter((x) => x.startsWith(s + '/')).length
+  const report = (f: string[]) => ['marker', 'lowlight', 'underline'].map((s) => `${s} ${perStyle(f, s)}/${cases}`).join(', ')
+  test.info().annotations.push({ type: 'mid-word edges, unsnapped', description: report(before) })
+
+  // After: the reader drags across each copy, and highlights it as the app does.
+  const copies: string[] = []
+  for (const p of PARAS) for (let k = 0; k < per; k++) copies.push(p)
+  await openApp(page, copies.join('\n\n') + '\n')
+  for (let i = 0; i < PARAS.length; i++) {
+    for (let k = 0; k < DRAGS.length; k++) {
+      const [a, b] = dragOffsets(PARAS[i], DRAGS[k])
+      await page.evaluate(async ({ n, a, b }) => {
+        // The paragraph is one run of text; find it fresh, since highlighting redraws its block.
+        const p = document.querySelectorAll<HTMLElement>('#doc p')[n]
+        const t = document.createTreeWalker(p, NodeFilter.SHOW_TEXT).nextNode() as Text
+        const r = document.createRange()
+        r.setStart(t, a); r.setEnd(t, b)
+        await (window as any).leading.view.highlightInReader('yellow', false, { kind: 'selection', range: r })
+      }, { n: i * per + k + 1, a, b })
+    }
+  }
+  expect(await page.locator('#doc mark.hl').count()).toBe(PARAS.length * DRAGS.length)
+  // Every highlight now begins and ends at a space (or the paragraph's edge),
+  // and covers at least what was dragged.
+  const edges = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('#doc mark.hl')].map((m) => {
+    const p = m.closest('p')!
+    const r = document.createRange()
+    r.setStart(p, 0); r.setEndBefore(m)
+    const pre = r.toString()
+    r.setStartAfter(m); r.setEndAfter(p.lastChild!)
+    const post = r.toString()
+    return { ok: (pre === '' || /\s$/.test(pre)) && (post === '' || /^\s/.test(post)), text: m.textContent }
+  }))
+  expect(edges.filter((e) => !e.ok)).toEqual([])
+  const after = await breakFailures(page, per)
+  test.info().annotations.push({ type: 'mid-word edges, snapped', description: report(after) })
+  console.log(`line breaks moved, unsnapped: ${report(before)}; snapped: ${report(after)}`)
+  expect(after).toEqual([])
+  // The unsnapped case is what made snapping worth doing; on macOS it shows.
+  if (process.platform === 'darwin') expect(before.length).toBeGreaterThan(0)
 })
 
 test('an element boundary at a space leaves every glyph where it was', async ({ page }) => {

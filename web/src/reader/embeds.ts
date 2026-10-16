@@ -54,6 +54,8 @@ export class NoteEmbeds {
     if (!el.isConnected) return
     if (!body) { el.dataset.filled = 'missing'; return }
     body.className = 'note-embed-body'
+    // A note that names its own language keeps it here; one that names none reads as this page does.
+    if (body.lang) el.lang = body.lang
     el.append(body)
     el.dataset.filled = 'yes'
     this.onFilled()
@@ -81,7 +83,9 @@ export async function noteCopy(docId: string, imageBase: string | null, target: 
  */
 function renderCopy(text: string, imageBase: string | null, heading: string | undefined, maxBlocks: number, sectionOnly: boolean): HTMLElement | null {
   const body = document.createElement('div')
-  const blocks = renderMarkdown(text, { imageBase, vaultEmbeds: true }).blocks
+  const r = renderMarkdown(text, { imageBase, vaultEmbeds: true })
+  const blocks = r.blocks
+  if (r.lang) body.lang = r.lang
   // A section is cut from the whole note; a preview needs only the opening.
   body.innerHTML = (heading ? blocks : blocks.slice(0, maxBlocks)).map((b) => b.html).join('')
   if (heading) {
