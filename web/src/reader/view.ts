@@ -324,6 +324,8 @@ export class ReaderView {
     }
     this.renderedText = src
     this.lastResult = result
+    // The editor checks spelling in the note's language too (it takes effect from the next render).
+    this.els.editor.lang = result.lang
     this.readerOutline = result.outline
     if (this.mode === 'read') this.outline.setItems(result.outline)
     this.tables.scan(doc)

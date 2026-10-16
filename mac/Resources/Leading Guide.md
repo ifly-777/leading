@@ -218,6 +218,8 @@ tags: [stoicism, reading]
 ---
 ```
 
+A `lang` property (or `language`) names the language a note is written in, as a language code: `lang: de` for German, `lang: en-GB` for British English. Leading then hyphenates the note by that language’s rules, on screen and on paper. A note without one is read as English.
+
 ### Punctuation
 
 Leading sets straight quotes as curly ones, two hyphens as an en dash and three as an em dash, and three full stops as an ellipsis, on the page only. The file keeps what you typed. Code and math are left alone.

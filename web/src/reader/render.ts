@@ -11,6 +11,7 @@ import type { Edit } from '../core/format'
 import { splitForParallel, referenceDefinitions, FENCE, nextFence } from '../core/chunks'
 import { topIn } from './geometry'
 import { SearchIndex } from '../core/search-index'
+import { DEFAULT_LANG } from '../core/lang'
 
 export const PREVIEW_BYTES = 20_000
 export const LARGE_DOC = 300_000 // above this, far-away blocks skip layout
@@ -25,7 +26,13 @@ export interface LoadTimings {
   bytes: number
 }
 
-export interface LoadResult { outline: OutlineItem[]; blocks: Block[]; timings: LoadTimings }
+export interface LoadResult {
+  outline: OutlineItem[]
+  blocks: Block[]
+  timings: LoadTimings
+  /** The language the page is set in: the note's own, or the default */
+  lang: string
+}
 
 /**
  * The opening slice of a document, cut at a blank line so no block is split.
@@ -128,6 +135,8 @@ export class Reader {
 
     if (prefix.length === src.length) {
       const r = renderMarkdown(src, opts)
+      // Before the text goes in, so the first paint already hyphenates by the note's rules.
+      this.doc.lang = r.lang ?? DEFAULT_LANG
       this.doc.innerHTML = r.blocks.map((b) => b.html).join('')
       this.index.add({ texts: r.blocks.map((b) => b.text) })
       this.onIndexGrew?.()
@@ -137,13 +146,15 @@ export class Reader {
       const t = laidOut(this.doc, t0)
       this.onFirstPaint?.(t)
       await nextFrame()
-      return { outline: r.outline, blocks: r.blocks, timings: { firstPaint: t, complete: t, blocks: r.blocks.length, bytes: src.length } }
+      return { outline: r.outline, blocks: r.blocks, lang: this.doc.lang, timings: { firstPaint: t, complete: t, blocks: r.blocks.length, bytes: src.length } }
     }
 
     // 1. Paint the opening straight away.
     const p0 = performance.now()
     const preview = renderMarkdown(prefix, opts)
     const previewParse = performance.now() - p0
+    // The opening slice always holds the front matter whole (cutPrefix), so its language is the note's.
+    this.doc.lang = preview.lang ?? DEFAULT_LANG
     this.doc.innerHTML = preview.blocks.map((b) => b.html).join('')
     this.pending = []
     this.nextIndex = 0
@@ -213,6 +224,7 @@ export class Reader {
     return {
       outline,
       blocks: this.pending,
+      lang: this.doc.lang,
       timings: {
         previewParse, firstPaint, pieces: chunks.length, parsed: parsedAt,
         complete: performance.now() - t0, blocks: this.pending.length, bytes: src.length,
@@ -230,6 +242,7 @@ export class Reader {
     document.documentElement.dataset.large = 'false'
     this.sections = []
     this.sectionStart = []
+    this.doc.lang = DEFAULT_LANG
     const esc = src.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)
     const block = { html: `<pre class="plain" data-b="0" data-s="0" data-e="${src.length}">${esc}</pre>`, s: 0, e: src.length, text: src }
     this.doc.innerHTML = block.html
@@ -240,7 +253,7 @@ export class Reader {
     this.onIndexGrew?.()
     const t = performance.now() - t0
     this.onFirstPaint?.(laidOut(this.doc, t0))
-    return { outline: [], blocks: this.pending, timings: { firstPaint: t, complete: t, blocks: 1, bytes: src.length } }
+    return { outline: [], blocks: this.pending, lang: DEFAULT_LANG, timings: { firstPaint: t, complete: t, blocks: 1, bytes: src.length } }
   }
 
   /**
@@ -426,6 +439,8 @@ export class Reader {
     let delta = 0
     for (const b of [...groups.keys()].sort((x, y) => x - y)) {
       const blk = this.pending[b]
+      // The note's properties set the page's language, so a change there draws the whole page again.
+      if (blk.html.startsWith('<details class="props"')) return false
       const d = groups.get(b)!.reduce((n, ed) => n + ed.insert.length - (ed.to - ed.from), 0)
       const s = blk.s + delta, e = blk.e + delta + d
       const s0 = text.lastIndexOf('\n', s - 1) + 1

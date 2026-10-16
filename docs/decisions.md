@@ -2,6 +2,17 @@
 
 Short notes on choices that are not obvious from the code, and what testing showed. Newest first.
 
+## After 1.5.1
+
+### A note names its own language
+Every note used to be hyphenated, and spell-checked while editing, as English, because the page said `lang="en"` whatever the file held. A note can now name its language in its properties, `lang: de` or `language: de`, as people write both. The value is read from the YAML the Properties line already parses, so the file is not parsed twice, and it reaches the page with the render: the column takes it before its first paint, so the opening screen is hyphenated by the right rules and nothing re-breaks a moment later. Print and Quick Look show the same page, so they follow. An embedded note that names its own language keeps it; one that names none reads as the page around it.
+
+The value must be a language tag, checked with `Intl.getCanonicalLocales` and put in its canonical form (`en-gb` becomes `en-GB`). Anything else, a number, a list, a misspelling, falls back to English and never stops the page. A tag must also start with a two- or three-letter language: BCP 47 allows five to eight letters for registered languages, of which there are none, so `language: German` would otherwise pass as a tag no dictionary knows and quietly hyphenate nothing. Names are not translated to codes. Changing the property while editing takes effect at the next render, like any other change; a change to the properties always redraws the whole page rather than one block, since it can change how every block breaks.
+
+Quotation marks stay English. Smart punctuation still turns `"` into “ ”, not German „ “ or French « »: that is a different job (the source has one kind of straight quote; the right pair depends on the language and on nesting) and is left out on purpose.
+
+The default stays English rather than following the Mac's preferred language. The test for hyphenation runs on macOS only: it depends on the platform's dictionaries, CoreText's on macOS and whatever libhyphen data the Linux runner has.
+
 ## Leading 1.5
 
 ### One note at a time, encrypted in its own file

@@ -28,6 +28,7 @@ import { obsidianMathText } from './plugins/math-text'
 import { classifyTables } from './tables'
 import { textOf } from './text'
 import { blockText, isUnsearched } from './search-index'
+import { noteLang } from './lang'
 
 export interface OutlineItem { depth: number; text: string; id: string; s: number; /** top-level block holding it */ b: number }
 export interface Block {
@@ -37,7 +38,12 @@ export interface Block {
   /** Displayed text, for the search index (see search-index.ts for the rule) */
   text: string
 }
-export interface RenderResult { blocks: Block[]; outline: OutlineItem[] }
+export interface RenderResult {
+  blocks: Block[]
+  outline: OutlineItem[]
+  /** The language the note's properties name (canonical tag), if they name a valid one */
+  lang?: string
+}
 export interface RenderOptions {
   /** URL prefix for local images, relative to the document. Null: show alt text only.
    *  Plain data (not a function) so options can cross into a Web Worker. */
@@ -129,7 +135,10 @@ function pageBreak(node: any): Element {
   return el('div', { className: ['page-break'], role: 'separator', ariaLabel: 'Page break', ...pos(node) }, [])
 }
 
-function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]): Handlers {
+/** What a render learns about the note as a whole, rather than about one block. */
+interface NoteMeta { lang?: string }
+
+function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[], meta: NoteMeta): Handlers {
   const slugs = new Map<string, number>()
   return {
     text(state: State, node: any) {
@@ -231,6 +240,9 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]
       let rows: ElementContent[] = []
       try {
         const data = YAML.parse(node.value)
+        // Read here, from the YAML already parsed for the Properties line, not parsed again.
+        const lang = noteLang(data)
+        if (lang) meta.lang = lang
         if (data && typeof data === 'object') {
           for (const [k, v] of Object.entries(data)) {
             const val = Array.isArray(v) ? v.join(', ') : v instanceof Date ? v.toISOString().slice(0, 10)
@@ -325,7 +337,8 @@ function hasRaw(node: any): boolean {
 export function render(tree: Root, opts: RenderOptions = {}): RenderResult {
   const outline: OutlineItem[] = []
   const tex: string[] = []
-  const hast = toHast(tree, { allowDangerousHtml: true, handlers: makeHandlers(outline, opts, tex) }) as HastRoot
+  const meta: NoteMeta = {}
+  const hast = toHast(tree, { allowDangerousHtml: true, handlers: makeHandlers(outline, opts, tex, meta) }) as HastRoot
   const blocks: Block[] = []
   // HTML blocks arrive as top-level "raw" nodes; everything else as elements.
   const kids = hast.children.filter((c) => c.type === 'element' || c.type === ('raw' as string))
@@ -359,7 +372,7 @@ export function render(tree: Root, opts: RenderOptions = {}): RenderResult {
     while (b + 1 < blocks.length && (blocks[b + 1].s < 0 || blocks[b + 1].s <= item.s)) b++
     item.b = b
   }
-  return { blocks, outline }
+  return meta.lang ? { blocks, outline, lang: meta.lang } : { blocks, outline }
 }
 
 export function renderMarkdown(src: string, opts: RenderOptions = {}): RenderResult {
