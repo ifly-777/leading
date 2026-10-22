@@ -28,7 +28,7 @@ The View menu holds the reading aids.
 - **Focus** (⌘D) dims everything but the paragraph you are reading.
 - **Page by Page** moves a screen at a time. Space or → goes forward; ⇧Space or ← goes back. Page Up and Page Down work too.
 - **Read Aloud** (⌥⌘R) reads from the top of the window, or from the selection, in the voice set in System Settings › Accessibility › Spoken Content. The word being spoken is marked, and the page follows it. ⌥⌘R again stops. Code, formulas and diagrams are skipped.
-- **Show Links to This Note** (⌥⌘B) lists, in the margin, the notes in the vault that link here, with the line where each does. Click one to open it.
+- **Show Links to This Note** (⌥⌘B) lists, in the margin, the notes in the vault that link here, with the line where each does. Click one to open it. Where two notes share a name, a link counts only for the one it opens.
 - **Show as Plain Text** shows the file exactly as written, without Markdown formatting, until you close it.
 - **Enter Full Screen** (⌃⌘F) leaves only the page.
 
@@ -700,6 +700,12 @@ If another app changes a file you have open, Leading shows the new text without 
 
 Find (⌘F) ignores case, accents and curly quotes, so “cafe” finds “Café”. Return or ⌘G goes to the next match, ⇧Return or ⇧⌘G to the one before, and Esc closes the bar. Find and Replace (⌥⌘F) works while editing.
 
+### Searching the vault
+
+Edit › Find › Search Vault… (⇧⌘F) searches every note in the vault, not just this one. Type in the field at the top of the margin's Search tab: the notes holding your words are listed, those with the words in their name first, then those with the most matches, each with the lines where the words are. ↓ moves into the list, ↑ and ↓ move through it, and Return or a click opens a note at that line, with Find on the words, so ⌘G goes on to the next one. Words are matched as Find matches them.
+
+The vault is the folder holding `.obsidian` above the note, or, with no vault, the note's own folder and those below it. Leading reads it once when a note from it opens, keeps the index in memory while any of its notes is open, and follows changes other apps make. Nothing is written to disk. Encrypted notes are found by name only. A note kept straight in your home folder has no vault to search: it is too broad.
+
 ## Printing and Quick Look
 
 File › Print (⌘P) and File › Export as PDF set the file for paper, in your typeface, always on light paper. Leading starts a new page wherever the file asks for one, in any of the forms notes already use:
@@ -790,6 +796,7 @@ Leading has no account, collects nothing and sends nothing. It never loads anyth
 | Find | ⌘F |
 | Next or previous match | ⌘G and ⇧⌘G, or Return and ⇧Return |
 | Find and Replace | ⌥⌘F |
+| Search the vault | ⇧⌘F |
 
 ### Editing
 

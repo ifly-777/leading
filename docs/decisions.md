@@ -2,6 +2,24 @@
 
 Short notes on choices that are not obvious from the code, and what testing showed. Newest first.
 
+## Leading 1.7
+
+### One index per vault, kept in memory
+Search, Links to This Note, wikilinks and embeds all used to walk the vault and, for links, read every note, each time they were asked. `VaultIndex` (LeadingCore) now reads a vault once: every file's path, so a wikilink to a picture resolves, and for each Markdown note its lines, cleaned as a reader sees them, folded for search, and the links on each. `Vaults` (the app) builds one when a window shows a note from that vault, keeps it current with an FSEvents stream on the vault's folder, and lets it go 30 s after the last such window closes, so closing and reopening a note does not read the vault again. The index lives only in memory: writing it to disk would put a second copy of every note's text outside the vault and need invalidation for little gain, as building is quick (figures below). Until it is built, callers search the disk as before, so nothing waits on it.
+
+A vault is found as a wikilink finds it: the nearest folder above holding `.obsidian`, else the note's own folder. A note kept straight in the home folder, or at a disk's top, gets no index: keeping and watching all of that is not worth it, and search says so. The limits of the old walk stay: 50,000 entries, files over 4 MB indexed by name only, hidden folders and packages skipped. An event about a file whose size and date are unchanged is ignored; a folder event (FSEvents asking for a rescan, or a folder moved) reads that folder again.
+
+### A link counts for the note it opens
+Links to This Note used to count `[[Name]]` for every note called Name. A click opens only one: the note beside the linking note if there is one, else the one nearest the vault's top. The index now resolves each candidate link the way a click does (`VaultIndex.resolve`, used by both), so the list and the click always agree. Ties at the same depth, which the old walk left to the order the disk returned, go to the path that sorts first, so they are settled the same way every time.
+
+### Vault search folds as Find folds
+`Fold` (LeadingCore) is a port of the page's `fold.ts`: the same table of curly quotes, dashes, ellipses and spaces, accents dropped, case ignored. Search scans the folded UTF-8 bytes of each note directly, which is fast enough that no word index is needed. A query is a phrase, as in Find; words are not matched separately across a note. Lines are searched as a reader sees them, links shown by their text, so "the pond" finds `[[Walden|the pond]]`; a comment's words are searched too, since a note on a highlight is kept in one. A result opens its note with Find on the words, at the match in the block where the result's line starts. If that block shows no match (the words were in a hidden comment), the page still goes to the block.
+
+Encrypted notes are indexed by name only. Their text is never read, and since the index reads only the disk, a note unlocked in a window never reaches it either.
+
+### Measured
+`VaultIndexScaleTests` builds a synthetic vault of 10,000 notes of about 2.5 KB each and prints how long the index takes to build, a search, and a lookup of links to a note. Figures from GitHub's macOS runner follow once it has run.
+
 ## Leading 1.6
 
 ### Comments are blanked before parsing, not removed after it
@@ -17,6 +35,7 @@ Notes are written `==words==%%note%%`, straight after the highlight, with nothin
 `#tag` is set as a quiet label. Clicking one would need a search of the vault for every note with that tag, which is a notes manager's job; Leading lists links to the note it is showing (below), not notes by tag. A tag needs a space or the line's start before it, and something other than digits, so "#1" and "C#" are left alone.
 
 ### Links to this note are found when asked
+*Superseded in 1.7: links now come from the vault's index, and a `[[Name]]` counts only for the note it opens. See "One index per vault, kept in memory".*
 The Links tab asks the app, which walks the vault (found as a wikilink finds it) and reads each Markdown file that mentions the note's name, keeping the lines with a `[[Name]]`, a `[[Folder/Name]]` or a Markdown link whose path leads to the note. It runs off the main thread, only while the tab is showing, and again each time it is shown, since other notes change while this one is open; no index is kept. A `[[Name]]` is counted even where two notes share a name, which Obsidian would resolve to the one nearest the vault's top: rare, and a false entry in a list is cheaper than a missed one.
 
 ### Read Aloud marks words without an element
