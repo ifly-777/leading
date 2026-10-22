@@ -20,6 +20,8 @@ public struct ReaderSettings: Codable, Equatable {
     public var highlightStyle = "marker"
     public var zebra = false
     public var outlineOpen = false
+    /// The deepest heading level the outline lists: 2, 3 or 4
+    public var outlineDepth = 3
     /// A thin rule showing how far through the file, and minutes left (off by default)
     public var progress = false
     /// Dim everything but the paragraph being read (off by default)
@@ -46,7 +48,7 @@ public struct ReaderSettings: Codable, Equatable {
         take(.size, &size); take(.lineHeight, &lineHeight); take(.measure, &measure); take(.theme, &theme)
         take(.letterSpacing, &letterSpacing); take(.wordSpacing, &wordSpacing)
         take(.paragraphStyle, &paragraphStyle); take(.paragraphSpacing, &paragraphSpacing)
-        take(.align, &align); take(.highlightStyle, &highlightStyle); take(.zebra, &zebra); take(.outlineOpen, &outlineOpen); take(.smartTyping, &smartTyping)
+        take(.align, &align); take(.highlightStyle, &highlightStyle); take(.zebra, &zebra); take(.outlineOpen, &outlineOpen); take(.outlineDepth, &outlineDepth); take(.smartTyping, &smartTyping)
         take(.progress, &progress); take(.focus, &focus); take(.paged, &paged)
         take(.lastHighlight, &lastHighlight); take(.highlightColors, &highlightColors)
         if !HighlightColors.slots.contains(lastHighlight) { lastHighlight = "yellow" }
@@ -60,6 +62,19 @@ public struct ReaderSettings: Codable, Equatable {
         letterSpacing = min(0.12, max(-0.02, letterSpacing))
         wordSpacing = min(0.16, max(0, wordSpacing))
         paragraphSpacing = min(2, max(0, paragraphSpacing))
+        outlineDepth = min(4, max(2, outlineDepth))
+    }
+
+    /// The reading settings back to Leading's own, keeping what is the reader's
+    /// rather than the page's look: the margin's state, the last highlight colour,
+    /// their own highlight colours, and smart punctuation.
+    public func restoringDefaults() -> ReaderSettings {
+        var d = ReaderSettings()
+        d.outlineOpen = outlineOpen
+        d.lastHighlight = lastHighlight
+        d.highlightColors = highlightColors
+        d.smartTyping = smartTyping
+        return d
     }
 
     /// As a JSON-compatible dictionary, for passing to the page.

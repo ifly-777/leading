@@ -42,8 +42,14 @@ export class OutlinePanel {
     scroller.addEventListener('scroll', () => this.schedule(), { passive: true })
   }
 
-  setItems(items: OutlineItem[], maxDepth = 3): void {
-    this.items = items.filter((i) => i.depth <= maxDepth)
+  /** The deepest heading level listed (the reader's setting). */
+  maxDepth = 3
+  /** The headings last given, before the depth cut, so a new depth can list them again. */
+  private given: OutlineItem[] = []
+
+  setItems(items: OutlineItem[]): void {
+    this.given = items
+    this.items = items.filter((i) => i.depth <= this.maxDepth)
     this.flat = []
     this.list.replaceChildren()
     if (!this.items.length) {
@@ -112,6 +118,13 @@ export class OutlinePanel {
     f.setAttribute('aria-expanded', String(open))
     const name = li.querySelector(':scope > a')?.textContent ?? 'section'
     f.setAttribute('aria-label', `${open ? 'Collapse' : 'Expand'} ${name}`)
+  }
+
+  /** List deeper or shallower headings. */
+  setDepth(depth: number): void {
+    if (depth === this.maxDepth) return
+    this.maxDepth = depth
+    this.setItems(this.given)
   }
 
   /** Open with keyboard focus in the filter box. */

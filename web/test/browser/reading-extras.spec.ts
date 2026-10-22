@@ -250,3 +250,16 @@ test('polish: the margin works from the keyboard and reads well to VoiceOver', a
     }), { message: theme }).toBeGreaterThanOrEqual(4.5)
   }
 })
+
+test('polish: the outline lists as deep as the reader chooses, and a restored window gets its tab back', async ({ page }) => {
+  await open(page, '# One\n\n## Two\n\n### Three\n\n#### Four\n\nText.')
+  await page.evaluate(() => (window as any).leading.command({ name: 'toggleOutline' }))
+  const names = () => page.locator('#outline > ol a').allTextContents()
+  await expect.poll(names).toEqual(['One', 'Two', 'Three'])
+  await page.evaluate(() => (window as any).leading.view.change({ outlineDepth: 4 }))
+  await expect.poll(names).toEqual(['One', 'Two', 'Three', 'Four'])
+  await page.evaluate(() => (window as any).leading.view.change({ outlineDepth: 2 }))
+  await expect.poll(names).toEqual(['One', 'Two'])
+  await page.evaluate(() => (window as any).leading.showTab({ tab: 'search' }))
+  await expect(page.locator('#outline')).toHaveAttribute('data-tab', 'search')
+})

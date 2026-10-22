@@ -268,6 +268,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func pageMode(editing: Bool) {
         self.editing = editing
+        window?.invalidateRestorableState()
     }
 
     func pageSavedPlace(s: Int, dy: Double) {
@@ -409,7 +410,31 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     /// Which of the notes this one's wikilinks name the vault lacks, so the page can dim those links.
     /// Only once the vault's index is ready: until then nothing is dimmed, and the page asks again when it is.
-    func pageSideTab(_ tab: String) { sideTab = tab }
+    func pageSideTab(_ tab: String) {
+        sideTab = tab
+        window?.invalidateRestorableState()
+    }
+
+    // MARK: Restoring a window as it was
+
+    // macOS reopens documents after a restart; each window also comes back in edit
+    // mode or showing plain text if it was, with the margin on the tab it showed.
+    func window(_ window: NSWindow, willEncodeRestorableState state: NSCoder) {
+        state.encode(editing, forKey: "editing")
+        state.encode(doc?.showsPlainText == true, forKey: "plainText")
+        state.encode(sideTab, forKey: "sideTab")
+    }
+
+    func window(_ window: NSWindow, didDecodeRestorableState state: NSCoder) {
+        guard let doc, !doc.isPasswordLocked else { return }
+        if state.decodeBool(forKey: "plainText"), !doc.showsPlainText {
+            doc.showsPlainText = true
+            sendDocument(keepPlace: true)
+        }
+        // Calls wait for the page, and run after the document it is already loading.
+        if let tab = state.decodeObject(of: NSString.self, forKey: "sideTab") as String?, tab != "outline" { web?.call("showTab", ["tab": tab]) }
+        if state.decodeBool(forKey: "editing"), !editing, !doc.showsPlainText, !doc.isGuide { command("toggleEdit") }
+    }
 
     func pageWikiTargets(_ targets: [String]) {
         guard let url = doc?.fileURL, let index = Vaults.shared.index(for: url) else { return }
@@ -577,6 +602,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         guard let doc else { return }
         doc.showsPlainText.toggle()
         sendDocument(keepPlace: true)
+        window?.invalidateRestorableState()
     }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {

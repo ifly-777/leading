@@ -10,7 +10,7 @@ Leading opens Markdown files where they already live. Double-click one in Finder
 
 Leading also opens `.markdown`, `.mdown`, `.mkd`, `.mkdn` and plain `.txt` files. File › New (⌘N), or opening Leading with no file, gives a blank page to write in; ⌘S saves it as a Markdown file.
 
-Every file opens where you stopped reading it last time. Links to other notes open them in a new tab, at the heading they name, and ⌘[ takes you back. Leading › Settings sets whether Leading is your default app for Markdown, and whether it checks for updates.
+Every file opens where you stopped reading it last time. Links to other notes open them in a new tab, at the heading they name, and ⌘[ takes you back. Leading › Settings (⌘,) sets your own highlight colours, whether Leading is your default app for Markdown, and whether it checks for updates.
 
 ## Setting the page
 
@@ -824,7 +824,7 @@ Leading has no account, collects nothing and sends nothing. It never loads anyth
 | Close | ⌘W |
 | Print | ⌘P |
 | Lock encrypted notes | ⌃⌘L |
-| Minimise | ⌘M |
+| Minimize (as the Window menu has it) | ⌘M |
 | Settings | ⌘, |
 | This guide | ⌘? |
 | Hide Leading · hide others | ⌘H · ⌥⌘H |

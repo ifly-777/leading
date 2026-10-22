@@ -82,6 +82,15 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(s.font, "literata"); XCTAssertEqual(s.size, 19); XCTAssertEqual(s.lineHeight, 1.5)
         XCTAssertEqual(s.measure, "medium"); XCTAssertEqual(s.theme, "system"); XCTAssertFalse(s.outlineOpen)
         XCTAssertFalse(s.progress); XCTAssertFalse(s.focus); XCTAssertFalse(s.paged)
+        XCTAssertEqual(s.outlineDepth, 3)
+    }
+
+    func testRestoringDefaultsKeepsWhatIsTheReaders() {
+        var s = ReaderSettings()
+        s.size = 24; s.theme = "dark"; s.outlineDepth = 4; s.outlineOpen = true; s.lastHighlight = "green"; s.smartTyping = false
+        let d = s.restoringDefaults()
+        XCTAssertEqual(d.size, 19); XCTAssertEqual(d.theme, "system"); XCTAssertEqual(d.outlineDepth, 3)
+        XCTAssertTrue(d.outlineOpen); XCTAssertEqual(d.lastHighlight, "green"); XCTAssertFalse(d.smartTyping)
     }
 
     func testLenientDecodingKeepsDefaultsAndClamps() throws {

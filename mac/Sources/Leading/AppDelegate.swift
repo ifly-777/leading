@@ -40,6 +40,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         NSWorkspace.shared.open(URL(string: "https://github.com/ifly-777/leading")!)
     }
 
+    /// The Dock icon's menu: a new note, from anywhere.
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        let menu = NSMenu()
+        let new = NSMenuItem(title: "New Note", action: #selector(NSDocumentController.newDocument(_:)), keyEquivalent: "")
+        new.target = NSDocumentController.shared
+        menu.addItem(new)
+        return menu
+    }
+
     // Document apps stay running with no windows, as on every Mac.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 

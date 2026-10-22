@@ -206,6 +206,11 @@ document.addEventListener('click', (e) => {
     await loading.catch(() => {})
     view.findAt(args.query, args.s)
   },
+  /** A restored window: the margin on the tab it showed. */
+  async showTab(args: { tab: 'outline' | 'highlights' | 'links' | 'search' }) {
+    await loading.catch(() => {})
+    view.highlights.show(args.tab)
+  },
   /** The wikilink targets the vault has no note for. */
   wikiMissing(args: { targets: string[] }) { view.setMissingWikis(args.targets) },
   /** A short message from the app, where it would otherwise beep. */

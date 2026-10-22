@@ -287,6 +287,7 @@ export class ReaderView {
     this.appliedKey = lookKey
     const opts = () => ({ prefersDark: this.dark.matches, avgCharEm: this.avg })
     applySettings(this.root, s, this.tuning, opts())
+    this.outline.setDepth(s.outlineDepth ?? 3)
     // Recalibrate the measure only when something that changes character widths changed.
     const key = [getComputedStyle(this.els.doc).fontFamily, s.letterSpacing, s.wordSpacing, this.root.style.getPropertyValue('--weight')].join('|')
     if (key !== this.avgKey) {
