@@ -119,3 +119,15 @@ test('Look Up reports the selected words and where they sit', async ({ page }) =
   expect(t.size).toBeGreaterThan(10)
   expect(t.x).toBeGreaterThan(0)
 })
+
+test('notes already in a file are read on opening, short or long, and a comment across the opening slice stays hidden', async ({ page }) => {
+  await open(page, 'A ==marked==%%kept note%% word.')
+  await expect(page.locator('#doc mark.hl')).toHaveAttribute('data-note', 'kept note')
+  // Long enough to be painted in a slice and parsed in pieces, with a comment spanning where the slice ends.
+  const para = 'Filler paragraph with enough words in it to take up some room on the page. '.repeat(3)
+  const long = ['# Long', ...Array(150).fill(para), '%%', '# Hidden heading', ...Array(150).fill(para), '%%', '## After', ...Array(400).fill(para), 'End ==mark==%%far note%%.'].join('\n\n')
+  await page.evaluate(async (t) => { await (window as any).leading.load({ text: t, imageBase: null }) }, long)
+  await expect(page.locator('#doc mark.hl')).toHaveAttribute('data-note', 'far note')
+  await expect(page.locator('#doc')).not.toContainText('Hidden heading')
+  await expect(page.locator('#doc h2')).toHaveText(['After'])
+})

@@ -423,7 +423,58 @@ enum SelfTest {
                     page.callAsyncJavaScript("document.querySelector('#doc li.task-list-item input').click(); return true", arguments: [:], in: nil, in: .page) { _ in
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                             check("Ticking a task while reading writes [x] into the file", doc.text.contains("- [x] Walkaround"))
-                            pdfCheck(check: check, done: done)
+                            vaultChecks(folder: folder, check: check, done: done)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Obsidian's extras in the real app: a block embedded by its ^id, the note it lives in
+    /// listing the note that links to it, a comment hidden, a highlight's note, and Read Aloud speaking.
+    private static func vaultChecks(folder: URL, check: @escaping (String, Bool) -> Void, done: @escaping () -> Void) {
+        try? "# Block\n\nFirst line, not wanted.\n\nA named line. ^named\n\nA ==marked==%%kept note%% word and %%hidden%% text #tagged.\n".write(to: folder.appendingPathComponent("Block.md"), atomically: true, encoding: .utf8)
+        try? "# Refs\n\n- Back to [[Block#^named|the line]]\n\n![[Block#^named]]\n".write(to: folder.appendingPathComponent("Refs.md"), atomically: true, encoding: .utf8)
+        func open(_ name: String, _ then: @escaping (DocumentWindowController, ReaderWebView) -> Void) {
+            NSDocumentController.shared.openDocument(withContentsOf: folder.appendingPathComponent(name), display: true) { opened, _, _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    guard let wc = opened?.windowControllers.first as? DocumentWindowController else { check("\(name) opens", false); return done() }
+                    then(wc, wc.pageForTests)
+                }
+            }
+        }
+        open("Refs.md") { _, page in
+            page.callAsyncJavaScript("return document.querySelector('#doc .note-embed')?.textContent ?? ''", arguments: [:], in: nil, in: .page) { r in
+                let t = (try? r.get()) as? String ?? ""
+                check("![[Block#^named]] shows that block alone (\(t.trimmingCharacters(in: .whitespacesAndNewlines)))", t.contains("A named line.") && !t.contains("First line") && !t.contains("^named"))
+                open("Block.md") { wc, page in
+                    let js = "return [document.querySelector('#doc').textContent.includes('hidden'), document.querySelector('#doc mark.hl')?.dataset.note ?? '', document.querySelectorAll('#doc .tag').length]"
+                    page.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { r in
+                        let v = (try? r.get()) as? [Any] ?? []
+                        check("A %%comment%% is not on the page", v.first as? Bool == false)
+                        check("A highlight's note is read from the comment after it", (v.count > 1 ? v[1] as? String : nil) == "kept note")
+                        check("A #tag is drawn as a tag", (v.count > 2 ? v[2] as? Int : nil) == 1)
+                        wc.leadingShowLinks(nil)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            page.callAsyncJavaScript("return Array.from(document.querySelectorAll('#outline .link-item')).map(a => a.textContent)", arguments: [:], in: nil, in: .page) { r in
+                                let names = (try? r.get()) as? [String] ?? []
+                                check("Show Links lists the note that links here (\(names.joined(separator: ", ")))", names == ["Refs"])
+                                wc.leadingShowLinks(nil)
+                                wc.leadingReadAloud(nil)
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                                    let item = NSMenuItem(title: "", action: #selector(DocumentWindowController.leadingReadAloud(_:)), keyEquivalent: "")
+                                    _ = wc.validateMenuItem(item)
+                                    let speaking = item.title == "Stop Reading Aloud"
+                                    page.callAsyncJavaScript("return !!(window.CSS && CSS.highlights && CSS.highlights.has('read-aloud'))", arguments: [:], in: nil, in: .page) { r in
+                                        check("Read Aloud speaks (\(item.title)), and the page marks the word being read", speaking && (try? r.get()) as? Bool == true)
+                                        wc.leadingReadAloud(nil)
+                                        _ = wc.validateMenuItem(item)
+                                        check("Read Aloud stops when asked again", item.title == "Read Aloud")
+                                        pdfCheck(check: check, done: done)
+                                    }
+                                }
+                            }
                         }
                     }
                 }

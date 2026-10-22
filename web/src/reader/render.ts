@@ -132,10 +132,11 @@ export class Reader {
     document.documentElement.dataset.large = String(this.sectioned)
     this.sections = []
     this.sectionStart = []
-    // A comment can span paragraphs and headings, so it is blanked from the whole
-    // file before it is cut into pieces; parsing a blanked piece blanks nothing more.
-    if (src.includes('%%')) src = hideComments(src).text
-    const prefix = cutPrefix(src)
+    // A comment can span paragraphs and headings, so cuts are chosen in a copy with
+    // comments blanked (offsets unchanged): no piece then starts or ends inside one.
+    // The pieces themselves are the real text, so a highlight's note is still read.
+    const cuttable = src.includes('%%') ? hideComments(src).text : src
+    const prefix = src.slice(0, cutPrefix(cuttable).length)
 
     if (prefix.length === src.length) {
       const r = renderMarkdown(src, opts)
@@ -169,7 +170,7 @@ export class Reader {
 
     // 2. Parse the whole file in pieces, in parallel.
     const workers = warmPool()
-    const chunks = splitForParallel(src, workers.length * 2)
+    const chunks = splitForParallel(cuttable, workers.length * 2)
     const defs = referenceDefinitions(src)
     const results: (PieceResult | undefined)[] = new Array(chunks.length)
     const outline: OutlineItem[] = []
