@@ -195,3 +195,58 @@ test('polish: Next Theme passes through Auto, a missing note is dimmed and says 
   await page.evaluate(() => (window as any).leading.notice({ text: 'From the app.' }))
   await expect(page.locator('.notice')).toHaveText('From the app.')
 })
+
+test('polish: the margin works from the keyboard and reads well to VoiceOver', async ({ page }) => {
+  await open(page, '# One\n\n## Inside\n\n### Deep target\n\nA ==yellow== and <mark class="hltr-green">green</mark> word.\n\n# Two\n\nEnd.')
+  // Tabs are a tab list: ← and → move between them.
+  await page.evaluate(() => (window as any).leading.command({ name: 'toggleOutline' }))
+  const tabs = page.locator('#outline .side-tabs')
+  await expect(tabs).toHaveAttribute('role', 'tablist')
+  await expect(tabs.locator('[role=tab][aria-selected=true]')).toHaveText('Outline')
+  // ⌥⌘O puts the cursor in the filter first; then Shift-Tab back to the tabs.
+  await expect(page.locator('#outline > input')).toBeFocused()
+  // (The page gives back focus WebKit hands a new window until a key is pressed.)
+  await page.keyboard.press('Shift')
+  await tabs.locator('[data-tab=outline]').focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(tabs.locator('[aria-selected=true]')).toHaveText('Highlights')
+  await expect(tabs.locator('[data-tab=highlights]')).toBeFocused()
+  // Highlights are focusable links, named with their colour; ↓ moves on.
+  const items = page.locator('#outline a.hl-item')
+  await expect(items).toHaveCount(2)
+  await expect(items.first()).toHaveAttribute('aria-label', 'Yellow: yellow')
+  await items.first().focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(items.nth(1)).toBeFocused()
+  await expect(page.locator('#outline .hl-chip[data-c=green]')).toHaveAttribute('aria-label', 'Only green highlights')
+  // The outline's filter opens a collapsed section to show a match inside it, and says when nothing matches.
+  await page.keyboard.press('Home')
+  await tabs.locator('[data-tab=outline]').click()
+  // Fold arrows are buttons for the keyboard too.
+  await page.locator('#outline .fold').first().focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('#outline li > ol').first()).toBeHidden()
+  await expect(page.locator('#outline .fold').first()).toHaveAttribute('aria-expanded', 'false')
+  await page.evaluate(() => (window as any).leading.view.outline.focusForTyping())
+  await page.keyboard.type('deep')
+  await expect(page.locator('#outline a', { hasText: 'Deep target' })).toBeVisible()
+  await page.keyboard.type('zzz')
+  await expect(page.locator('#outline > p.empty')).toBeVisible()
+  // Esc clears the filter first; the outline stays open.
+  await page.keyboard.press('Escape')
+  await expect(page.locator('#outline > input')).toHaveValue('')
+  await expect(page.locator('#outline')).toBeVisible()
+  // Text in the margin is at least 4.5:1 against the paper, on every theme.
+  for (const theme of ['light', 'sepia', 'dark']) {
+    await page.evaluate((t) => (window as any).leading.view.change({ theme: t }), theme)
+    // Colours ease into a new theme, so poll until they settle.
+    await expect.poll(() => page.evaluate(() => {
+      // color-mix() computes to color(srgb r g b), channels 0–1; rgb() has 0–255.
+      const rgb = (s: string) => s.match(/[\d.]+/g)!.slice(0, 3).map((v) => Number(v) * (s.startsWith('color(') ? 255 : 1))
+      const lum = (c: number[]) => { const [r, g, b] = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }); return 0.2126 * r + 0.7152 * g + 0.0722 * b }
+      const fg = lum(rgb(getComputedStyle(document.getElementById('outline')!).color))
+      const bg = lum(rgb(getComputedStyle(document.body).backgroundColor))
+      return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05)
+    }), { message: theme }).toBeGreaterThanOrEqual(4.5)
+  }
+})

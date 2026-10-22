@@ -70,6 +70,8 @@ view.readAloud.onStop = () => post({ type: 'stopSpeaking' })
 view.links.request = () => post({ type: 'backlinks' })
 // A note that links here opens as any link to a file does.
 view.links.onOpen = (href) => post({ type: 'openLink', href })
+// …or at the line where it does: openAt with no words just goes there.
+view.links.onOpenAt = (href, s) => post({ type: 'openAt', href, query: '', s })
 view.search.request = (query, id) => post({ type: 'vaultSearch', query, id })
 view.onWikiTargets = (targets) => post({ type: 'wikiTargets', targets })
 view.onSideTab = (tab) => post({ type: 'sideTab', tab })
@@ -194,7 +196,7 @@ document.addEventListener('click', (e) => {
   speechWord(args: { seg: number; loc: number; len: number }) { view.readAloud.word(args.seg, args.loc, args.len) },
   speechEnded() { view.readAloud.ended() },
   /** The notes that link here, found by the app for the margin's Links tab. */
-  backlinks(args: { items: { name: string; href: string; lines: string[] }[]; saved: boolean }) { view.links.set(args.items, args.saved) },
+  backlinks(args: { items: { name: string; href: string; lines: string[]; offsets?: number[] }[]; saved: boolean }) { view.links.set(args.items, args.saved) },
   /** The app's answer to a vault search. */
   searchResults(args: { id: number; items: SearchNote[]; notes: number; total: number; state: SearchState }) {
     view.search.set(args.id, args.items, { notes: args.notes, total: args.total }, args.state)

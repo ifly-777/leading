@@ -7,6 +7,14 @@ public struct Backlink: Equatable {
     public var name: String { url.deletingPathExtension().lastPathComponent }
     /// Each line holding a link, trimmed for a glance (at most a few)
     public let lines: [String]
+    /// Where each of those lines starts in the note's text, in UTF-16 units, as the page counts
+    public var offsets: [Int] = []
+
+    public init(url: URL, lines: [String], offsets: [Int] = []) {
+        self.url = url
+        self.lines = lines
+        self.offsets = offsets
+    }
 }
 
 public enum Backlinks {

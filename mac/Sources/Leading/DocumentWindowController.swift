@@ -377,7 +377,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let found = Vaults.shared.index(for: url)?.backlinks(to: url) ?? Backlinks.find(to: url)
-            let items: [[String: Any]] = found.map { ["name": $0.name, "href": $0.url.absoluteString, "lines": $0.lines] }
+            let items: [[String: Any]] = found.map { ["name": $0.name, "href": $0.url.absoluteString, "lines": $0.lines, "offsets": $0.offsets] }
             DispatchQueue.main.async { self?.web?.call("backlinks", ["items": items, "saved": true]) }
         }
     }

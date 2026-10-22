@@ -543,6 +543,14 @@ export class ReaderView {
    * the block holding source offset `s` (where the result's line starts).
    */
   findAt(query: string, s: number): void {
+    // No words: just go to the line (a note opened from the Links tab, where it links here).
+    if (!query) {
+      if (s < 0) return
+      this.rememberPlace()
+      if (this.mode === 'edit') this.editor?.scrollToPos(s)
+      else if (this.lastResult) this.placeAt(s, this.lastResult)
+      return
+    }
     if (this.mode === 'edit' || !this.lastResult) { this.find.query = query; this.find.open(); return }
     const blocks = this.lastResult.blocks
     const b = s < 0 ? -1 : blocks.findIndex((x) => x.s >= 0 && x.e >= s)
@@ -556,7 +564,9 @@ export class ReaderView {
   private toggleSide(tab: 'highlights' | 'links'): void {
     if (this.settings.outlineOpen && this.highlights.tab === tab) { void this.change({ outlineOpen: false }); return }
     this.highlights.show(tab)
-    if (!this.settings.outlineOpen) void this.change({ outlineOpen: true })
+    // ⌥⌘L puts the keyboard in the list, as ⌥⌘O puts it in the outline's filter.
+    const ready = this.settings.outlineOpen ? Promise.resolve() : this.change({ outlineOpen: true })
+    if (tab === 'highlights') void ready.then(() => this.highlights.focusList())
   }
 
   /** View › Read Aloud: from the selection, or from the top of the window; again to stop. */

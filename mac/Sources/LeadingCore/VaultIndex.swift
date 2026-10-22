@@ -323,8 +323,8 @@ public final class VaultIndex: @unchecked Sendable {
                 if hit { lines.append(l.line) }
             }
             if lines.isEmpty { continue }
-            let shown = lines.prefix(3).compactMap { e.raw[$0] }.map { Backlinks.clean($0) }
-            found.append((Backlink(url: e.url, lines: shown), e.depth))
+            let kept = lines.prefix(3).filter { e.raw[$0] != nil }
+            found.append((Backlink(url: e.url, lines: kept.map { Backlinks.clean(e.raw[$0]!) }, offsets: kept.map { e.offsets[$0] }), e.depth))
         }
         return found.sorted { $0.1 != $1.1 ? $0.1 < $1.1 : $0.0.name.localizedStandardCompare($1.0.name) == .orderedAscending }.map(\.0)
     }

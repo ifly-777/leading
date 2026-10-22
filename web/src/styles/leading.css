@@ -275,7 +275,8 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
   max-height: calc(100% - 7rem); overflow-y: auto; scrollbar-width: none;
   font-family: var(--font-body); font-size: var(--outline-size); line-height: 1.45;
   font-variant-numeric: lining-nums;
-  color: var(--muted);
+  /* Muted alone is 3.5:1 on sepia; a third of the text colour makes 4.8:1 or more on every paper. */
+  color: color-mix(in srgb, var(--fg) 30%, var(--muted));
   opacity: var(--outline-idle);
   transition: opacity 0.25s ease, color 0.25s ease;
 }
@@ -300,12 +301,14 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .outline .fold { float: left; margin-left: -0.6em; width: 0.9em; text-align: center; opacity: 0; cursor: pointer; transition: opacity 0.15s, transform 0.15s; }
 .outline:hover .fold { opacity: 0.7; }
 .outline .fold.closed { transform: rotate(-90deg); opacity: 0.7; }
+.outline .fold:focus-visible { opacity: 1; outline: 2px solid var(--link); outline-offset: 1px; border-radius: 2px; }
+.outline > p.empty { margin: 0 0 0.4em; }
 .outline .empty { font-style: italic; padding-left: 0.75em; }
 /* Four tabs share the margin: the outline, the file's highlights, links here, and search. */
 .outline .side-tabs { display: flex; flex-wrap: wrap; gap: 0.25em 0.8em; margin: 0 0 0.6em 0.75em; }
 .outline .side-tabs button { all: unset; cursor: pointer; color: var(--muted); padding-bottom: 0.1em; border-bottom: 1px solid transparent; }
 .outline .side-tabs button:disabled { opacity: 0.4; cursor: default; }
-.outline .side-tabs button[aria-pressed="true"] { color: var(--fg); border-bottom-color: color-mix(in srgb, var(--fg) 45%, transparent); }
+.outline .side-tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: color-mix(in srgb, var(--fg) 45%, transparent); }
 .outline:is([data-tab="highlights"], [data-tab="links"], [data-tab="search"]) > ol, .outline:is([data-tab="highlights"], [data-tab="links"], [data-tab="search"]) > input { display: none; }
 .outline:not([data-tab="links"]) > .links-side { display: none; }
 .outline:not([data-tab="search"]) > .search-side { display: none; }
@@ -317,13 +320,18 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .outline .search-count { color: var(--muted); font-size: 0.85em; font-variant-numeric: tabular-nums; }
 .outline .links-status { margin: 0 0 0.5em 0.75em; font-size: 0.88em; font-style: italic; }
 .outline .links-side li { margin: 0 0 0.7em; }
+.outline .links-side[aria-busy="true"] ol { opacity: 0.55; transition: opacity 0.2s; }
+.outline .links-side a.link-line { white-space: normal; padding-top: 0; padding-bottom: 0; color: inherit; }
 .outline a.link-item { white-space: normal; color: var(--fg); }
 .outline .link-line { margin: 0.1em 0 0 0.75em; font-size: 0.85em; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 /* Read Aloud's current word (reader/read-aloud.ts), drawn over the text without an element. */
 ::highlight(read-aloud) { background-color: color-mix(in srgb, var(--link) 22%, transparent); }
 .outline:not([data-tab="highlights"]) > .hl-side { display: none; }
 .outline .hl-chips { display: flex; align-items: center; gap: 7px; margin: 0 0 0.5em 0.75em; }
-.outline .hl-chip { all: unset; width: 10px; height: 10px; border-radius: 50%; cursor: pointer; background: var(--c); box-shadow: inset 0 0 0 1px var(--cl); }
+.outline .hl-chip { all: unset; position: relative; width: 10px; height: 10px; border-radius: 50%; cursor: pointer; background: var(--c); box-shadow: inset 0 0 0 1px var(--cl); }
+/* A 24 px target round each 10 px dot. */
+.outline .hl-chip::before { content: ""; position: absolute; inset: -7px; }
+.outline :is(.side-tabs button, .hl-chip, .hl-copy, a):focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 2px; }
 .outline .hl-chip[hidden] { display: none; }
 .outline .hl-chip[aria-pressed="true"] { outline: 1.5px solid var(--cl); outline-offset: 2px; }
 .outline .hl-copy { all: unset; margin-left: auto; cursor: pointer; color: var(--muted); font-size: 0.9em; }
@@ -460,6 +468,15 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 
 @media (prefers-reduced-motion: reduce) {
   .outline, .outline a, .outline .fold, .doc details summary::before, .doc details summary::after, .progress-left { transition: none; }
+  /* A block reached by a link: marked steadily for the moment, without the fade. */
+  .doc .block-target { animation: none; background: color-mix(in srgb, var(--hl-yellow) 45%, transparent); }
+}
+
+/* Increase Contrast: the margin at full strength, and Focus dims less. */
+@media (prefers-contrast: more) {
+  .outline { opacity: 1; color: color-mix(in srgb, var(--fg) 60%, var(--muted)); }
+  :root[data-focus="on"] .doc [data-b], :root[data-focus="on"] .doc [data-b]:is(ul, ol) > li { opacity: 0.6; }
+  .outline .side-tabs button[aria-selected="true"] { border-bottom-width: 2px; }
 }
 
 /* ---- Find bar: slim, top right, clear of the text column on wide windows -- */
