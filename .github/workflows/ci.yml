@@ -36,6 +36,10 @@ jobs:
       - name: Swift tests
         working-directory: mac
         run: swift test
+      # The vault index's timings, optimised as the app is (the step above builds for debugging).
+      - name: Vault index timing (optimised)
+        working-directory: mac
+        run: swift test -c release -Xswiftc -enable-testing --filter VaultIndexScaleTests
       - name: Build the app
         run: scripts/build-app.sh
       - name: Self-test

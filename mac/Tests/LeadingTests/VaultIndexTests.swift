@@ -129,8 +129,9 @@ final class VaultIndexTests: XCTestCase {
 }
 
 /// A vault of 10,000 notes: how long the index takes to build, how long a search takes,
-/// and how much text the index holds. Printed for docs/decisions.md; the limits are
-/// loose, since shared CI machines vary.
+/// and how much text the index holds. Printed for docs/decisions.md. Times mean
+/// something only when optimised (CI runs this again with `-c release`), so the
+/// limits apply only there, and are loose, since shared CI machines vary.
 final class VaultIndexScaleTests: XCTestCase {
     func testTenThousandNotes() throws {
         let fm = FileManager.default
@@ -155,18 +156,25 @@ final class VaultIndexScaleTests: XCTestCase {
         let build = Date().timeIntervalSince(t)
         let memory = index.textBytes
         t = Date()
-        let common = index.search("harbour lamp")
+        let common = index.search("note")
         let rare = index.search("kumquat")
         let search = Date().timeIntervalSince(t) / 2
         t = Date()
         let links = index.backlinks(to: vault.appendingPathComponent("Folder 3/Note 123.md"))
         let backlinks = Date().timeIntervalSince(t)
-        print(String(format: "VAULT SCALE: 10,000 notes built in %.2f s, %ld MB of text held; a search takes %.0f ms; links to a note %.0f ms",
-                     build, memory / 1_000_000, search * 1000, backlinks * 1000))
+        #if DEBUG
+        let build_ = "debug build, unoptimised"
+        #else
+        let build_ = "optimised build"
+        #endif
+        print("VAULT SCALE (\(build_)): " + String(format: "10,000 notes built in %.2f s, %ld MB of text held; a search takes %.0f ms; links to a note %.0f ms",
+                                                   build, memory / 1_000_000, search * 1000, backlinks * 1000))
         XCTAssertEqual(rare.hits.map(\.name), ["Note 7777"])
-        XCTAssertGreaterThan(common.notes, 1000)
+        XCTAssertEqual(common.notes, 10_000)
         XCTAssertFalse(links.isEmpty)
-        XCTAssertLessThan(build, 60)
-        XCTAssertLessThan(search, 1)
+        #if !DEBUG
+        XCTAssertLessThan(build, 20)
+        XCTAssertLessThan(search, 0.5)
+        #endif
     }
 }
