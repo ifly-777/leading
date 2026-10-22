@@ -1,5 +1,6 @@
 import AppKit
 import PDFKit
+import LeadingCore
 
 /// LEADING_SELFTEST=1: after the first document paints, send the View and
 /// Find menu commands through the normal responder chain, then ask the page
