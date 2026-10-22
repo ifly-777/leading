@@ -363,18 +363,18 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 }
 .progress-left.on { opacity: 1; transition-duration: 0.15s; }
 /* A footnote shown beside its reference (click a footnote number). */
-.fn-pop {
+.fn-pop, .hl-note {
   position: absolute; z-index: 12; box-sizing: border-box; max-height: 40vh; overflow-y: auto;
   padding: 0.75em 1em; background: var(--bg); color: var(--fg);
   border: 1px solid var(--rule); border-radius: 8px;
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 28px rgb(0 0 0 / 0.12);
 }
-:root[data-theme="dark"] .fn-pop { box-shadow: 0 8px 28px rgb(0 0 0 / 0.45); }
-.fn-pop[hidden] { display: none; }
+:root[data-theme="dark"] :is(.fn-pop, .hl-note) { box-shadow: 0 8px 28px rgb(0 0 0 / 0.45); }
+.fn-pop[hidden], .hl-note[hidden] { display: none; }
 .fn-pop .fn-body { width: auto; margin: 0; padding: 0; font-size: calc(var(--size) * 0.88); }
 .fn-pop .fn-body > :last-child { margin-bottom: 0; }
 .fn-pop .fn-num { color: var(--muted); margin-right: 0.5em; font-size: 0.85em; font-variant-numeric: lining-nums; }
-[data-mode="edit"] .fn-pop { display: none; }
+[data-mode="edit"] :is(.fn-pop, .hl-note) { display: none; }
 /* A linked note's preview: the same card, a little taller, its headings scaled down. */
 .link-pop { max-height: 50vh; }
 .link-pop .fn-body :is(h1, h2, h3) { font-size: 1.1em; margin-top: 0.6em; }

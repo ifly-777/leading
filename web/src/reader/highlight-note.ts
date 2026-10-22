@@ -25,7 +25,8 @@ export class HighlightNote {
 
   constructor(private win: HTMLElement, private scroller: HTMLElement) {
     this.el = document.createElement('aside')
-    this.el.className = 'fn-pop hl-note'
+    // The footnote card's look, under its own name.
+    this.el.className = 'hl-note'
     this.el.hidden = true
     this.text = document.createElement('p')
     this.text.className = 'hl-note-text'

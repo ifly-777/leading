@@ -186,7 +186,8 @@ function splitText(parent: Parent, src: string): void {
       const a = m.index!, b = a + m[0].length
       hits.push({ a, b, make: () => makeWikiLink(k, a, b, m[1] === '!', m[2], src) })
     }
-    for (const m of v.matchAll(TAG)) {
+    // Most text has no #; the pattern looks behind at every position, so skip it there.
+    if (v.includes('#')) for (const m of v.matchAll(TAG)) {
       const a = m.index!, b = a + m[0].length
       if (hits.some((h) => a < h.b && b > h.a)) continue
       hits.push({ a, b, make: () => ({ type: 'tag', children: [sliceText(k, a, b, src)], position: sliceText(k, a, b, src).position } as any) })

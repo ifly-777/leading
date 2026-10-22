@@ -73,8 +73,11 @@ export function parse(file: string): Root {
 function pos(node: any): Properties {
   const p = node.position
   // A block named with ^id (plugins/inline.ts) carries it, whichever handler draws it.
+  if (!p) return {}
+  const out: Properties = { dataS: p.start.offset, dataE: p.end.offset }
   const id = node.data?.hProperties?.id
-  return p ? { dataS: p.start.offset, dataE: p.end.offset, ...(id ? { id } : {}) } : {}
+  if (id) out.id = id
+  return out
 }
 
 function el(tagName: string, properties: Properties, children: ElementContent[]): Element {

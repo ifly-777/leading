@@ -27,7 +27,7 @@ html, body { height: 100%; overflow: hidden; }
    between the margins the print settings give. */
 @media print {
   html, body, #window, #scroller { height: auto !important; overflow: visible !important; contain: none !important; position: static !important; }
-  #window::before, #outline, #editor, #frame, .findbar, .scroll-ticks, .search-layer, .progress-rule, .progress-left, .fn-pop, .format-popover, .notice, .lightbox { display: none !important; }
+  #window::before, #outline, #editor, #frame, .findbar, .scroll-ticks, .search-layer, .progress-rule, .progress-left, .fn-pop, .hl-note, .format-popover, .notice, .lightbox { display: none !important; }
   :root { --size: 11pt !important; --col-w: auto !important; --col-left: 0 !important; }
   .doc { width: auto !important; margin: 0 !important; padding: 0 !important; }
   /* Long documents skip laying out far-away parts on screen; paper needs every part. */
