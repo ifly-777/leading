@@ -18,7 +18,9 @@ Links to This Note used to count `[[Name]]` for every note called Name. A click 
 Encrypted notes are indexed by name only. Their text is never read, and since the index reads only the disk, a note unlocked in a window never reaches it either.
 
 ### Measured
-`VaultIndexScaleTests` builds a synthetic vault of 10,000 notes of about 2.5 KB each and prints how long the index takes to build, a search, and a lookup of links to a note. Figures from GitHub's macOS runner follow once it has run.
+`VaultIndexScaleTests` builds a synthetic vault of 10,000 notes of about 2.5 KB each (25 MB) and times the index; CI runs it optimised, as the app is built. On GitHub's macOS runner (Apple Silicon, three cores): the index builds in 0.8 s and holds 39 MB of text (each line as shown, and folded); a search takes 64 ms, averaged over one word every note holds and one only a single note holds; links to a note take 28 ms.
+
+The first version took 10.8 s to build and 1.2 s to search. Two causes, both gone: lines were cut by Characters, which finds grapheme clusters across the whole file, and every line was tested for every pattern; and search broke ties, of which a word in every note makes thousands, by a name worked out from each URL and compared with `localizedStandardCompare`. Lines are now cut at newline bytes, one pass over each line's bytes says which patterns it needs, files are read in parallel, and ties go to the folded path the index already holds.
 
 ## Leading 1.6
 
