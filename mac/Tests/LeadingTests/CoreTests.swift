@@ -53,6 +53,12 @@ final class PathTests: XCTestCase {
     func testScriptLinksAreNeverFollowed() {
         XCTAssertEqual(Paths.linkTarget("javascript:alert(1)", document: doc), .none)
         XCTAssertEqual(Paths.linkTarget("data:text/html,x", document: doc), .none)
+        XCTAssertEqual(Paths.linkTarget("leading://app/app.html", document: doc), .none)
+    }
+
+    func testOtherAppsLinksAreHandedOn() {
+        XCTAssertEqual(Paths.linkTarget("obsidian://open?vault=V&file=Note", document: doc), .otherApp(URL(string: "obsidian://open?vault=V&file=Note")!))
+        XCTAssertEqual(Paths.linkTarget("zotero://select/items/ABC", document: doc), .otherApp(URL(string: "zotero://select/items/ABC")!))
     }
 
     func testRelativeMarkdownLinksOpenInLeading() {

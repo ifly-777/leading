@@ -273,13 +273,23 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         Places.shared?.set(Place(s: s, dy: dy), for: url)
     }
 
+    /// A short notice on the page, where a beep would leave the reader guessing.
+    private func say(_ text: String) {
+        if let web { web.call("notice", ["text": text]) } else { NSSound.beep() }
+    }
+
     func pageOpenLink(_ href: String) {
         switch Paths.linkTarget(href, document: doc?.fileURL) {
         case .external(let url): NSWorkspace.shared.open(url)
         case .document(let url): open(url, heading: Paths.fragment(href))
         case .otherFile(let url):
-            if FileManager.default.fileExists(atPath: url.path) { NSWorkspace.shared.open(url) } else { NSSound.beep() }
-        case .none: NSSound.beep()
+            if FileManager.default.fileExists(atPath: url.path) { NSWorkspace.shared.open(url) } else { say("There is no file “\(url.lastPathComponent)” there.") }
+        case .otherApp(let url):
+            // Only if some app on this Mac opens such links; otherwise macOS would show its own error.
+            if NSWorkspace.shared.urlForApplication(toOpen: url) != nil { NSWorkspace.shared.open(url) }
+            else { say("No app on this Mac opens \(url.scheme ?? "these"): links.") }
+        case .none:
+            if doc?.fileURL == nil, !href.hasPrefix("#") { say("Save this note to follow its links.") } else { NSSound.beep() }
         }
     }
 
@@ -295,7 +305,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 found = Paths.wikiTarget(target, document: from)
             }
             DispatchQueue.main.async {
-                guard let found else { NSSound.beep(); return }
+                guard let found else {
+                    self?.say(from == nil ? "Save this note to follow its links." : "No note named “\(target)” in this vault.")
+                    return
+                }
                 switch Paths.classifyFile(found) {
                 case .document(let url): self?.open(url, heading: heading)
                 default: NSWorkspace.shared.open(found)
@@ -320,7 +333,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // A note that is already open is brought forward where it is.
         NSDocumentController.shared.openDocument(withContentsOf: url, display: false) { [weak self] opened, alreadyOpen, error in
             guard let opened else {
-                if let error { NSApp.presentError(error) } else { NSSound.beep() }
+                if let error { NSApp.presentError(error) } else { self?.say("Leading could not open “\(url.lastPathComponent)”.") }
                 return
             }
             if alreadyOpen || !opened.windowControllers.isEmpty {
@@ -390,6 +403,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     func pageOpenAt(_ href: String, query: String, s: Int) {
         guard let url = URL(string: href), url.isFileURL else { return }
         open(url) { wc in wc.findAt(query, s: s) }
+    }
+
+    /// Which of the notes this one's wikilinks name the vault lacks, so the page can dim those links.
+    /// Only once the vault's index is ready: until then nothing is dimmed, and the page asks again when it is.
+    func pageWikiTargets(_ targets: [String]) {
+        guard let url = doc?.fileURL, let index = Vaults.shared.index(for: url) else { return }
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let missing = targets.filter { index.resolve($0, from: url) == nil }
+            DispatchQueue.main.async { self?.web?.call("wikiMissing", ["targets": missing]) }
+        }
     }
 
     /// The page waits for its document to finish loading before it finds.

@@ -166,3 +166,32 @@ test('Search Vault: asks the app, marks the words, moves by keyboard, and opens 
   await page.evaluate((id) => (window as any).leading.searchResults({ id, items: [], notes: 0, total: 0, state: 'indexing' }), id)
   await expect(page.locator('#outline .search-side .links-status')).toHaveText('Reading the vault…')
 })
+
+test('polish: Next Theme passes through Auto, a missing note is dimmed and says so, and empty commands explain themselves', async ({ page }) => {
+  const sent = await open(page, '# Top\n\nSee [[Here]] and [[Nowhere|gone]].\n\nPlain words.')
+  const theme = () => page.evaluate(() => (window as any).leading.view.settings.theme)
+  const start = await theme()
+  const seen = [start]
+  for (let i = 0; i < 4; i++) { await page.evaluate(() => (window as any).leading.command({ name: 'cycleTheme' })); seen.push(await theme()) }
+  expect(seen).toContain('system')
+  expect(seen.at(-1)).toBe(start)
+  // The page asks which link targets exist; the app answers with the missing ones.
+  await expect.poll(() => sent.find((m) => m.type === 'wikiTargets')?.targets).toEqual(['Here', 'Nowhere'])
+  await page.evaluate(() => (window as any).leading.wikiMissing({ targets: ['Nowhere'] }))
+  await expect(page.locator('#doc .wikilink.wiki-missing')).toHaveText(['gone'])
+  await expect(page.locator('#doc .wikilink:not(.wiki-missing)')).toHaveText(['Here'])
+  const shown = await page.evaluate(async () => {
+    const v = (window as any).leading.view
+    const link = document.querySelector('#doc .wiki-missing')!
+    await v.preview.show(link, 'Nowhere', undefined)
+    return document.querySelector('.link-pop .link-missing')?.textContent
+  })
+  expect(shown).toBe('No note named “Nowhere” in this vault.')
+  // A heading that is not there, and a highlight with nothing selected, say so.
+  await page.evaluate(() => (window as any).leading.jumpToHeading({ text: 'Missing part' }))
+  await expect(page.locator('.notice')).toHaveText('There is no heading “Missing part” in this note.')
+  await page.evaluate(() => { window.getSelection()?.removeAllRanges(); return (window as any).leading.command({ name: 'highlightYellow' }) })
+  await expect(page.locator('.notice')).toHaveText('Select some text to highlight.')
+  await page.evaluate(() => (window as any).leading.notice({ text: 'From the app.' }))
+  await expect(page.locator('.notice')).toHaveText('From the app.')
+})

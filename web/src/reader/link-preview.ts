@@ -84,7 +84,17 @@ export class LinkPreview {
 
   /** Show the preview for `link` now (also for tests). */
   async show(link: Element, target: string, heading: string | undefined, gen = ++this.gen): Promise<boolean> {
-    const copy = await this.embeds.note(target, heading, MAX_BLOCKS)
+    // A wikilink the vault has no note for: say so, rather than show nothing.
+    let copy: Element | null
+    if (link.classList.contains('wiki-missing')) {
+      copy = document.createElement('div')
+      const p = document.createElement('p')
+      p.className = 'link-missing'
+      p.textContent = `No note named “${target}” in this vault.`
+      copy.append(p)
+    } else {
+      copy = await this.embeds.note(target, heading, MAX_BLOCKS)
+    }
     if (gen !== this.gen) return false
     // Nothing to show for this link: close the card an earlier link left open.
     if (!copy || !link.isConnected) { this.hide(); return false }

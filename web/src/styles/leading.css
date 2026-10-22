@@ -111,6 +111,8 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .doc a { color: var(--link); text-decoration-line: underline; text-decoration-thickness: 1px; text-underline-offset: 0.18em; text-decoration-color: color-mix(in srgb, var(--link) 40%, transparent); }
 .doc a:hover { text-decoration-color: var(--link); }
 .doc .wikilink { color: var(--link); text-decoration: underline dotted 1px color-mix(in srgb, var(--link) 60%, transparent); text-underline-offset: 0.2em; cursor: pointer; }
+.doc .wikilink.wiki-missing { color: var(--muted); text-decoration-style: dashed; text-decoration-color: color-mix(in srgb, var(--muted) 70%, transparent); }
+.link-pop .link-missing { font-style: italic; color: var(--muted); margin: 0; }
 .doc .wikilink.embed::before { content: "\21B3\2009"; color: var(--muted); }
 
 .doc img { display: block; max-width: 100%; height: auto; margin: 1.4em auto; border-radius: 3px; }
@@ -302,6 +304,7 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 /* Four tabs share the margin: the outline, the file's highlights, links here, and search. */
 .outline .side-tabs { display: flex; flex-wrap: wrap; gap: 0.25em 0.8em; margin: 0 0 0.6em 0.75em; }
 .outline .side-tabs button { all: unset; cursor: pointer; color: var(--muted); padding-bottom: 0.1em; border-bottom: 1px solid transparent; }
+.outline .side-tabs button:disabled { opacity: 0.4; cursor: default; }
 .outline .side-tabs button[aria-pressed="true"] { color: var(--fg); border-bottom-color: color-mix(in srgb, var(--fg) 45%, transparent); }
 .outline:is([data-tab="highlights"], [data-tab="links"], [data-tab="search"]) > ol, .outline:is([data-tab="highlights"], [data-tab="links"], [data-tab="search"]) > input { display: none; }
 .outline:not([data-tab="links"]) > .links-side { display: none; }

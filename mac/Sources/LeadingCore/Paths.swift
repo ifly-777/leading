@@ -8,6 +8,9 @@ public enum LinkTarget: Equatable {
     case document(URL)
     /// Any other local file, for the app that owns it
     case otherFile(URL)
+    /// A link for another app (obsidian://, zotero://, x-devonthink-item://, tel:), handed
+    /// to whichever app claims its scheme, if any does
+    case otherApp(URL)
     /// Nothing sensible to do
     case none
 }
@@ -22,7 +25,9 @@ public enum Paths {
         if let url = URL(string: trimmed), let scheme = url.scheme?.lowercased() {
             if ["http", "https", "mailto"].contains(scheme) { return .external(url) }
             if scheme == "file" { return classifyFile(url) }
-            return .none // javascript:, data: and the rest: never followed
+            // Never followed: what would run code or load content in the page, and our own scheme.
+            if ["javascript", "vbscript", "data", "blob", "about", "leading"].contains(scheme) { return .none }
+            return .otherApp(url)
         }
         guard let base = document?.deletingLastPathComponent() else { return .none }
         // Relative path, possibly with a #fragment we cannot honour across files.

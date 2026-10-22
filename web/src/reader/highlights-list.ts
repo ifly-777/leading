@@ -120,6 +120,17 @@ export class HighlightsList {
     this.onTab(tab)
   }
 
+  /**
+   * While editing, only the outline: the other tabs list the rendered page,
+   * which is hidden then, as the View menu already has it.
+   */
+  setEditing(editing: boolean): void {
+    for (const b of this.tabs.querySelectorAll<HTMLButtonElement>('button')) {
+      if (b.dataset.tab !== 'outline') b.disabled = editing
+    }
+    if (editing && this.tab !== 'outline') this.show('outline')
+  }
+
   /** The page changed: list it again, soon (highlights often come several at once). */
   invalidate(): void {
     if (this.tab !== 'highlights') return
