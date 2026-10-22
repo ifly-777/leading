@@ -73,12 +73,21 @@ public final class VaultIndex: @unchecked Sendable {
         var links: [Link] = []
     }
 
+    /// The chunks a parallel build reads, each filled by one worker.
+    private final class Parts: @unchecked Sendable {
+        private var items: [[Entry]]
+        private let lock = NSLock()
+        init(count: Int) { items = Array(repeating: [], count: count) }
+        var count: Int { items.count }
+        var all: [[Entry]] { lock.lock(); defer { lock.unlock() }; return items }
+        func set(_ i: Int, _ e: [Entry]) { lock.lock(); items[i] = e; lock.unlock() }
+    }
+
     private let lock = NSLock()
     /// Keyed by `rel`
     private var entries: [String: Entry] = [:]
     /// Folded file name ("walden.md") to the `rel`s carrying it
     private var byName: [String: Set<String>] = [:]
-    private var foldCache: [UInt32: [UInt8]] = [:]
 
     public init(root: URL, limit: Int = 50_000, maxBytes: Int = 4_000_000) {
         let resolved = root.standardizedFileURL.resolvingSymlinksInPath()
@@ -101,10 +110,16 @@ public final class VaultIndex: @unchecked Sendable {
 
     /// Read the whole vault. Safe to call again; the index is replaced in one step.
     public func build() {
-        var fresh: [String: Entry] = [:]
-        for url in walk(root) {
-            if let e = read(url) { fresh[e.rel] = e }
+        let files = walk(root)
+        // Read in parallel, in chunks: reading and folding is nearly all of the time.
+        let chunk = 64
+        let parts = Parts(count: (files.count + chunk - 1) / chunk)
+        DispatchQueue.concurrentPerform(iterations: parts.count) { i in
+            let found = files[(i * chunk)..<min(files.count, (i + 1) * chunk)].compactMap { self.read($0) }
+            parts.set(i, found)
         }
+        var fresh: [String: Entry] = [:]
+        for part in parts.all { for e in part { fresh[e.rel] = e } }
         lock.lock()
         entries = fresh
         byName = [:]
@@ -209,9 +224,7 @@ public final class VaultIndex: @unchecked Sendable {
         let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey])
         guard values?.isRegularFile == true, let rel = relative(url.standardizedFileURL), !rel.isEmpty else { return nil }
         let size = values?.fileSize ?? 0
-        lock.lock()
-        var cache = foldCache
-        lock.unlock()
+        var cache: [UInt32: [UInt8]] = [:]
         var e = Entry(url: url.standardizedFileURL, rel: rel, depth: rel.split(separator: "/").count, modified: values?.contentModificationDate, size: size,
                       name: Fold.bytes(url.deletingPathExtension().lastPathComponent, cache: &cache))
         e.markdown = ["md", "markdown"].contains(url.pathExtension.lowercased())
@@ -221,13 +234,17 @@ public final class VaultIndex: @unchecked Sendable {
         let text = TextFile.decode(data).text
         let folder = url.deletingLastPathComponent()
         var offset = 0
-        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            defer { offset += line.utf16.count + 1 }
-            let s = String(line)
-            let shown = Backlinks.clean(s, keepComments: true, limit: nil)
+        // Lines are cut at "\n" bytes: splitting by Characters would find grapheme
+        // clusters across the whole file, several times slower.
+        for bytes in text.utf8.split(separator: 10, omittingEmptySubsequences: false) {
+            let s = String(Substring(bytes))
+            defer { offset += s.utf16.count + 1 }
+            let marks = Backlinks.Marks(s)
+            if marks.blank { continue }
+            let shown = Backlinks.clean(s, keepComments: true, limit: nil, marks: marks)
             if shown.isEmpty { continue }
             let n = e.lines.count
-            if s.contains("[[") || s.contains("](") {
+            if marks.links {
                 let ns = s as NSString
                 let full = NSRange(location: 0, length: ns.length)
                 var found = false
@@ -249,9 +266,6 @@ public final class VaultIndex: @unchecked Sendable {
             e.lines.append(shown)
             e.offsets.append(offset)
         }
-        lock.lock()
-        if cache.count > foldCache.count { foldCache = cache }
-        lock.unlock()
         return e
     }
 
@@ -316,14 +330,14 @@ public final class VaultIndex: @unchecked Sendable {
     }
 
     /// Notes holding `query`, folded as Find folds it. A note whose name holds the
-    /// words comes first; then the most occurrences; then nearest the top; then by name.
+    /// words comes first; then the most occurrences; then nearest the top; then by path.
     public func search(_ query: String, limit: Int = 100, linesPerNote: Int = 3) -> SearchResult {
         let q = Fold.bytes(query.trimmingCharacters(in: .whitespacesAndNewlines))
         guard !q.isEmpty else { return SearchResult(hits: [], notes: 0, total: 0) }
         lock.lock()
         let notes = entries.values.filter(\.markdown)
         lock.unlock()
-        var scored: [(hit: SearchHit, depth: Int)] = []
+        var scored: [(hit: SearchHit, depth: Int, rel: String)] = []
         var total = 0
         for e in notes {
             let at = Fold.find(q, in: e.folded)
@@ -341,13 +355,14 @@ public final class VaultIndex: @unchecked Sendable {
                 lines.append(SearchLine(text: e.lines[lo], offset: e.offsets[lo]))
                 if lines.count == linesPerNote { break }
             }
-            scored.append((SearchHit(url: e.url, lines: lines, count: at.count, inName: inName), e.depth))
+            scored.append((SearchHit(url: e.url, lines: lines, count: at.count, inName: inName), e.depth, e.rel))
         }
         scored.sort { a, b in
             if a.hit.inName != b.hit.inName { return a.hit.inName }
             if a.hit.count != b.hit.count { return a.hit.count > b.hit.count }
             if a.depth != b.depth { return a.depth < b.depth }
-            return a.hit.name.localizedStandardCompare(b.hit.name) == .orderedAscending
+            // The folded path: cheap to compare, and by name within a folder.
+            return a.rel < b.rel
         }
         return SearchResult(hits: scored.prefix(limit).map(\.hit), notes: scored.count, total: total)
     }
