@@ -10,7 +10,10 @@
 import type { HighlightSlot } from '../core/nodes'
 import { SLOTS as HIGHLIGHT_SLOTS } from '../core/highlight-colors'
 
-export interface HighlightEntry { mark: HTMLElement; slot: HighlightSlot; text: string; s: number; e: number; heading: string | null }
+/** The margin's three tabs: the outline, this file's highlights, and the notes that link to it. */
+export type SideTab = 'outline' | 'highlights' | 'links'
+
+export interface HighlightEntry { mark: HTMLElement; slot: HighlightSlot; text: string; s: number; e: number; heading: string | null; note?: string }
 
 /**
  * Top-level highlights on the page, in order, with the heading of the section
@@ -31,6 +34,7 @@ export function collectHighlights(doc: HTMLElement, correction: (b: number) => n
     out.push({
       mark: el, slot: (el.dataset.c as HighlightSlot) || 'yellow', s: Number(el.dataset.s) + d, e: Number(el.dataset.e) + d,
       text: (el.textContent ?? '').replace(/\s+/g, ' ').trim(), heading,
+      ...(el.dataset.note ? { note: el.dataset.note } : {}),
     })
   }
   return out
@@ -46,6 +50,8 @@ export function highlightsMarkdown(entries: HighlightEntry[], source: string, ti
       lines.push('', `## ${heading ?? 'Before the first heading'}`, '')
     }
     lines.push(`- ${source.slice(e.s, e.e).replace(/\s*\n\s*/g, ' ')}`)
+    // The note goes under its highlight, as text: a comment would hide it in the paste.
+    if (e.note) lines.push(`    - ${e.note}`)
   }
   return lines.join('\n') + '\n'
 }
@@ -59,7 +65,9 @@ export class HighlightsList {
   private only: HighlightSlot | null = null
   private timer = 0
   /** Which tab the margin shows. */
-  tab: 'outline' | 'highlights' = 'outline'
+  tab: SideTab = 'outline'
+  /** The margin turned to a tab (the view fetches the Links tab's notes then). */
+  onTab: (tab: SideTab) => void = () => {}
   /** Hooks into the view. */
   collect: () => HighlightEntry[] = () => []
   onJump: (mark: HTMLElement) => void = () => {}
@@ -68,7 +76,7 @@ export class HighlightsList {
   constructor(private panel: HTMLElement) {
     this.tabs = document.createElement('div')
     this.tabs.className = 'side-tabs'
-    for (const [id, label] of [['outline', 'Outline'], ['highlights', 'Highlights']] as const) {
+    for (const [id, label] of [['outline', 'Outline'], ['highlights', 'Highlights'], ['links', 'Links']] as const) {
       const b = document.createElement('button')
       b.type = 'button'
       b.dataset.tab = id
@@ -104,11 +112,12 @@ export class HighlightsList {
     this.show('outline')
   }
 
-  show(tab: 'outline' | 'highlights'): void {
+  show(tab: SideTab): void {
     this.tab = tab
     this.panel.dataset.tab = tab
     for (const b of this.tabs.querySelectorAll<HTMLElement>('button')) b.setAttribute('aria-pressed', String(b.dataset.tab === tab))
     if (tab === 'highlights') this.refresh()
+    this.onTab(tab)
   }
 
   /** The page changed: list it again, soon (highlights often come several at once). */
@@ -159,6 +168,12 @@ export class HighlightsList {
       a.title = e.text
       a.addEventListener('click', (ev) => { ev.preventDefault(); if (e.mark.isConnected) this.onJump(e.mark) })
       li.append(a)
+      if (e.note) {
+        const n = document.createElement('p')
+        n.className = 'hl-item-note'
+        n.textContent = e.note
+        li.append(n)
+      }
       this.list.append(li)
     }
   }

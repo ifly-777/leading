@@ -1,5 +1,6 @@
 // Inline transforms on the mdast tree: Obsidian highlights (==text== and
-// <mark …>), wikilinks and all-caps runs.
+// <mark …>), wikilinks, all-caps runs, what is left of comments, and block
+// ids (^id).
 //
 // These run on the parsed tree instead of inside the tokenizer, which keeps
 // them small. Every node they create gets exact source positions through the
@@ -9,6 +10,7 @@ import type { Parent, PhrasingContent, Text, Html, Root } from 'mdast'
 import { align, sourceRange, type OffsetMap } from '../sourcemap'
 import { colorFromMarkTag, slotForColor } from '../highlight-colors'
 import type { Highlight, HighlightSlot, WikiLink } from '../nodes'
+import { commentAt, type Comment } from '../comments'
 
 const maps = new WeakMap<Text, OffsetMap>()
 
@@ -152,6 +154,9 @@ function pairEquals(parent: Parent, src: string): void {
 
 const WIKILINK = /(!?)\[\[([^\[\]\n]+?)\]\]/g
 // A run of words with at least two capitals each, e.g. "NASA", "ICAO METAR".
+// Obsidian's tags: #word after a space or at the start, letters, digits, _ - and /
+// for nesting, but not digits alone ("#1" is a number, not a tag).
+const TAG = /(?<=^|\s)#(?![\p{N}]+(?![\p{L}\p{N}_\-\/]))[\p{L}\p{N}_\-\/]+/gu
 const CAPS = /\b[A-Z0-9]*[A-Z][A-Z0-9]*[A-Z][A-Z0-9]*(?:[ \-][A-Z0-9]*[A-Z][A-Z0-9]*[A-Z][A-Z0-9]*)*\b/g
 
 function makeWikiLink(t: Text, a: number, b: number, embed: boolean, inner: string, src: string): WikiLink {
@@ -161,15 +166,16 @@ function makeWikiLink(t: Text, a: number, b: number, embed: boolean, inner: stri
   const alias = bar >= 0 ? inner.slice(bar + 1).trim() : undefined
   const hash = ref.indexOf('#')
   const target = (hash >= 0 ? ref.slice(0, hash) : ref).trim()
-  const heading = hash >= 0 ? ref.slice(hash + 1).replace(/^\^/, '').trim() : undefined
-  const display = alias || [target, heading].filter(Boolean).join(' › ')
+  // A block reference keeps its caret ([[Note#^id]]), so it is never taken for a heading.
+  const heading = hash >= 0 ? ref.slice(hash + 1).trim() : undefined
+  const display = alias || [target, heading?.replace(/^\^/, '')].filter(Boolean).join(' › ')
   return { type: 'wikilink', target, heading, alias, embed, display, position: { start: point(s), end: point(e) } }
 }
 
 function splitText(parent: Parent, src: string): void {
-  if (parent.type === 'caps' || parent.type === 'link' || parent.type === 'linkReference') return
+  if (parent.type === 'caps' || (parent.type as string) === 'tag' || parent.type === 'link' || parent.type === 'linkReference') return
   const kids = parent.children as PhrasingContent[]
-  if (!kids.some((k) => k.type === 'text' && k.position && (k.value.includes('[[') || /[A-Z].*[A-Z]/.test(k.value)))) return
+  if (!kids.some((k) => k.type === 'text' && k.position && (k.value.includes('[[') || k.value.includes('#') || /[A-Z].*[A-Z]/.test(k.value)))) return
   const out: PhrasingContent[] = []
   for (const k of kids) {
     if (k.type !== 'text' || !k.position) { out.push(k); continue }
@@ -179,6 +185,11 @@ function splitText(parent: Parent, src: string): void {
     for (const m of v.matchAll(WIKILINK)) {
       const a = m.index!, b = a + m[0].length
       hits.push({ a, b, make: () => makeWikiLink(k, a, b, m[1] === '!', m[2], src) })
+    }
+    for (const m of v.matchAll(TAG)) {
+      const a = m.index!, b = a + m[0].length
+      if (hits.some((h) => a < h.b && b > h.a)) continue
+      hits.push({ a, b, make: () => ({ type: 'tag', children: [sliceText(k, a, b, src)], position: sliceText(k, a, b, src).position } as any) })
     }
     for (const m of v.matchAll(CAPS)) {
       const a = m.index!, b = a + m[0].length
@@ -201,7 +212,7 @@ function splitText(parent: Parent, src: string): void {
 // Nodes whose content is literal and must never be transformed.
 const LITERAL = new Set(['code', 'inlineCode', 'html', 'yaml', 'math', 'inlineMath'])
 
-export function transformInline(root: Root, src: string): void {
+export function transformInline(root: Root, src: string, comments: Comment[] = []): void {
   const walk = (node: Parent) => {
     if (LITERAL.has(node.type)) return
     pairMarkHtml(node)
@@ -216,4 +227,97 @@ export function transformInline(root: Root, src: string): void {
     }
   }
   walk(root)
+  if (comments.length) {
+    dropComments(root, src, comments)
+    attachNotes(root, comments)
+  }
+  if (src.includes('^')) blockIds(root, src)
+}
+
+// ---------------------------------------------------------------------------
+// Comments: blanked before parsing (comments.ts); the blanks are cut out here.
+
+function dropComments(node: Parent, src: string, comments: Comment[]): void {
+  if (LITERAL.has(node.type)) return
+  const out: any[] = []
+  let changed = false
+  for (const k of node.children as any[]) {
+    if (k.type === 'text' && k.position) {
+      const p = k.position
+      // Only text that overlaps a comment is cut.
+      const first = commentAt(comments, p.start.offset) ?? comments.find((c) => c.s >= p.start.offset && c.s < p.end.offset)
+      if (first) {
+        changed = true
+        const m = textMap(k, src)
+        let a = -1
+        for (let i = 0; i <= k.value.length; i++) {
+          const inside = i < k.value.length && commentAt(comments, m.from[i]) !== null
+          if (!inside && i < k.value.length) { if (a < 0) a = i; continue }
+          if (a >= 0) { out.push(sliceText(k, a, i, src)); a = -1 }
+        }
+        continue
+      }
+    }
+    if ('children' in k) dropComments(k, src, comments)
+    // A paragraph that held nothing but a comment goes.
+    if (k.type === 'paragraph' && !k.children.length) { changed = true; continue }
+    out.push(k)
+  }
+  if (changed) node.children = out
+  if ((node as any).type === 'callout') {
+    const holder = { type: 'paragraph', children: (node as any).title } as Parent
+    dropComments(holder, src, comments)
+    ;(node as any).title = holder.children
+  }
+}
+
+/** A comment written straight after a highlight is its note. */
+function attachNotes(root: Parent, comments: Comment[]): void {
+  const byStart = new Map(comments.map((c) => [c.s, c]))
+  const walk = (node: any) => {
+    if (node.type === 'highlight') {
+      const c = byStart.get(node.position?.end.offset)
+      if (c) node.note = { text: c.body.trim(), s: c.s, e: c.e }
+    }
+    if (node.children) for (const k of node.children) walk(k)
+    if (node.title) for (const k of node.title) walk(k)
+  }
+  walk(root)
+}
+
+// ---------------------------------------------------------------------------
+// Block ids: "^id" at the end of a block names it, so [[Note#^id]] can link to
+// it and ![[Note#^id]] embed it. A table, quotation or list is named by a
+// "^id" on its own line just after it. The id becomes the element's id on the
+// page, caret and all, and is not shown.
+
+const BLOCK_ID = /(^|\s)\^([A-Za-z0-9-]+)[ \t]*$/
+
+function setId(node: any, id: string): void {
+  node.data = { ...node.data, hProperties: { ...node.data?.hProperties, id: '^' + id } }
+}
+
+function blockIds(node: Parent, src: string): void {
+  if (LITERAL.has(node.type)) return
+  const kids = node.children as any[]
+  for (let i = 0; i < kids.length; i++) {
+    const k = kids[i]
+    if (k.type !== 'paragraph') { if ('children' in k) blockIds(k, src); continue }
+    const last = k.children[k.children.length - 1]
+    if (last?.type !== 'text') continue
+    const m = BLOCK_ID.exec(last.value)
+    if (!m) continue
+    if (m.index === 0 && !m[1] && k.children.length === 1) {
+      // "^id" alone: it names the block before it.
+      if (i > 0 && kids[i - 1].type !== 'heading') { setId(kids[i - 1], m[2]); kids.splice(i--, 1) }
+      continue
+    }
+    // The text before it, without the space that separated them.
+    const cut = last.value.slice(0, m.index).replace(/\s+$/, '').length
+    if (cut && last.position) k.children[k.children.length - 1] = sliceText(last, 0, cut, src)
+    else if (cut) last.value = last.value.slice(0, cut)
+    else k.children.pop()
+    // In a list, the item is the block Obsidian names.
+    setId(node.type === 'listItem' ? node : k, m[2])
+  }
 }

@@ -42,7 +42,7 @@ The disk image has the same steps, with pictures, as *If macOS blocks Leading.pd
 
 Five typefaces, three bundled and two from macOS: Literata, Atkinson Hyperlegible Next, iA Writer Quattro, New York and Charter. You can also use any font you have. You set the size, line spacing, column width, paragraph style and justification, in light, sepia or dark. A note set in another language hyphenates by that language’s rules: add `lang: de`, or any language code, to its properties. The defaults were chosen with a typography prototype that ships with the source, and the page passes WCAG’s text-spacing test.
 
-Leading remembers where you stopped in every file. An outline of the headings sits in the margin. Footnotes open beside their number, so you never leave the line. Three optional aids help with long reads: a hairline that shows how far through you are and the time left, **Focus** (⌘D), which dims all but the paragraph you are reading, and **Page by Page**, which moves a screen at a time.
+Leading remembers where you stopped in every file. An outline of the headings sits in the margin. Footnotes open beside their number, so you never leave the line. Three optional aids help with long reads: a hairline that shows how far through you are and the time left, **Focus** (⌘D), which dims all but the paragraph you are reading, and **Page by Page**, which moves a screen at a time. **Read Aloud** (⌥⌘R) reads from where you are in your Mac’s Spoken Content voice, marking each word as it goes. Click a picture or diagram to see it full window, and press ⌃⌘D on a word to look it up.
 
 <p align="center">
 <img src="docs/screenshots/outline.png" alt="Dark theme, with the outline of headings beside the text" width="49%">
@@ -54,10 +54,11 @@ Leading remembers where you stopped in every file. An outline of the headings si
 
 Open any note in your vault, where it already lives. There is nothing to import.
 
-- **Wikilinks** open their note as a new tab, at the heading they name. Leading finds the note anywhere in the vault, as Obsidian does.
-- **Embeds:** `![[picture.png]]` and `![[Note#Heading]]` appear in place.
+- **Wikilinks** open their note as a new tab, at the heading or block they name (`[[Note#^id]]`). Leading finds the note anywhere in the vault, as Obsidian does.
+- **Links to this note** (⌥⌘B): the margin lists every note in the vault that links here, with the line where it does.
+- **Embeds:** `![[picture.png]]`, `![[Note#Heading]]` and `![[Note#^block]]` appear in place.
 - **Link previews:** rest the pointer on a link to glance at the note, or at the section it points to.
-- **Callouts, properties and highlights** look as they should. Highlights are read and written in Obsidian’s own `==text==` and Highlightr’s coloured `<mark>`, so the two apps always agree.
+- **Callouts, properties, tags and highlights** look as they should, and `%%comments%%` stay out of sight. Highlights are read and written in Obsidian’s own `==text==` and Highlightr’s coloured `<mark>`, so the two apps always agree.
 
 <p align="center"><img src="docs/screenshots/vault.png" alt="Dark theme: a note about Marcus Aurelius with yellow, green and blue highlights, a passage embedded from another note, and the list of highlights in the margin" width="880"></p>
 <p align="center"><sub>A vault note in dark: a section embedded from another note, and its highlights listed by section in the margin</sub></p>
@@ -76,7 +77,8 @@ All of it is bundled with the app, so nothing is fetched from the internet.
 ### Mark it up, take it with you
 
 - **Highlight** with ⇧⌘H, or ⌥⌘1 to ⌥⌘5 for five colours. Each highlight is written into the file. A careless drag still takes whole words, so marking a passage never shifts the text around it.
-- **Show Highlights** (⌥⌘L) lists every highlight beside the text, by section. Click one to go there. Copy puts them all on the clipboard as Markdown, colours included.
+- **Notes on highlights:** click a highlight and write a few words on it. The note is kept in the file as a comment after the highlight, so Obsidian hides it too.
+- **Show Highlights** (⌥⌘L) lists every highlight beside the text, by section, with its note. Click one to go there. Copy puts them all on the clipboard as Markdown, colours included.
 - **Copy as Quote** (⇧⌘C) copies the selection as a Markdown quotation, with a link back to the note and section it came from.
 - **Tick tasks** while reading. ⌘Z undoes a tick, as it undoes a highlight.
 
@@ -112,6 +114,7 @@ Obsidian’s reading view, Typora and their kin are editors first, and their rea
 | Copy as Quote | ⇧⌘C |
 | Outline · go back after a jump | ⌥⌘O · ⌘[ |
 | Focus · reading progress | ⌘D · ⌥⌘P |
+| Read aloud · links to this note · look up | ⌥⌘R · ⌥⌘B · ⌃⌘D |
 | Bigger · smaller · next theme | ⌘+ · ⌘− · ⌥⌘T |
 | Narrower or wider column | ⌥⌘[ · ⌥⌘] |
 | Find · Find and Replace | ⌘F · ⌥⌘F |

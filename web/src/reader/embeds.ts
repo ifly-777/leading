@@ -96,8 +96,12 @@ function renderCopy(text: string, imageBase: string | null, heading: string | un
   return body
 }
 
-/** Keep only the section under the named heading: from it to the next heading at its level or above. */
+/**
+ * Keep only the section under the named heading: from it to the next heading
+ * at its level or above. A name starting with ^ is a block id: that block alone.
+ */
 function keepSection(body: HTMLElement, name: string): boolean {
+  if (name.startsWith('^')) return keepBlock(body, name)
   const want = slugify(name)
   const headings = Array.from(body.querySelectorAll<HTMLElement>(':scope > :is(h1,h2,h3,h4,h5,h6)'))
   const h = headings.find((x) => x.id === want || slugify(x.textContent ?? '') === want)
@@ -109,6 +113,22 @@ function keepSection(body: HTMLElement, name: string): boolean {
     keep.push(n)
   }
   body.replaceChildren(...keep)
+  return true
+}
+
+/** Keep only the block named ^id; a list item keeps a list around it, so it still reads as one. */
+function keepBlock(body: HTMLElement, id: string): boolean {
+  const el = body.querySelector<HTMLElement>(`[id="${CSS.escape(id)}"]`)
+  if (!el) return false
+  if (el.tagName === 'LI' && el.parentElement) {
+    const list = el.parentElement.cloneNode(false) as HTMLElement
+    // An ordered list keeps the item's own number.
+    if (list.tagName === 'OL') list.setAttribute('start', String(Array.from(el.parentElement.children).indexOf(el) + Number(el.parentElement.getAttribute('start') ?? 1)))
+    list.append(el)
+    body.replaceChildren(list)
+  } else {
+    body.replaceChildren(el)
+  }
   return true
 }
 

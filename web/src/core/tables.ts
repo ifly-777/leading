@@ -57,5 +57,5 @@ function annotate(table: Table): void {
   // An empty first row is the usual way to write a table without a header in
   // Markdown (GFM requires one); show no header at all rather than an empty one.
   const headless = rows[0]?.every((c) => !c.trim())
-  table.data = { ...table.data, hProperties: { className: ['cols-' + info.length, ...(headless ? ['headless'] : [])] } } as any
+  table.data = { ...table.data, hProperties: { ...(table.data as any)?.hProperties, className: ['cols-' + info.length, ...(headless ? ['headless'] : [])] } } as any
 }

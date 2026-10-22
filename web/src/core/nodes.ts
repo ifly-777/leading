@@ -11,6 +11,8 @@ export interface Highlight extends Parent {
   syntax: 'eq' | 'mark'
   /** The literal colour from the file, kept so unknown colours are not lost */
   hex?: string
+  /** A note on it: the %%comment%% written straight after it (core/comments.ts) */
+  note?: { text: string; s: number; e: number }
   children: PhrasingContent[]
 }
 
@@ -28,6 +30,12 @@ export interface Caps extends Parent {
   children: PhrasingContent[]
 }
 
+/** An Obsidian #tag in the text */
+export interface Tag extends Parent {
+  type: 'tag'
+  children: PhrasingContent[]
+}
+
 export interface Callout extends Parent {
   type: 'callout'
   calloutType: string
@@ -36,7 +44,7 @@ export interface Callout extends Parent {
 }
 
 declare module 'mdast' {
-  interface PhrasingContentMap { highlight: Highlight; wikilink: WikiLink; caps: Caps }
-  interface RootContentMap { highlight: Highlight; wikilink: WikiLink; caps: Caps; callout: Callout }
+  interface PhrasingContentMap { highlight: Highlight; wikilink: WikiLink; caps: Caps; tag: Tag }
+  interface RootContentMap { highlight: Highlight; wikilink: WikiLink; caps: Caps; tag: Tag; callout: Callout }
   interface BlockContentMap { callout: Callout }
 }

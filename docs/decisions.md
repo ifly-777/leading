@@ -2,6 +2,29 @@
 
 Short notes on choices that are not obvious from the code, and what testing showed. Newest first.
 
+## Leading 1.6
+
+### Comments are blanked before parsing, not removed after it
+An Obsidian comment, `%%…%%`, can run across paragraphs, headings and fences, so it has to be found before the parser cuts the file into blocks: afterwards its two halves would sit in different blocks with the text between them already parsed. `core/comments.ts` finds them first (skipping fences, inline code and front matter, where `%%` is literal) and gives the parser a copy with every comment character turned into a space and every line break kept. Offsets and lines are unchanged, so highlights, edits and the remembered place still land on the right characters of the file. The spaces left inside a line are then cut from the tree (`plugins/inline.ts`), so `a%%x%%b` reads "ab", as in Obsidian. One trap: a comment that opens a line and is followed by text becomes four or more spaces, which Markdown reads as code. The first blank there is a zero-width space instead, which the parser treats as text and the same cut removes. A long file is blanked whole before it is cut into pieces for the workers, so no piece starts inside a comment. An unclosed `%%` stays text: "100%% sure" is more likely than a comment running to the end of the file.
+
+### A note on a highlight is a comment after it
+Notes are written `==words==%%note%%`, straight after the highlight, with nothing between. Obsidian hides comments in reading view, so a note never shows there as stray text, and the file needs no second store. A footnote was the alternative and was rejected: it shows in Obsidian, and footnotes renumber. A note is kept on one line and cannot contain `%%`, which would close it early. Removing a highlight removes its note in the same edit, since a note left behind would be a comment attached to nothing. The dot marking a noted highlight is absolutely positioned at its place in the text, so adding a note never re-breaks the paragraph (see "A highlight must not move text", under "After 1.0.0").
+
+### Block ids are element ids, caret and all
+`^id` at the end of a paragraph or list item, or alone on the line after a table, quotation or code block, becomes that element's `id`, written with its caret (`id="^id"`). Headings take their ids from their text, so a caret can never collide with one, and `[[Note#^id]]` keeps its caret all the way to the page, where `jumpToHeading` sees it and looks for the element instead of a heading. A list item is named, not its list, as Obsidian does. A `^id` alone after a heading is left as text rather than rename the heading, whose id the outline relies on.
+
+### Tags are drawn, not followed
+`#tag` is set as a quiet label. Clicking one would need a search of the vault for every note with that tag, which is a notes manager's job; Leading lists links to the note it is showing (below), not notes by tag. A tag needs a space or the line's start before it, and something other than digits, so "#1" and "C#" are left alone.
+
+### Links to this note are found when asked
+The Links tab asks the app, which walks the vault (found as a wikilink finds it) and reads each Markdown file that mentions the note's name, keeping the lines with a `[[Name]]`, a `[[Folder/Name]]` or a Markdown link whose path leads to the note. It runs off the main thread, only while the tab is showing, and again each time it is shown, since other notes change while this one is open; no index is kept. A `[[Name]]` is counted even where two notes share a name, which Obsidian would resolve to the one nearest the vault's top: rare, and a false entry in a list is cheaper than a missed one.
+
+### Read Aloud marks words without an element
+The page hands the app one passage per paragraph, heading, list item or cell, from the top of the window or the selection, and `AVSpeechSynthesizer` speaks them with `prefersAssistiveTechnologySettings`, so the voice and rate are those of System Settings › Accessibility › Spoken Content. The app reports each word's range; the page marks it with the CSS Custom Highlight API, which paints over text without an element and so cannot move it. Where that API is missing (WebKit before Safari 17.2), the page still follows the voice, without the mark. White space is folded before speaking, and the page maps the reported ranges back through the fold.
+
+### Look Up uses AppKit's panel
+⌃⌘D asks the page for the selected words, their font and size, and where their first line's baseline sits, and calls `showDefinition(for:at:)`, so the panel is the system's own, drawn over the words. Force-click already worked, through WebKit.
+
 ## After 1.5.1
 
 ### New highlights take whole words

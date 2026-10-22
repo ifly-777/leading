@@ -27,8 +27,12 @@ The View menu holds the reading aids.
 - **Show Reading Progress** (⌥⌘P) draws a hairline showing how far through you are, and the time left at your pace.
 - **Focus** (⌘D) dims everything but the paragraph you are reading.
 - **Page by Page** moves a screen at a time. Space or → goes forward; ⇧Space or ← goes back. Page Up and Page Down work too.
+- **Read Aloud** (⌥⌘R) reads from the top of the window, or from the selection, in the voice set in System Settings › Accessibility › Spoken Content. The word being spoken is marked, and the page follows it. ⌥⌘R again stops. Code, formulas and diagrams are skipped.
+- **Show Links to This Note** (⌥⌘B) lists, in the margin, the notes in the vault that link here, with the line where each does. Click one to open it.
 - **Show as Plain Text** shows the file exactly as written, without Markdown formatting, until you close it.
 - **Enter Full Screen** (⌃⌘F) leaves only the page.
+
+Click a picture or a diagram to see it full window; click again or press Esc to return. To look up a word in the dictionary, select it and press ⌃⌘D, or force-click it.
 
 A table wider than the column scrolls sideways, with its first column pinned. Double-click a table to see it alone, full window; Esc returns. Right-click a table and choose Copy Table as CSV to take it to a spreadsheet.
 
@@ -262,6 +266,16 @@ Open any note in your vault where it lives. Leading finds the vault from the not
 
 A wikilink names a note without its folder or `.md`. Leading finds it anywhere in the vault, as Obsidian does, and opens it in a new tab. A `#` sends it to a heading; a bar gives the link its own text. Rest the pointer on a link for a moment to see a preview of the note, or of the section it names.
 
+A paragraph, list item or table can be given a name of its own, so a link can point straight at it. Put a caret and a name at the end of the paragraph or item, or on a line of its own after a table or quotation:
+
+```markdown
+Simplicity is mostly arithmetic. ^simple
+
+[[Walden notes#^simple]]
+```
+
+The name is not shown. Following the link brings that block to the top of the window and marks it for a moment; an embed or a preview shows that block alone.
+
 ### Embeds
 
 An exclamation mark before a wikilink puts the thing itself in the page.
@@ -293,6 +307,30 @@ A callout is a quotation whose first line names its kind in brackets. Text after
 
 Leading colours the kinds Obsidian does: note and info; tip and abstract; success; question; warning; failure, danger and bug; example; and quote. Obsidian’s other names for them work too: summary, tldr, hint, important, check, done, help, faq, caution, attention, fail, missing, error and cite. Any other kind takes the colour of a note.
 
+### Comments and tags
+
+```markdown
+Text the reader sees. %%A comment no one sees.%%
+
+%%
+A comment can run over
+several paragraphs.
+%%
+
+Filed under #reading and #books/fiction.
+```
+
+Text the reader sees. %%A comment no one sees.%%
+
+%%
+A comment can run over
+several paragraphs.
+%%
+
+Filed under #reading and #books/fiction.
+
+Anything between double percent signs is a comment: it stays in the file and never shows on the page, in print or in Quick Look. Inside code it is left alone. A tag is a word after a `#`, with no space; Leading shows it quietly, as a label.
+
 ### Highlights
 
 ```markdown
@@ -307,7 +345,9 @@ Leading writes highlights the way Obsidian and its Highlightr plugin do, so the 
 
 Select some text and press ⇧⌘H to highlight it in the colour you used last, or choose one: ⌥⌘1 yellow, ⌥⌘2 green, ⌥⌘3 blue, ⌥⌘4 pink, ⌥⌘5 orange. ⌥⌘0 removes a highlight. Yellow is written as `==text==`, the others as Highlightr’s `<mark>`. ⌘Z undoes a highlight. A highlight takes whole words: a selection that starts or ends partway through a word takes in all of it, with any punctuation attached, so the text never shifts. To highlight part of a word, select it in edit mode (⌘E).
 
-**Show Highlights** (⌥⌘L) lists every highlight in the margin, by section; click one to go there. **Copy All Highlights** (⌥⇧⌘C) puts them on the clipboard as Markdown, colours included.
+**Notes:** click a highlight and choose ✎ to write a note on it; Return keeps the note, Esc leaves it as it was. A small dot at the end of the highlight shows it has one, and clicking the highlight shows the note. Leading writes the note as a comment straight after the highlight, `==words==%%your note%%`, so Obsidian keeps it out of sight too. Removing the highlight removes its note; clearing the note's text removes just the note.
+
+**Show Highlights** (⌥⌘L) lists every highlight in the margin, by section, with its note; click one to go there. **Copy All Highlights** (⌥⇧⌘C) puts them on the clipboard as Markdown, colours and notes included.
 
 **Copy as Quote** (⇧⌘C) copies the selection as a Markdown quotation, with a link back to the note and the section it came from. Paste it into another note and the link leads home.
 
@@ -723,9 +763,12 @@ Leading has no account, collects nothing and sends nothing. It never loads anyth
 | Go back after following a link or heading | ⌘[ |
 | Show reading progress | ⌥⌘P |
 | Focus on the paragraph being read | ⌘D |
+| Read aloud, or stop | ⌥⌘R |
+| Show the notes that link here | ⌥⌘B |
+| Look up a word | ⌃⌘D |
 | Full screen | ⌃⌘F |
 | Next or previous screen, in Page by Page | Space or → · ⇧Space or ← |
-| Close a footnote, preview, outline or table view | Esc |
+| Close a footnote, preview, outline, table view or enlarged picture | Esc |
 | Go to a footnote’s note at the end | ⌥-click the number |
 
 ### Highlighting and copying

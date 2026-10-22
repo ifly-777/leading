@@ -23,6 +23,9 @@ type ToSwift =
   | { type: 'place'; s: number; dy: number }
   | { type: 'openWiki'; target: string; heading?: string }
   | { type: 'canGoBack'; can: boolean }
+  | { type: 'speak'; passages: string[]; lang: string }
+  | { type: 'stopSpeaking' }
+  | { type: 'backlinks' }
 
 const post = (m: ToSwift | { type: 'log'; text: string }) => (window as any).webkit?.messageHandlers?.leading?.postMessage(m)
 
@@ -57,6 +60,11 @@ view.onSettingsChanged = (settings) => post({ type: 'settings', settings })
 view.onPlace = (p) => post({ type: 'place', ...p })
 view.onCanGoBack = (can) => post({ type: 'canGoBack', can })
 view.onCopyText = (text) => post({ type: 'copy', text })
+view.readAloud.onSpeak = (passages, lang) => post({ type: 'speak', passages, lang })
+view.readAloud.onStop = () => post({ type: 'stopSpeaking' })
+view.links.request = () => post({ type: 'backlinks' })
+// A note that links here opens as any link to a file does.
+view.links.onOpen = (href) => post({ type: 'openLink', href })
 
 // The document being shown, so a heading jump that arrives with it waits for it.
 let loading: Promise<unknown> = Promise.resolve()
@@ -172,6 +180,13 @@ document.addEventListener('click', (e) => {
   },
   /** The whole current text: Swift asks for it if its copy ever disagrees. */
   text() { return view.editor?.exists ? view.editor.text : null },
+  /** Read Aloud: the app is speaking this word, or has stopped. */
+  speechWord(args: { seg: number; loc: number; len: number }) { view.readAloud.word(args.seg, args.loc, args.len) },
+  speechEnded() { view.readAloud.ended() },
+  /** The notes that link here, found by the app for the margin's Links tab. */
+  backlinks(args: { items: { name: string; href: string; lines: string[] }[]; saved: boolean }) { view.links.set(args.items, args.saved) },
+  /** Edit › Look Up: the selected words and where they are. */
+  lookUpTarget() { return view.lookUpTarget() },
   /** Right-click "Copy Table as CSV": the table under the pointer. */
   copyTableAsCSV() { if (view.tables.hovered) post({ type: 'copy', text: tableToCSV(view.tables.hovered) }) },
   /** For the measuring script and tests. */

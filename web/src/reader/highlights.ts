@@ -174,6 +174,11 @@ export class ReaderPalette {
   target: PaletteTarget | null = null
   /** The reader picked a colour (null: remove). */
   onPick: (slot: HighlightSlot | null, target: PaletteTarget) => void = () => {}
+  /** The reader asked to write a note on a highlight. */
+  onNote: (mark: HTMLElement) => void = () => {}
+  /** The palette came up over a target (the view shows a highlight's note beside it). */
+  onShow: (t: PaletteTarget) => void = () => {}
+  private noteButton: HTMLButtonElement
   /** Only while reading. */
   active = () => true
   private pointerDown = false
@@ -185,7 +190,20 @@ export class ReaderPalette {
     this.el.setAttribute('role', 'toolbar')
     this.el.setAttribute('aria-label', 'Highlight')
     this.buttons = paletteButtons((slot) => { if (this.target) this.onPick(slot, this.target) })
-    this.el.append(...this.buttons)
+    // A note belongs to a highlight that exists, so the pencil shows over highlights only.
+    this.noteButton = document.createElement('button')
+    this.noteButton.className = 'hl-note-btn'
+    this.noteButton.textContent = '✎'
+    const pickNote = (e: Event) => {
+      e.preventDefault()
+      const t = this.target
+      if (t?.kind !== 'mark') return
+      this.hide()
+      this.onNote(t.mark)
+    }
+    this.noteButton.addEventListener('mousedown', pickNote)
+    this.noteButton.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') pickNote(e) })
+    this.el.append(...this.buttons, this.noteButton)
     win.append(this.el)
 
     document.addEventListener('pointerdown', (e) => {
@@ -239,6 +257,12 @@ export class ReaderPalette {
   show(t: PaletteTarget): void {
     this.target = t
     showCurrent(this.buttons, this.slotsOf(t))
+    this.noteButton.hidden = t.kind !== 'mark'
+    if (t.kind === 'mark') {
+      const label = t.mark.dataset.note ? 'Change note' : 'Add a note'
+      this.noteButton.title = label
+      this.noteButton.setAttribute('aria-label', label)
+    }
     const rect = (t.kind === 'mark' ? t.mark.getClientRects()[0] : t.range.getClientRects()[0]) ?? (t.kind === 'mark' ? t.mark : t.range).getBoundingClientRect()
     const box = this.frame.getBoundingClientRect()
     this.el.hidden = false
@@ -248,6 +272,7 @@ export class ReaderPalette {
     this.el.style.left = left + 'px'
     // Below the line if there is no room above (under the title bar).
     this.el.style.top = (top < 44 ? rect.bottom - box.top + 8 : top) + 'px'
+    this.onShow(t)
   }
 
   hide(): void {

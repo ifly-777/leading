@@ -12,6 +12,7 @@ import { splitForParallel, referenceDefinitions, FENCE, nextFence } from '../cor
 import { topIn } from './geometry'
 import { SearchIndex } from '../core/search-index'
 import { DEFAULT_LANG } from '../core/lang'
+import { hideComments } from '../core/comments'
 
 export const PREVIEW_BYTES = 20_000
 export const LARGE_DOC = 300_000 // above this, far-away blocks skip layout
@@ -131,6 +132,9 @@ export class Reader {
     document.documentElement.dataset.large = String(this.sectioned)
     this.sections = []
     this.sectionStart = []
+    // A comment can span paragraphs and headings, so it is blanked from the whole
+    // file before it is cut into pieces; parsing a blanked piece blanks nothing more.
+    if (src.includes('%%')) src = hideComments(src).text
     const prefix = cutPrefix(src)
 
     if (prefix.length === src.length) {
@@ -380,6 +384,9 @@ export class Reader {
   }
 
   get complete(): boolean { return this.nextIndex >= this.pending.length }
+
+  /** Blocks parsed so far (painted or waiting to be). */
+  get blockCount(): number { return this.pending.length }
 
   // -------------------------------------------------------------------------
   // Small changes in place (a highlight, or undoing one)

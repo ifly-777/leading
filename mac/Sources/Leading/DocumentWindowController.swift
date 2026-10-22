@@ -23,6 +23,16 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private let aaPopover = NSPopover()
     /// The outline button stays pressed while the outline is showing.
     private var outlineButton: NSButton?
+    /// View › Read Aloud: made on first use.
+    private lazy var speaker: Speaker = {
+        let s = Speaker()
+        s.onWord = { [weak self] seg, loc, len in
+            DispatchQueue.main.async { self?.web?.call("speechWord", ["seg": seg, "loc": loc, "len": len]) }
+        }
+        s.onEnd = { [weak self] in DispatchQueue.main.async { self?.web?.call("speechEnded") } }
+        return s
+    }()
+    private var speakerMade = false
 
     private var doc: MarkdownDocument? { document as? MarkdownDocument }
     /// The window's page, for the self-test only.
@@ -101,6 +111,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func documentLocked() {
         guard let doc else { return }
+        if speakerMade { speaker.stop() }
         if aaPopover.isShown { aaPopover.close() }
         if let page = web {
             page.host = nil
@@ -306,6 +317,26 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func pageCanGoBack(_ can: Bool) { canGoBack = can }
 
+    func pageSpeak(_ passages: [String], language: String?) {
+        speakerMade = true
+        speaker.speak(passages, language: language)
+    }
+
+    func pageStopSpeaking() { if speakerMade { speaker.stop() } }
+
+    /// The margin's Links tab: notes in the vault that link here, found off the main thread.
+    func pageWantsBacklinks() {
+        guard let url = doc?.fileURL else {
+            web?.call("backlinks", ["items": [[String: Any]](), "saved": false])
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let found = Backlinks.find(to: url)
+            let items: [[String: Any]] = found.map { ["name": $0.name, "href": $0.url.absoluteString, "lines": $0.lines] }
+            DispatchQueue.main.async { self?.web?.call("backlinks", ["items": items, "saved": true]) }
+        }
+    }
+
     // MARK: Menu commands
 
     private func command(_ name: String) { web?.call("command", ["name": name]) }
@@ -340,6 +371,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingToggleSmartTyping(_ sender: Any?) { SettingsStore.shared.settings.smartTyping.toggle() }
     @objc func leadingBack(_ sender: Any?) { command("back") }
     @objc func leadingShowHighlights(_ sender: Any?) { command("showHighlights") }
+    @objc func leadingShowLinks(_ sender: Any?) { command("showLinks") }
+    @objc func leadingReadAloud(_ sender: Any?) {
+        if speakerMade && speaker.isSpeaking { speaker.stop() } else { command("readAloud") }
+    }
+    @objc func leadingLookUp(_ sender: Any?) { web?.lookUpSelection() }
     @objc func leadingCopyHighlights(_ sender: Any?) { command("copyHighlights") }
     @objc func leadingCopyQuote(_ sender: Any?) { command("copyQuote") }
     @objc func leadingPageBreak(_ sender: Any?) { command("pageBreak") }
@@ -490,8 +526,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             item.state = SettingsStore.shared.settings.smartTyping ? .on : .off
         case #selector(leadingBack(_:)): return canGoBack
         // The list is of the rendered page: not for plain text, and read in reading mode.
-        case #selector(leadingShowHighlights(_:)), #selector(leadingCopyHighlights(_:)):
+        case #selector(leadingShowHighlights(_:)), #selector(leadingCopyHighlights(_:)), #selector(leadingShowLinks(_:)):
             return doc?.showsPlainText != true && !editing
+        case #selector(leadingReadAloud(_:)):
+            let speaking = speakerMade && speaker.isSpeaking
+            item.title = speaking ? "Stop Reading Aloud" : "Read Aloud"
+            return speaking || !editing
         case #selector(leadingToggleProgress(_:)):
             item.state = SettingsStore.shared.settings.progress ? .on : .off
         case #selector(leadingToggleFocus(_:)):
@@ -550,6 +590,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     }
 
     func windowWillClose(_ notification: Notification) {
+        if speakerMade { speaker.stop() }
         SchemeHandler.shared.forget(base: imageBase)
         Places.shared?.save()
     }

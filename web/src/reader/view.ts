@@ -29,6 +29,10 @@ import { LinkPreview } from './link-preview'
 import { HighlightsList, collectHighlights, highlightsMarkdown } from './highlights-list'
 import { Focus } from './focus'
 import { Paging } from './paging'
+import { HighlightNote, noteComment } from './highlight-note'
+import { Lightbox } from './lightbox'
+import { LinksList } from './links-list'
+import { ReadAloud } from './read-aloud'
 
 export interface ViewElements {
   win: HTMLElement; scroller: HTMLElement; doc: HTMLElement; layer: HTMLElement
@@ -63,7 +67,7 @@ export interface Place { s: number; dy: number }
 
 export type Command =
   | 'find' | 'findNext' | 'findPrevious' | 'toggleOutline' | 'bigger' | 'smaller' | 'actualSize'
-  | 'narrower' | 'wider' | 'cycleTheme' | 'back' | 'showHighlights' | 'copyHighlights' | 'copyQuote' | 'pageBreak'
+  | 'narrower' | 'wider' | 'cycleTheme' | 'back' | 'showHighlights' | 'showLinks' | 'readAloud' | 'copyHighlights' | 'copyQuote' | 'pageBreak'
   | 'toggleEdit' | 'findReplace' | 'undo' | 'redo'
   | 'bold' | 'italic' | 'underline' | 'strike' | 'code' | 'link'
   | 'bulletList' | 'numberList' | 'table'
@@ -102,6 +106,14 @@ export class ReaderView {
   readonly focus: Focus
   /** A screen at a time, when on */
   readonly paging: Paging
+  /** A highlight's note, shown and written under its line */
+  readonly note: HighlightNote
+  /** A picture or diagram, enlarged to the window */
+  readonly lightbox: Lightbox
+  /** The notes that link here, the margin's third tab */
+  readonly links: LinksList
+  /** View › Read Aloud */
+  readonly readAloud: ReadAloud
   /** Text the view wants on the clipboard (the host puts it there). */
   onCopyText: (text: string) => void = () => {}
   /** Words before each block, for the progress mark; rebuilt when the blocks change. */
@@ -161,6 +173,12 @@ export class ReaderView {
     // Plain text shows the file unrendered: there is no Markdown to place a highlight in.
     this.palette.active = () => this.mode === 'read' && !this.lastOpen.plain && !this.readOnly
     this.palette.onPick = (slot, target) => { void this.highlightInReader(slot, false, target) }
+    this.note = new HighlightNote(win, scroller)
+    this.palette.onShow = (t) => { if (t.kind === 'mark') this.note.show(t.mark); else this.note.hide() }
+    this.palette.onNote = (mark) => this.note.open(mark)
+    this.note.onSave = (mark, text) => { void this.saveNote(mark, text) }
+    this.lightbox = new Lightbox(win, doc)
+    this.lightbox.active = () => this.mode === 'read'
     this.outline.locate = (item, force) => {
       const blk = this.reader.blockEl(item.b, force)
       if (!blk) return null
@@ -178,6 +196,9 @@ export class ReaderView {
       scroller.scrollTop += top - scroller.clientHeight * 0.3
     }
     this.highlights.onCopy = () => this.copyHighlights()
+    this.links = new LinksList(outline)
+    this.highlights.onTab = (tab) => { if (tab === 'links') this.links.refresh() }
+    this.readAloud = new ReadAloud(doc, scroller)
     this.readerFind.blockY = (b) => this.reader.blockY(b, scroller)
     this.readerFind.index = () => this.reader.index
     this.readerFind.getBlock = (b, force) => this.reader.blockEl(b, force)
@@ -307,6 +328,10 @@ export class ReaderView {
     }
     this.footnotes.hide()
     this.preview.hide()
+    this.note.hide()
+    this.lightbox.hide()
+    // A new text (another file, or this one re-rendered) has new elements: what was being read is gone.
+    this.readAloud.stop()
     this.embeds.setDocument(opts.imageBase)
     // A different document (not a reload of this one): its jumps have nothing to go back to.
     if (!opts.keepPlace && !opts.fromDisk && opts.placeAt === undefined && this.backStack.length) {
@@ -340,6 +365,7 @@ export class ReaderView {
     this.outline.updateCurrent()
     this.updateProgress(false)
     this.highlights.invalidate()
+    if (this.highlights.tab === 'links' && !opts.keepPlace && !opts.fromDisk && opts.placeAt === undefined) this.links.refresh()
     this.focus.schedule()
     // Warm block geometry once the page settles, so the first Find keystroke is quick,
     // and fetch edit mode's code in the background so ⌘E is instant when it comes.
@@ -452,11 +478,36 @@ export class ReaderView {
     notice(this.els.win, `Copied ${entries.length} highlight${entries.length === 1 ? '' : 's'} as Markdown.`)
   }
 
-  /** View › Show Highlights: the margin's highlights tab, or close it if it is already showing. */
-  private toggleHighlights(): void {
-    if (this.settings.outlineOpen && this.highlights.tab === 'highlights') { void this.change({ outlineOpen: false }); return }
-    this.highlights.show('highlights')
+  /** View › Show Highlights, or Show Links: that tab in the margin, or close the margin if it is already showing. */
+  private toggleSide(tab: 'highlights' | 'links'): void {
+    if (this.settings.outlineOpen && this.highlights.tab === tab) { void this.change({ outlineOpen: false }); return }
+    this.highlights.show(tab)
     if (!this.settings.outlineOpen) void this.change({ outlineOpen: true })
+  }
+
+  /** View › Read Aloud: from the selection, or from the top of the window; again to stop. */
+  toggleReadAloud(): void {
+    if (this.readAloud.speaking) { this.readAloud.stop(); return }
+    if (this.mode !== 'read') return
+    if (!this.readAloud.start(this.topBlock())) notice(this.els.win, 'Nothing here to read aloud.')
+  }
+
+  /**
+   * Edit › Look Up: the selected words, the font they are set in and where
+   * their first line's baseline sits in the window, for the dictionary's panel.
+   */
+  lookUpTarget(): { text: string; x: number; y: number; size: number; font: string } | null {
+    const sel = window.getSelection()
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return null
+    const range = sel.getRangeAt(0)
+    const text = range.toString().replace(/\s+/g, ' ').trim()
+    const rect = range.getClientRects()[0]
+    const holder = range.startContainer.nodeType === 1 ? range.startContainer as Element : range.startContainer.parentElement
+    if (!text || !rect || !holder) return null
+    const css = getComputedStyle(holder)
+    const size = parseFloat(css.fontSize) || 17
+    // The baseline: the line box's bottom less the font's descent (about a fifth of its size).
+    return { text: text.slice(0, 200), x: rect.left, y: rect.bottom - size * 0.22, size, font: css.fontFamily.split(',')[0].replace(/["']/g, '').trim() }
   }
 
   /** Before a jump within the document: remember where the reader was, for View › Back. */
@@ -484,6 +535,7 @@ export class ReaderView {
    * other.md#further-reading). False if the document has no such heading.
    */
   jumpToHeading(name: string): boolean {
+    if (name.startsWith('^')) return this.jumpToBlock(name)
     const want = slugify(name)
     const items = this.mode === 'edit' && this.editor ? scanHeadings(this.editor.text) : this.readerOutline
     const item = items.find((i) => i.id === name || slugify(i.text) === want)
@@ -492,6 +544,37 @@ export class ReaderView {
     if (this.mode === 'edit') this.editor?.scrollToPos(item.s)
     else this.outline.jumpTo(item)
     return true
+  }
+
+  /**
+   * Go to a block named with ^id, as [[Note#^id]] names it. Reading mode
+   * finds its element; edit mode finds the "^id" in the text.
+   */
+  private jumpToBlock(id: string): boolean {
+    if (this.mode === 'edit' && this.editor) {
+      const m = new RegExp(`(?:^|\\s)\\^${id.replace(/[^A-Za-z0-9-]/g, '')}[ \\t]*$`, 'm').exec(this.editor.text)
+      if (!m) return false
+      this.rememberPlace()
+      this.editor.scrollToPos(m.index)
+      return true
+    }
+    // Long files may not have painted that far yet: paint until it is there.
+    let el = this.findBlockId(id)
+    if (!el && !this.reader.complete) { this.reader.ensureBlock(this.reader.blockCount - 1); el = this.findBlockId(id) }
+    if (!el) return false
+    this.rememberPlace()
+    const { scroller } = this.els
+    // A third of the way down the window, where the eye goes after a jump.
+    scroller.scrollTop += el.getBoundingClientRect().top - scroller.getBoundingClientRect().top - scroller.clientHeight * 0.3
+    el.classList.remove('block-target')
+    void el.offsetWidth // restart the flash if the same block is jumped to again
+    el.classList.add('block-target')
+    return true
+  }
+
+  private findBlockId(id: string): HTMLElement | null {
+    for (const el of this.els.doc.querySelectorAll<HTMLElement>(`[id="${CSS.escape(id)}"]`)) if (!el.closest('.note-embed')) return el
+    return null
   }
 
   /** Redraw the progress mark, if it is on; `scrolling` also shows the time left for a moment. */
@@ -568,6 +651,8 @@ export class ReaderView {
       this.progress.hide()
       this.footnotes.hide()
       this.preview.hide()
+      this.note.hide()
+      this.readAloud.stop()
       this.focus.enabled = false
       ed.focus()
       ed.scrollToPos(pos)
@@ -659,6 +744,8 @@ export class ReaderView {
     if (!r.ok) { notice(this.els.win, r.reason); return }
     this.rememberColour(slot)
     if (!r.edits.length) return
+    // A highlight taken away takes its note with it, or the note would be left behind as a stray comment.
+    if (slot === null) r.edits.push(...this.notesWithin(t, span.from, span.to, r.edits))
     window.getSelection()?.removeAllRanges()
     await this.applyFromReader(r.edits)
     if (match) this.find.step(1)
@@ -675,6 +762,41 @@ export class ReaderView {
     if (err) { notice(this.els.win, err); return }
     this.rememberColour(slot)
     if (span) this.find.step(1)
+  }
+
+  /** Deletions for the notes of highlights wholly inside [from, to], that no other edit touches. */
+  private notesWithin(t: PaletteTarget, from: number, to: number, edits: Edit[]): Edit[] {
+    const marks = t.kind === 'mark' ? [t.mark] : Array.from(this.els.doc.querySelectorAll<HTMLElement>('mark.hl[data-note-s]')).filter((m) => t.range.intersectsNode(m))
+    const out: Edit[] = []
+    for (const m of marks) {
+      if (!m.dataset.noteS || m.closest('.note-embed')) continue
+      const d = this.reader.correction(Number(m.closest<HTMLElement>('[data-b]')?.dataset.b ?? 0))
+      const s = Number(m.dataset.s) + d, e = Number(m.dataset.e) + d
+      const ns = Number(m.dataset.noteS) + d, ne = Number(m.dataset.noteE) + d
+      if (s < from || e > to) continue
+      if (edits.some((x) => x.from < ne && x.to > ns)) continue
+      out.push({ from: ns, to: ne, insert: '' })
+    }
+    return out
+  }
+
+  /** Keep a highlight's note: written as a comment straight after it, or removed when empty. One edit, so ⌘Z undoes it. */
+  async saveNote(mark: HTMLElement, note: string): Promise<void> {
+    const blk = mark.closest<HTMLElement>('[data-b]')
+    if (this.mode !== 'read' || this.readOnly || !blk || !mark.dataset.e || mark.closest('.note-embed')) return
+    const d = this.reader.correction(Number(blk.dataset.b))
+    const text = this.text
+    const comment = noteComment(note)
+    if (mark.dataset.noteS) {
+      const s = Number(mark.dataset.noteS) + d, e = Number(mark.dataset.noteE) + d
+      // The page and the text must agree before anything is written.
+      if (!text.startsWith('%%', s) || text.slice(e - 2, e) !== '%%') return
+      await this.applyFromReader([{ from: s, to: e, insert: comment }])
+    } else if (comment) {
+      const at = Number(mark.dataset.e) + d
+      await this.applyFromReader([{ from: at, to: at, insert: comment }])
+    }
+    notice(this.els.win, comment ? 'Note kept.' : 'Note removed.')
   }
 
   /** Tick or untick a task: "- [ ]" becomes "- [x]" in the file, and back. One edit, so ⌘Z undoes it. */
@@ -725,7 +847,9 @@ export class ReaderView {
     switch (c) {
       case 'toggleEdit': return this.readOnly || this.noEdit ? undefined : this.toggleEdit()
       case 'back': this.goBack(); break
-      case 'showHighlights': this.toggleHighlights(); break
+      case 'showHighlights': this.toggleSide('highlights'); break
+      case 'showLinks': this.toggleSide('links'); break
+      case 'readAloud': this.toggleReadAloud(); break
       case 'copyHighlights': this.copyHighlights(); break
       case 'copyQuote': this.copyQuote(); break
       // Obsidian's and Typora's form, so the break holds when the note is printed there too.
@@ -746,7 +870,7 @@ export class ReaderView {
       case 'findPrevious': if (!this.find.isOpen) this.find.open(); this.find.step(-1); break
       case 'toggleOutline':
         // Showing highlights: ⌥⌘O turns the margin back to the outline rather than closing it.
-        if (s.outlineOpen && this.highlights.tab === 'highlights') { this.highlights.show('outline'); this.outline.focusForTyping(); break }
+        if (s.outlineOpen && this.highlights.tab !== 'outline') { this.highlights.show('outline'); this.outline.focusForTyping(); break }
         this.highlights.show('outline')
         this.change({ outlineOpen: !s.outlineOpen }).then(() => { if (this.settings.outlineOpen) this.outline.focusForTyping() })
         break

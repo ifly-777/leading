@@ -14,6 +14,9 @@ protocol ReaderWebViewHost: AnyObject {
     func pageSavedPlace(s: Int, dy: Double)
     func pageOpenWiki(target: String, heading: String?)
     func pageCanGoBack(_ can: Bool)
+    func pageSpeak(_ passages: [String], language: String?)
+    func pageStopSpeaking()
+    func pageWantsBacklinks()
 }
 
 /// The web view showing one document. Holds calls until its page reports it is
@@ -52,6 +55,21 @@ final class ReaderWebView: WKWebView, WKNavigationDelegate {
         }
     }
 
+    /// Edit › Look Up (⌃⌘D): the dictionary's panel for the selected words, at the
+    /// selection, as in any Mac app. The page reports the words, their size and where they sit.
+    func lookUpSelection() {
+        guard isReady else { return }
+        callAsyncJavaScript("return window.leading.lookUpTarget()", arguments: [:], in: nil, in: .page) { [weak self] r in
+            guard let self, let t = (try? r.get()) as? [String: Any], let text = t["text"] as? String, !text.isEmpty,
+                  let x = (t["x"] as? NSNumber)?.doubleValue, let y = (t["y"] as? NSNumber)?.doubleValue else { NSSound.beep(); return }
+            let size = (t["size"] as? NSNumber)?.doubleValue ?? 17
+            let font = NSFont(name: t["font"] as? String ?? "", size: size) ?? NSFont.systemFont(ofSize: size)
+            // The page measures from the top; AppKit's point is the text's baseline in view coordinates.
+            let baseline = isFlipped ? y : bounds.height - y
+            showDefinition(for: NSAttributedString(string: text, attributes: [.font: font]), at: NSPoint(x: x, y: baseline))
+        }
+    }
+
     /// Call `window.leading.<fn>(args)` in the page, now or once it is ready.
     /// Arguments travel as native values, so even a 5 MB document needs no escaping.
     func call(_ fn: String, _ args: [String: Any] = [:]) {
@@ -83,6 +101,9 @@ final class ReaderWebView: WKWebView, WKNavigationDelegate {
         case "mode": host?.pageMode(editing: message["editing"] as? Bool ?? false)
         case "place":
             if let s = (message["s"] as? NSNumber)?.intValue { host?.pageSavedPlace(s: s, dy: (message["dy"] as? NSNumber)?.doubleValue ?? 0) }
+        case "speak": host?.pageSpeak(message["passages"] as? [String] ?? [], language: message["lang"] as? String)
+        case "stopSpeaking": host?.pageStopSpeaking()
+        case "backlinks": host?.pageWantsBacklinks()
         case "log": NSLog("Leading page: %@", message["text"] as? String ?? "")
         case "overTable": overTable = message["over"] as? Bool ?? false
         case "copy":

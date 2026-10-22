@@ -72,12 +72,7 @@ public enum Paths {
         }
 
         // 2. Anywhere in the vault.
-        var root = folder
-        var probe = folder.standardizedFileURL
-        while probe.path.count > 1, probe.path != home.standardizedFileURL.path {
-            if fm.fileExists(atPath: probe.appendingPathComponent(".obsidian").path) { root = probe; break }
-            probe = probe.deletingLastPathComponent()
-        }
+        let root = vaultRoot(for: folder, home: home)
         let wanted = candidates.map(norm)
         guard let walk = fm.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return nil }
         var best: (url: URL, depth: Int)?
@@ -93,6 +88,17 @@ public enum Paths {
             if best == nil || depth < best!.depth { best = (url.standardizedFileURL, depth) }
         }
         return best?.url
+    }
+
+    /// The vault a folder belongs to: the nearest folder above holding `.obsidian`
+    /// (stopping at the home folder), or the folder itself if there is none.
+    public static func vaultRoot(for folder: URL, home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
+        var probe = folder.standardizedFileURL
+        while probe.path.count > 1, probe.path != home.standardizedFileURL.path {
+            if FileManager.default.fileExists(atPath: probe.appendingPathComponent(".obsidian").path) { return probe }
+            probe = probe.deletingLastPathComponent()
+        }
+        return folder
     }
 
     /// The file for an image request, relative to the document's folder.

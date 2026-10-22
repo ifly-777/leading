@@ -29,6 +29,7 @@ import { classifyTables } from './tables'
 import { textOf } from './text'
 import { blockText, isUnsearched } from './search-index'
 import { noteLang } from './lang'
+import { hideComments } from './comments'
 
 export interface OutlineItem { depth: number; text: string; id: string; s: number; /** top-level block holding it */ b: number }
 export interface Block {
@@ -52,7 +53,9 @@ export interface RenderOptions {
   vaultEmbeds?: boolean
 }
 
-export function parse(src: string): Root {
+export function parse(file: string): Root {
+  // Comments are blanked before parsing, offsets unchanged (see comments.ts).
+  const { text: src, comments } = hideComments(file)
   const tree = fromMarkdown(src, {
     // Obsidian needs ~~double~~ tildes for strikethrough; a single ~ is literal.
     // Math: $$…$$ from the stock extension, single dollars by Obsidian's rules (see math-text.ts).
@@ -60,7 +63,7 @@ export function parse(src: string): Root {
     mdastExtensions: [gfmFromMarkdown(), frontmatterFromMarkdown(['yaml']), mathFromMarkdown()],
   })
   transformCallouts(tree, src)
-  transformInline(tree, src)
+  transformInline(tree, src, comments)
   classifyTables(tree)
   smarten(tree)
   return tree
@@ -69,7 +72,9 @@ export function parse(src: string): Root {
 // Source range as data attributes; every highlightable run carries one.
 function pos(node: any): Properties {
   const p = node.position
-  return p ? { dataS: p.start.offset, dataE: p.end.offset } : {}
+  // A block named with ^id (plugins/inline.ts) carries it, whichever handler draws it.
+  const id = node.data?.hProperties?.id
+  return p ? { dataS: p.start.offset, dataE: p.end.offset, ...(id ? { id } : {}) } : {}
 }
 
 function el(tagName: string, properties: Properties, children: ElementContent[]): Element {
@@ -189,6 +194,7 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]
       Object.assign(e.properties, pos(node))
       // Colour: the <code> inside gets highlight.js's spans in place of plain text.
       const code = e.children[0]
+      if (code?.type === 'element') delete code.properties.id // a block id belongs to the <pre> alone
       const coloured = highlightCode(node.lang, node.value)
       if (coloured && code?.type === 'element') {
         // The plain block ends with a newline; keep it, so the text Find sees is unchanged.
@@ -232,7 +238,9 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]
     },
     table(state, node) {
       const t = defaultHandlers.table(state, node)
-      const wrap = el('div', { className: ['table-bleed'] }, [el('div', { className: ['table-scroll'] }, [t])])
+      const id = (node as any).data?.hProperties?.id
+      if (id) delete t.properties.id // on the wrapper, which is the block on the page
+      const wrap = el('div', { className: ['table-bleed'], ...(id ? { id } : {}) }, [el('div', { className: ['table-scroll'] }, [t])])
       state.patch(node, wrap)
       return wrap
     },
@@ -261,7 +269,9 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]
       return e
     },
     highlight(state, node: Highlight) {
-      return el('mark', { className: ['hl'], dataC: node.slot, dataSyntax: node.syntax, dataHex: node.hex, ...pos(node) }, state.all(node as any))
+      // A note travels with its highlight; its range lets the page change or remove it.
+      const note = node.note ? { dataNote: node.note.text, dataNoteS: node.note.s, dataNoteE: node.note.e } : {}
+      return el('mark', { className: ['hl'], dataC: node.slot, dataSyntax: node.syntax, dataHex: node.hex, ...note, ...pos(node) }, state.all(node as any))
     },
     wikilink(state, node: WikiLink) {
       // ![[picture.png]] and ![[Note]]: the app finds the file in the vault (SchemeHandler, __wiki).
@@ -289,6 +299,9 @@ function makeHandlers(outline: OutlineItem[], opts: RenderOptions, tex: string[]
     },
     caps(state, node: any) {
       return el('span', { className: ['caps'] }, state.all(node))
+    },
+    tag(state, node: any) {
+      return el('span', { className: ['tag'] }, state.all(node))
     },
     callout(state, node: Callout) {
       const kind = CALLOUT_ALIASES[node.calloutType] ?? node.calloutType

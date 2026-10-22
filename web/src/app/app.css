@@ -27,7 +27,7 @@ html, body { height: 100%; overflow: hidden; }
    between the margins the print settings give. */
 @media print {
   html, body, #window, #scroller { height: auto !important; overflow: visible !important; contain: none !important; position: static !important; }
-  #window::before, #outline, #editor, #frame, .findbar, .scroll-ticks, .search-layer, .progress-rule, .progress-left, .fn-pop, .format-popover, .notice { display: none !important; }
+  #window::before, #outline, #editor, #frame, .findbar, .scroll-ticks, .search-layer, .progress-rule, .progress-left, .fn-pop, .format-popover, .notice, .lightbox { display: none !important; }
   :root { --size: 11pt !important; --col-w: auto !important; --col-left: 0 !important; }
   .doc { width: auto !important; margin: 0 !important; padding: 0 !important; }
   /* Long documents skip laying out far-away parts on screen; paper needs every part. */
@@ -47,4 +47,6 @@ html, body { height: 100%; overflow: hidden; }
   .doc .page-break { border: 0; margin: 0; break-after: page; }
   .doc .page-break::after { display: none; }
   .doc .page-break + * { break-before: page; }
+  /* Notes are the reader's own, kept in the file; paper shows the text. */
+  .doc mark.hl[data-note]::after { display: none; }
 }

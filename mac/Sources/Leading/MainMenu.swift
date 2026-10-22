@@ -66,6 +66,8 @@ enum MainMenu {
             item("Select All", #selector(NSText.selectAll(_:)), "a"),
             .separator(),
             findItem,
+            // ⌃⌘D is Look Up across macOS.
+            item("Look Up", #selector(ReaderActions.leadingLookUp(_:)), "d", [.command, .control]),
         ])
 
         let bigger = item("Bigger", #selector(ReaderActions.leadingBigger(_:)), "+")
@@ -103,6 +105,7 @@ enum MainMenu {
             .separator(),
             item("Show Outline", #selector(ReaderActions.leadingToggleOutline(_:)), "o", [.command, .option]),
             item("Show Highlights", #selector(ReaderActions.leadingShowHighlights(_:)), "l", [.command, .option]),
+            item("Show Links to This Note", #selector(ReaderActions.leadingShowLinks(_:)), "b", [.command, .option]),
             item("Back", #selector(ReaderActions.leadingBack(_:)), "["),
             .separator(),
             bigger, biggerAlias,
@@ -115,6 +118,7 @@ enum MainMenu {
             item("Show Reading Progress", #selector(ReaderActions.leadingToggleProgress(_:)), "p", [.command, .option]),
             item("Focus", #selector(ReaderActions.leadingToggleFocus(_:)), "d"),
             item("Page by Page", #selector(ReaderActions.leadingTogglePaged(_:))),
+            item("Read Aloud", #selector(ReaderActions.leadingReadAloud(_:)), "r", [.command, .option]),
             item("Show as Plain Text", #selector(ReaderActions.leadingTogglePlainText(_:))),
             .separator(),
             item("Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]),
@@ -203,6 +207,9 @@ private extension NSMenu {
     func leadingTogglePaged(_ sender: Any?)
     func leadingBack(_ sender: Any?)
     func leadingShowHighlights(_ sender: Any?)
+    func leadingShowLinks(_ sender: Any?)
+    func leadingReadAloud(_ sender: Any?)
+    func leadingLookUp(_ sender: Any?)
     func leadingCopyHighlights(_ sender: Any?)
     func leadingCopyQuote(_ sender: Any?)
     func leadingPageBreak(_ sender: Any?)

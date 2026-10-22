@@ -164,6 +164,23 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
   text-decoration-skip-ink: auto;
 }
 
+/* A highlight with a note: a small dot where it ends. Taken out of the line
+ * (absolute, at its place in the text), so adding a note never moves a word. */
+.doc mark.hl[data-note]::after {
+  content: ""; position: absolute; width: 0.34em; height: 0.34em; margin: -0.12em 0 0 0.08em;
+  border-radius: 50%; background: var(--cl); pointer-events: none;
+}
+
+/* Obsidian's #tags: quiet, so they do not compete with the text. */
+.doc .tag {
+  color: color-mix(in srgb, var(--link) 80%, var(--muted)); font-size: 0.92em;
+  background: color-mix(in srgb, var(--link) 9%, transparent); border-radius: 0.5em; padding: 0.04em 0.32em;
+}
+
+/* A block reached by [[#^id]]: a brief warm wash, so the eye finds it. */
+@keyframes block-target { from { background: color-mix(in srgb, var(--hl-yellow) 80%, transparent); } to { background: transparent; } }
+.doc .block-target { animation: block-target 1.6s ease-out; border-radius: 4px; }
+
 /* ---- Callouts ------------------------------------------------------------ */
 .doc .callout {
   --cc: #4A7FC1;
@@ -286,7 +303,14 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .outline .side-tabs { display: flex; gap: 0.9em; margin: 0 0 0.6em 0.75em; }
 .outline .side-tabs button { all: unset; cursor: pointer; color: var(--muted); padding-bottom: 0.1em; border-bottom: 1px solid transparent; }
 .outline .side-tabs button[aria-pressed="true"] { color: var(--fg); border-bottom-color: color-mix(in srgb, var(--fg) 45%, transparent); }
-.outline[data-tab="highlights"] > ol, .outline[data-tab="highlights"] > input { display: none; }
+.outline:is([data-tab="highlights"], [data-tab="links"]) > ol, .outline:is([data-tab="highlights"], [data-tab="links"]) > input { display: none; }
+.outline:not([data-tab="links"]) > .links-side { display: none; }
+.outline .links-status { margin: 0 0 0.5em 0.75em; font-size: 0.88em; font-style: italic; }
+.outline .links-side li { margin: 0 0 0.7em; }
+.outline a.link-item { white-space: normal; color: var(--fg); }
+.outline .link-line { margin: 0.1em 0 0 0.75em; font-size: 0.85em; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+/* Read Aloud's current word (reader/read-aloud.ts), drawn over the text without an element. */
+::highlight(read-aloud) { background-color: color-mix(in srgb, var(--link) 22%, transparent); }
 .outline:not([data-tab="highlights"]) > .hl-side { display: none; }
 .outline .hl-chips { display: flex; align-items: center; gap: 7px; margin: 0 0 0.5em 0.75em; }
 .outline .hl-chip { all: unset; width: 10px; height: 10px; border-radius: 50%; cursor: pointer; background: var(--c); box-shadow: inset 0 0 0 1px var(--cl); }
@@ -532,6 +556,36 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .format-popover .hl-remove { color: var(--muted); font-size: 12px; }
 .format-popover .hl-remove[hidden] { display: none; }
 .format-popover button:focus-visible { outline: 2px solid var(--link); outline-offset: -2px; }
+
+/* The palette's pencil: a note on the highlight. */
+.format-popover .hl-note-btn { color: var(--muted); font-size: 13px; }
+.format-popover .hl-note-btn[hidden] { display: none; }
+/* A highlight's note, under its line. */
+.hl-note { font: 13.5px/1.45 system-ui, -apple-system, sans-serif; padding: 0.6em 0.8em; }
+.hl-note .hl-note-text { margin: 0; white-space: pre-wrap; cursor: text; }
+.hl-note .hl-note-text[hidden], .hl-note .hl-note-input[hidden] { display: none; }
+.hl-note .hl-note-input {
+  all: unset; display: block; box-sizing: border-box; width: 100%; min-height: 3.6em; white-space: pre-wrap;
+  font: inherit; color: var(--fg); caret-color: var(--link);
+}
+.hl-note .hl-note-hint { margin: 0.4em 0 0; color: var(--muted); font-size: 11px; }
+.hl-note[data-editing="false"] .hl-note-hint { display: none; }
+.outline .hl-item-note { margin: 0 0 0.35em 0; padding-left: calc(0.75em + 3px); font-size: 0.88em; font-style: italic; color: var(--muted); }
+
+/* A picture or diagram enlarged to the window (reader/lightbox.ts). */
+:root:not([data-mode="edit"]) .doc :is(img, figure.diagram svg) { cursor: zoom-in; }
+:root:not([data-mode="edit"]) .doc a img { cursor: pointer; }
+.lightbox {
+  position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: calc(var(--sticky-top, 38px) + 16px) 32px 24px; box-sizing: border-box;
+  background: color-mix(in srgb, var(--bg) 97%, transparent); cursor: zoom-out;
+}
+.lightbox[hidden] { display: none; }
+.lightbox-stage { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }
+.lightbox-stage > img { object-fit: contain; width: auto; height: auto; border-radius: 3px; box-shadow: 0 2px 18px rgb(0 0 0 / 0.12); }
+.lightbox-stage > svg { width: 100%; height: 100%; }
+.lightbox-caption { margin: 0.8em 0 0; color: var(--muted); font-size: 0.9em; text-align: center; }
+.lightbox-caption[hidden] { display: none; }
 
 /* A quiet message (a highlight that could not be placed safely). */
 .notice {
