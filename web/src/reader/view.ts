@@ -478,6 +478,11 @@ export class ReaderView {
     notice(this.els.win, `Copied ${entries.length} highlight${entries.length === 1 ? '' : 's'} as Markdown.`)
   }
 
+  /** Notes in the vault changed: the Links tab, if showing, lists them again. */
+  vaultChanged(): void {
+    if (this.settings.outlineOpen && this.highlights.tab === 'links') this.links.refresh()
+  }
+
   /** View › Show Highlights, or Show Links: that tab in the margin, or close the margin if it is already showing. */
   private toggleSide(tab: 'highlights' | 'links'): void {
     if (this.settings.outlineOpen && this.highlights.tab === tab) { void this.change({ outlineOpen: false }); return }

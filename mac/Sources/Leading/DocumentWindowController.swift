@@ -33,6 +33,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         return s
     }()
     private var speakerMade = false
+    /// The vault this window's note belongs to, held so its index stays live.
+    private var vaultRoot: URL?
+    private var vaultWatch: NSObjectProtocol?
 
     private var doc: MarkdownDocument? { document as? MarkdownDocument }
     /// The window's page, for the self-test only.
@@ -75,6 +78,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         chromeWatch = window.observe(\.contentLayoutRect, options: [.initial, .new]) { [weak self] _, _ in
             DispatchQueue.main.async { self?.sendChrome() }
         }
+        // A vault's index changed: the Links and Search tabs look again if they are showing.
+        vaultWatch = NotificationCenter.default.addObserver(forName: .vaultChanged, object: nil, queue: .main) { [weak self] note in
+            guard let self, let root = note.object as? URL, root == self.vaultRoot else { return }
+            self.web?.call("vaultChanged")
+        }
+        holdVault(document.fileURL)
         // AppKit attaches `document` only after this initialiser returns, so pass it in directly.
         if document.isPasswordLocked {
             showLocked(document)
@@ -133,7 +142,17 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if let web { window?.makeFirstResponder(web) }
     }
 
+    /// Keep the index of the vault the note is in, letting go of the one it was in before.
+    private func holdVault(_ url: URL?) {
+        let root = url.flatMap { Vaults.shared.root(for: $0) }
+        guard root != vaultRoot else { return }
+        if let old = vaultRoot { Vaults.shared.release(old) }
+        vaultRoot = root
+        if let root { Vaults.shared.hold(root) }
+    }
+
     func documentMoved(to url: URL) {
+        holdVault(url)
         SchemeHandler.shared.setFolder(base: imageBase, document: url)
         web?.call("setName", ["name": url.deletingPathExtension().lastPathComponent])
     }
@@ -268,7 +287,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     func pageOpenWiki(target: String, heading: String?) {
         let from = doc?.fileURL
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let found = Paths.wikiTarget(target, document: from)
+            // From the vault's index when it is ready; otherwise by searching the disk.
+            let found: URL?
+            if let from, let index = Vaults.shared.index(for: from) {
+                found = index.resolve(target, from: from)
+            } else {
+                found = Paths.wikiTarget(target, document: from)
+            }
             DispatchQueue.main.async {
                 guard let found else { NSSound.beep(); return }
                 switch Paths.classifyFile(found) {
@@ -331,7 +356,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             return
         }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let found = Backlinks.find(to: url)
+            let found = Vaults.shared.index(for: url)?.backlinks(to: url) ?? Backlinks.find(to: url)
             let items: [[String: Any]] = found.map { ["name": $0.name, "href": $0.url.absoluteString, "lines": $0.lines] }
             DispatchQueue.main.async { self?.web?.call("backlinks", ["items": items, "saved": true]) }
         }
@@ -593,6 +618,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if speakerMade { speaker.stop() }
         SchemeHandler.shared.forget(base: imageBase)
         Places.shared?.save()
+        holdVault(nil)
+        if let vaultWatch { NotificationCenter.default.removeObserver(vaultWatch) }
     }
 
     func windowDidEndLiveResize(_ notification: Notification) {

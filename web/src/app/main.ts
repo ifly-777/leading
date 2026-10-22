@@ -185,6 +185,8 @@ document.addEventListener('click', (e) => {
   speechEnded() { view.readAloud.ended() },
   /** The notes that link here, found by the app for the margin's Links tab. */
   backlinks(args: { items: { name: string; href: string; lines: string[] }[]; saved: boolean }) { view.links.set(args.items, args.saved) },
+  /** Notes in this vault changed on disk: the margin's vault tabs look again if showing. */
+  vaultChanged() { view.vaultChanged() },
   /** Edit › Look Up: the selected words and where they are. */
   lookUpTarget() { return view.lookUpTarget() },
   /** Right-click "Copy Table as CSV": the table under the pointer. */

@@ -119,10 +119,17 @@ final class SchemeHandler: NSObject, WKURLSchemeHandler {
     /// Find an embedded file the way a wikilink is found. Images are served only as images,
     /// notes only as notes, so an embed can never reach any other kind of file.
     private func findEmbed(_ e: Embed) -> URL? {
+        let from = e.folder.appendingPathComponent("_.md")
+        if let index = Vaults.shared.index(for: from) {
+            guard let file = index.resolve(e.name, from: from) else { return nil }
+            let ext = file.pathExtension.lowercased()
+            return (e.image ? Paths.imageExtensions.contains(ext) : Paths.documentExtensions.contains(ext)) ? file : nil
+        }
+        // The vault is not indexed yet (or is too broad to index): search the disk, remembering what was found.
         let key = "\(e.image ? "i" : "n")\u{0}\(e.folder.path)\u{0}\(e.name)"
         foundLock.lock(); let known = found[key]; foundLock.unlock()
         let stillThere = known.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
-        let file = stillThere ? known : Paths.wikiTarget(e.name, document: e.folder.appendingPathComponent("_.md"))
+        let file = stillThere ? known : Paths.wikiTarget(e.name, document: from)
         guard let file else { return nil }
         let ext = file.pathExtension.lowercased()
         guard e.image ? Paths.imageExtensions.contains(ext) : Paths.documentExtensions.contains(ext) else { return nil }
