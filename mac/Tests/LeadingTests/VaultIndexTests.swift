@@ -127,3 +127,46 @@ final class VaultIndexTests: XCTestCase {
         XCTAssertTrue(index.search("kumquats").hits.isEmpty)
     }
 }
+
+/// A vault of 10,000 notes: how long the index takes to build, how long a search takes,
+/// and how much text the index holds. Printed for docs/decisions.md; the limits are
+/// loose, since shared CI machines vary.
+final class VaultIndexScaleTests: XCTestCase {
+    func testTenThousandNotes() throws {
+        let fm = FileManager.default
+        let vault = fm.temporaryDirectory.appendingPathComponent("big-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fm.removeItem(at: vault) }
+        try fm.createDirectory(at: vault.appendingPathComponent(".obsidian"), withIntermediateDirectories: true)
+        let words = "the quiet harbour lamp was lit again before the tide turned and the boats came home over grey water".split(separator: " ")
+        for f in 0..<20 { try fm.createDirectory(at: vault.appendingPathComponent("Folder \(f)"), withIntermediateDirectories: true) }
+        // About 2.5 KB each: a heading, twenty lines of prose, a few links.
+        for i in 0..<10_000 {
+            var text = "# Note \(i)\n\n"
+            for l in 0..<20 {
+                text += (0..<18).map { String(words[($0 * 7 + l * 3 + i) % words.count]) }.joined(separator: " ")
+                text += l % 5 == 0 ? " See [[Note \((i + l) % 10_000)]].\n" : ".\n"
+            }
+            if i == 7_777 { text += "A single kumquat.\n" }
+            try Data(text.utf8).write(to: vault.appendingPathComponent("Folder \(i % 20)/Note \(i).md"))
+        }
+        let index = VaultIndex(root: vault)
+        var t = Date()
+        index.build()
+        let build = Date().timeIntervalSince(t)
+        let memory = index.textBytes
+        t = Date()
+        let common = index.search("harbour lamp")
+        let rare = index.search("kumquat")
+        let search = Date().timeIntervalSince(t) / 2
+        t = Date()
+        let links = index.backlinks(to: vault.appendingPathComponent("Folder 3/Note 123.md"))
+        let backlinks = Date().timeIntervalSince(t)
+        print(String(format: "VAULT SCALE: 10,000 notes built in %.2f s, %ld MB of text held; a search takes %.0f ms; links to a note %.0f ms",
+                     build, memory / 1_000_000, search * 1000, backlinks * 1000))
+        XCTAssertEqual(rare.hits.map(\.name), ["Note 7777"])
+        XCTAssertGreaterThan(common.notes, 1000)
+        XCTAssertFalse(links.isEmpty)
+        XCTAssertLessThan(build, 60)
+        XCTAssertLessThan(search, 1)
+    }
+}

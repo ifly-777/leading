@@ -91,6 +91,12 @@ public final class VaultIndex: @unchecked Sendable {
     /// How many files are indexed.
     public var count: Int { lock.lock(); defer { lock.unlock() }; return entries.count }
 
+    /// Roughly how much text the index holds, in bytes: each line as shown, and folded.
+    public var textBytes: Int {
+        lock.lock(); defer { lock.unlock() }
+        return entries.values.reduce(0) { sum, e in sum + e.folded.count + e.lines.reduce(0) { $0 + $1.utf8.count } }
+    }
+
     // MARK: Building
 
     /// Read the whole vault. Safe to call again; the index is replaced in one step.
