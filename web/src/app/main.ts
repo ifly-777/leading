@@ -29,6 +29,7 @@ type ToSwift =
   | { type: 'backlinks' }
   | { type: 'vaultSearch'; query: string; id: number }
   | { type: 'wikiTargets'; targets: string[] }
+  | { type: 'sideTab'; tab: string }
   | { type: 'openAt'; href: string; query: string; s: number }
 
 const post = (m: ToSwift | { type: 'log'; text: string }) => (window as any).webkit?.messageHandlers?.leading?.postMessage(m)
@@ -71,6 +72,7 @@ view.links.request = () => post({ type: 'backlinks' })
 view.links.onOpen = (href) => post({ type: 'openLink', href })
 view.search.request = (query, id) => post({ type: 'vaultSearch', query, id })
 view.onWikiTargets = (targets) => post({ type: 'wikiTargets', targets })
+view.onSideTab = (tab) => post({ type: 'sideTab', tab })
 // A search result opens its note with Find on the words, at the line clicked.
 view.search.onOpen = (href, query, s) => post({ type: 'openAt', href, query, s })
 

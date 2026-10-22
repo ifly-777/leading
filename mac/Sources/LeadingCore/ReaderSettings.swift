@@ -7,6 +7,8 @@ public struct ReaderSettings: Codable, Equatable {
     public var customFont = ""
     public var monoFont = "sfmono"
     public var size: Double = 19
+    /// The text sizes allowed, in px; the page clamps to the same (RANGES.size in settings.ts)
+    public static let sizeRange: ClosedRange<Double> = 14...28
     public var lineHeight: Double = 1.5
     public var measure = "medium"
     public var theme = "system"
@@ -53,7 +55,7 @@ public struct ReaderSettings: Codable, Equatable {
 
     /// Keep values inside the ranges the page supports.
     public mutating func clamp() {
-        size = min(28, max(14, size.rounded()))
+        size = min(Self.sizeRange.upperBound, max(Self.sizeRange.lowerBound, size.rounded()))
         lineHeight = min(2.0, max(1.2, lineHeight))
         letterSpacing = min(0.12, max(-0.02, letterSpacing))
         wordSpacing = min(0.16, max(0, wordSpacing))

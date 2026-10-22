@@ -120,6 +120,8 @@ export class ReaderView {
   readonly readAloud: ReadAloud
   /** Text the view wants on the clipboard (the host puts it there). */
   onCopyText: (text: string) => void = () => {}
+  /** The margin turned to a tab (the app ticks the matching View menu item). */
+  onSideTab: (tab: string) => void = () => {}
   /** The notes this one's wikilinks name; the app answers with those the vault lacks. */
   onWikiTargets: (targets: string[]) => void = () => {}
   /** Wikilink targets the vault has no note for, as written, lower-cased. */
@@ -212,6 +214,7 @@ export class ReaderView {
     this.links = new LinksList(outline)
     this.search = new SearchList(outline)
     this.highlights.onTab = (tab) => {
+      this.onSideTab(tab)
       if (tab === 'links') this.links.refresh()
       if (tab === 'search') this.search.refresh()
     }

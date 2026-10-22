@@ -521,6 +521,22 @@ enum SelfTest {
         later(1.0) {
             search("named line") { names in
                 check("Search Vault finds the words in the vault's notes (\(names.joined(separator: ", ")))", names.joined().contains("Block"))
+                // The View and Find menus show where things stand.
+                let searchItem = NSMenuItem(title: "", action: #selector(DocumentWindowController.leadingSearchVault(_:)), keyEquivalent: "")
+                _ = wc.validateMenuItem(searchItem)
+                check("Search Vault is ticked while its tab shows", searchItem.state == .on)
+                let store = SettingsStore.shared
+                let size = store.settings.size, theme = store.settings.theme
+                store.settings.size = ReaderSettings.sizeRange.upperBound
+                let bigger = NSMenuItem(title: "", action: #selector(DocumentWindowController.leadingBigger(_:)), keyEquivalent: "")
+                check("Bigger is greyed at the largest size", !wc.validateMenuItem(bigger))
+                store.settings.size = size
+                let sepia = NSMenuItem(title: "Sepia", action: #selector(DocumentWindowController.leadingSetTheme(_:)), keyEquivalent: "")
+                sepia.representedObject = "sepia"
+                wc.leadingSetTheme(sepia)
+                _ = wc.validateMenuItem(sepia)
+                check("View › Theme › Sepia sets the theme and is ticked", store.settings.theme == "sepia" && sepia.state == .on)
+                store.settings.theme = theme
                 try? "# Fresh\n\nA kumquat, written by another app.\n".write(to: folder.appendingPathComponent("Fresh.md"), atomically: true, encoding: .utf8)
                 later(1.5) {
                     search("kumquat") { names in

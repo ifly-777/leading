@@ -20,6 +20,7 @@ protocol ReaderWebViewHost: AnyObject {
     func pageSearchVault(_ query: String, id: Int)
     func pageOpenAt(_ href: String, query: String, s: Int)
     func pageWikiTargets(_ targets: [String])
+    func pageSideTab(_ tab: String)
 }
 
 /// The web view showing one document. Holds calls until its page reports it is
@@ -111,6 +112,7 @@ final class ReaderWebView: WKWebView, WKNavigationDelegate {
         case "backlinks": host?.pageWantsBacklinks()
         case "vaultSearch":
             if let q = message["query"] as? String { host?.pageSearchVault(q, id: (message["id"] as? NSNumber)?.intValue ?? 0) }
+        case "sideTab": host?.pageSideTab(message["tab"] as? String ?? "outline")
         case "wikiTargets": host?.pageWikiTargets(message["targets"] as? [String] ?? [])
         case "openAt":
             if let href = message["href"] as? String, let q = message["query"] as? String {

@@ -35,6 +35,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private var speakerMade = false
     /// The vault this window's note belongs to, held so its index stays live.
     private var vaultRoot: URL?
+    /// The margin's tab, as the page last reported it, for the View menu's ticks.
+    private var sideTab = "outline"
     private var vaultWatch: NSObjectProtocol?
 
     private var doc: MarkdownDocument? { document as? MarkdownDocument }
@@ -407,6 +409,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     /// Which of the notes this one's wikilinks name the vault lacks, so the page can dim those links.
     /// Only once the vault's index is ready: until then nothing is dimmed, and the page asks again when it is.
+    func pageSideTab(_ tab: String) { sideTab = tab }
+
     func pageWikiTargets(_ targets: [String]) {
         guard let url = doc?.fileURL, let index = Vaults.shared.index(for: url) else { return }
         DispatchQueue.global(qos: .utility).async { [weak self] in
@@ -456,6 +460,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingShowHighlights(_ sender: Any?) { command("showHighlights") }
     @objc func leadingShowLinks(_ sender: Any?) { command("showLinks") }
     @objc func leadingSearchVault(_ sender: Any?) { command("searchVault") }
+    /// View › Theme: settings reach every window through the store.
+    @objc func leadingSetTheme(_ sender: Any?) {
+        guard let theme = (sender as? NSMenuItem)?.representedObject as? String else { return }
+        SettingsStore.shared.settings.theme = theme
+    }
     @objc func leadingReadAloud(_ sender: Any?) {
         if speakerMade && speaker.isSpeaking { speaker.stop() } else { command("readAloud") }
     }
@@ -610,9 +619,24 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             item.state = SettingsStore.shared.settings.smartTyping ? .on : .off
         case #selector(leadingBack(_:)): return canGoBack
         // The list is of the rendered page: not for plain text, and read in reading mode.
-        case #selector(leadingShowHighlights(_:)), #selector(leadingCopyHighlights(_:)), #selector(leadingShowLinks(_:)):
+        // Ticked while their tab is showing.
+        case #selector(leadingShowHighlights(_:)), #selector(leadingShowLinks(_:)):
+            let tab = item.action == #selector(leadingShowHighlights(_:)) ? "highlights" : "links"
+            item.state = SettingsStore.shared.settings.outlineOpen && sideTab == tab ? .on : .off
             return doc?.showsPlainText != true && !editing
-        case #selector(leadingSearchVault(_:)): return !editing
+        case #selector(leadingCopyHighlights(_:)):
+            return doc?.showsPlainText != true && !editing
+        case #selector(leadingSearchVault(_:)):
+            item.state = SettingsStore.shared.settings.outlineOpen && sideTab == "search" ? .on : .off
+            return !editing
+        // Size and column width: nothing to do at their limits.
+        case #selector(leadingBigger(_:)): return SettingsStore.shared.settings.size < ReaderSettings.sizeRange.upperBound
+        case #selector(leadingSmaller(_:)): return SettingsStore.shared.settings.size > ReaderSettings.sizeRange.lowerBound
+        case #selector(leadingActualSize(_:)): return SettingsStore.shared.settings.size != ReaderSettings().size
+        case #selector(leadingNarrower(_:)): return SettingsStore.shared.settings.measure != "narrow"
+        case #selector(leadingWider(_:)): return SettingsStore.shared.settings.measure != "wide"
+        case #selector(leadingSetTheme(_:)):
+            item.state = (item.representedObject as? String) == SettingsStore.shared.settings.theme ? .on : .off
         case #selector(leadingReadAloud(_:)):
             let speaking = speakerMade && speaker.isSpeaking
             item.title = speaking ? "Stop Reading Aloud" : "Read Aloud"
