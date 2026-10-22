@@ -28,6 +28,8 @@ type ToSwift =
   | { type: 'stopSpeaking' }
   | { type: 'backlinks' }
   | { type: 'vaultSearch'; query: string; id: number }
+  | { type: 'wikiTargets'; targets: string[] }
+  | { type: 'sideTab'; tab: string }
   | { type: 'openAt'; href: string; query: string; s: number }
 
 const post = (m: ToSwift | { type: 'log'; text: string }) => (window as any).webkit?.messageHandlers?.leading?.postMessage(m)
@@ -68,7 +70,11 @@ view.readAloud.onStop = () => post({ type: 'stopSpeaking' })
 view.links.request = () => post({ type: 'backlinks' })
 // A note that links here opens as any link to a file does.
 view.links.onOpen = (href) => post({ type: 'openLink', href })
+// …or at the line where it does: openAt with no words just goes there.
+view.links.onOpenAt = (href, s) => post({ type: 'openAt', href, query: '', s })
 view.search.request = (query, id) => post({ type: 'vaultSearch', query, id })
+view.onWikiTargets = (targets) => post({ type: 'wikiTargets', targets })
+view.onSideTab = (tab) => post({ type: 'sideTab', tab })
 // A search result opens its note with Find on the words, at the line clicked.
 view.search.onOpen = (href, query, s) => post({ type: 'openAt', href, query, s })
 
@@ -95,7 +101,7 @@ document.addEventListener('click', (e) => {
     const target = wiki.dataset.target ?? ''
     const heading = wiki.dataset.heading
     // [[#Heading]] is a heading in this note.
-    if (!target) { if (heading) view.jumpToHeading(heading); return }
+    if (!target) { if (heading) view.goToHeading(heading); return }
     post({ type: 'openWiki', target, heading })
     return
   }
@@ -113,7 +119,7 @@ document.addEventListener('click', (e) => {
       view.footnotes.hide()
       target.scrollIntoView({ block: 'start' })
     } else {
-      view.jumpToHeading(id)
+      view.goToHeading(id)
     }
     return
   }
@@ -182,7 +188,7 @@ document.addEventListener('click', (e) => {
   /** Go to a heading named in a link that opened this document (or one already open). */
   async jumpToHeading(args: { text: string }) {
     await loading.catch(() => {})
-    return view.jumpToHeading(args.text)
+    return view.goToHeading(args.text)
   },
   /** The whole current text: Swift asks for it if its copy ever disagrees. */
   text() { return view.editor?.exists ? view.editor.text : null },
@@ -190,7 +196,7 @@ document.addEventListener('click', (e) => {
   speechWord(args: { seg: number; loc: number; len: number }) { view.readAloud.word(args.seg, args.loc, args.len) },
   speechEnded() { view.readAloud.ended() },
   /** The notes that link here, found by the app for the margin's Links tab. */
-  backlinks(args: { items: { name: string; href: string; lines: string[] }[]; saved: boolean }) { view.links.set(args.items, args.saved) },
+  backlinks(args: { items: { name: string; href: string; lines: string[]; offsets?: number[] }[]; saved: boolean }) { view.links.set(args.items, args.saved) },
   /** The app's answer to a vault search. */
   searchResults(args: { id: number; items: SearchNote[]; notes: number; total: number; state: SearchState }) {
     view.search.set(args.id, args.items, { notes: args.notes, total: args.total }, args.state)
@@ -200,6 +206,15 @@ document.addEventListener('click', (e) => {
     await loading.catch(() => {})
     view.findAt(args.query, args.s)
   },
+  /** A restored window: the margin on the tab it showed. */
+  async showTab(args: { tab: 'outline' | 'highlights' | 'links' | 'search' }) {
+    await loading.catch(() => {})
+    view.highlights.show(args.tab)
+  },
+  /** The wikilink targets the vault has no note for. */
+  wikiMissing(args: { targets: string[] }) { view.setMissingWikis(args.targets) },
+  /** A short message from the app, where it would otherwise beep. */
+  notice(args: { text: string }) { view.notice(args.text) },
   /** Notes in this vault changed on disk: the margin's vault tabs look again if showing. */
   vaultChanged() { view.vaultChanged() },
   /** Edit › Look Up: the selected words and where they are. */

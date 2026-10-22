@@ -15,6 +15,8 @@ export class OutlinePanel {
   private selected = -1
   private input: HTMLInputElement
   private list: HTMLOListElement
+  /** "No matching headings", shown while a filter matches none */
+  private none: HTMLElement
   private openedForTyping = false
   private raf = 0
   /** Finds a heading's element; with `force`, paints it first if the loader has not reached it. */
@@ -29,14 +31,25 @@ export class OutlinePanel {
     this.input.setAttribute('aria-label', 'Filter headings')
     this.input.hidden = true
     this.list = document.createElement('ol')
-    el.append(this.input, this.list)
+    this.none = document.createElement('p')
+    this.none.className = 'empty'
+    this.none.textContent = 'No matching headings'
+    this.none.setAttribute('role', 'status')
+    this.none.hidden = true
+    el.append(this.input, this.none, this.list)
     this.input.addEventListener('input', () => this.filter())
     this.input.addEventListener('keydown', (e) => this.onKey(e))
     scroller.addEventListener('scroll', () => this.schedule(), { passive: true })
   }
 
-  setItems(items: OutlineItem[], maxDepth = 3): void {
-    this.items = items.filter((i) => i.depth <= maxDepth)
+  /** The deepest heading level listed (the reader's setting). */
+  maxDepth = 3
+  /** The headings last given, before the depth cut, so a new depth can list them again. */
+  private given: OutlineItem[] = []
+
+  setItems(items: OutlineItem[]): void {
+    this.given = items
+    this.items = items.filter((i) => i.depth <= this.maxDepth)
     this.flat = []
     this.list.replaceChildren()
     if (!this.items.length) {
@@ -55,7 +68,12 @@ export class OutlinePanel {
       a.textContent = item.text
       a.title = item.text
       a.tabIndex = -1
-      a.addEventListener('click', (e) => { e.preventDefault(); this.jump(item) })
+      a.addEventListener('click', (e) => {
+        e.preventDefault()
+        this.jump(item)
+        // A click ends a filter, as Return does, so Esc goes back to closing the outline.
+        if (!this.input.hidden) this.endTyping()
+      })
       li.append(a)
       const node: Node = { item, li, a, children: [] }
       while (stack.length && stack[stack.length - 1].item.depth >= item.depth) stack.pop()
@@ -81,15 +99,32 @@ export class OutlinePanel {
     f.className = 'fold'
     f.textContent = '▾'
     f.setAttribute('role', 'button')
-    f.setAttribute('aria-label', 'Collapse section')
-    f.addEventListener('click', (e) => {
-      e.stopPropagation()
-      const ol = n.li.querySelector(':scope > ol') as HTMLElement
-      ol.hidden = !ol.hidden
-      f.classList.toggle('closed', ol.hidden)
-      f.setAttribute('aria-label', ol.hidden ? 'Expand section' : 'Collapse section')
-    })
+    f.tabIndex = 0
+    f.setAttribute('aria-label', `Collapse ${n.item.text}`)
+    f.setAttribute('aria-expanded', 'true')
+    const toggle = () => { const ol = n.li.querySelector(':scope > ol') as HTMLElement; this.setOpen(n.li, !!ol.hidden) }
+    f.addEventListener('click', (e) => { e.stopPropagation(); toggle() })
+    f.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() } })
     n.li.prepend(f)
+  }
+
+  /** Open or collapse the section under `li`, keeping its arrow in step. */
+  private setOpen(li: HTMLElement, open: boolean): void {
+    const ol = li.querySelector(':scope > ol') as HTMLElement | null
+    const f = li.querySelector(':scope > .fold') as HTMLElement | null
+    if (!ol || !f) return
+    ol.hidden = !open
+    f.classList.toggle('closed', !open)
+    f.setAttribute('aria-expanded', String(open))
+    const name = li.querySelector(':scope > a')?.textContent ?? 'section'
+    f.setAttribute('aria-label', `${open ? 'Collapse' : 'Expand'} ${name}`)
+  }
+
+  /** List deeper or shallower headings. */
+  setDepth(depth: number): void {
+    if (depth === this.maxDepth) return
+    this.maxDepth = depth
+    this.setItems(this.given)
   }
 
   /** Open with keyboard focus in the filter box. */
@@ -107,8 +142,14 @@ export class OutlinePanel {
     this.flat.forEach((n, i) => {
       const hit = !q || fold(n.item.text).text.includes(q)
       n.a.style.display = hit ? '' : 'none'
+      // A hidden heading's arrow goes with it.
+      const f = n.li.querySelector<HTMLElement>(':scope > .fold')
+      if (f) f.style.display = hit ? '' : 'none'
       if (hit && first < 0) first = i
+      // A match inside a collapsed section: open the sections above it, or it could be chosen unseen.
+      if (q && hit) for (let li = n.li.parentElement?.closest('li'); li && this.list.contains(li); li = li.parentElement?.closest('li')) this.setOpen(li as HTMLElement, true)
     })
+    this.none.hidden = !q || first >= 0
     this.select(q ? first : this.flat.indexOf(this.current!))
   }
 
@@ -130,7 +171,9 @@ export class OutlinePanel {
       if (n) this.jump(n.item)
       this.endTyping()
     } else if (e.key === 'Escape') {
+      // Esc clears a filter first; with nothing typed, it closes the outline, as the Guide says.
       e.preventDefault()
+      if (this.input.value) { this.input.value = ''; this.filter(); return }
       const close = this.openedForTyping
       this.endTyping()
       if (close) this.onClose()
@@ -142,6 +185,7 @@ export class OutlinePanel {
     this.input.value = ''
     this.filter()
     this.flat.forEach((n) => (n.a.style.display = ''))
+    this.none.hidden = true
     this.openedForTyping = false
     this.scroller.focus({ preventScroll: true })
   }

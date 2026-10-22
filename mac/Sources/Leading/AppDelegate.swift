@@ -1,6 +1,6 @@
 import AppKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationWillFinishLaunching(_ notification: Notification) {
         OpenTiming.shared.launchBegan()
         NSApp.mainMenu = MainMenu.build()
@@ -40,6 +40,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWorkspace.shared.open(URL(string: "https://github.com/ifly-777/leading")!)
     }
 
+    /// The Dock icon's menu: a new note, from anywhere.
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        let menu = NSMenu()
+        let new = NSMenuItem(title: "New Note", action: #selector(NSDocumentController.newDocument(_:)), keyEquivalent: "")
+        new.target = NSDocumentController.shared
+        menu.addItem(new)
+        return menu
+    }
+
     // Document apps stay running with no windows, as on every Mac.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
@@ -49,27 +58,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     //
     // Menu commands normally reach the active document window through the
     // responder chain. When nothing is active (the app is in the background,
-    // or a panel holds focus) they arrive here; send them to the front
-    // document window instead of dropping them.
+    // or a panel such as Settings or Aa holds focus) they arrive here; every
+    // reading command goes on to the front document window, rather than a
+    // list of some of them going grey.
 
-    private func forward(_ sel: Selector) {
-        let target = (NSApp.mainWindow ?? NSApp.orderedWindows.first { $0.windowController is DocumentWindowController })?.windowController
-        _ = target?.tryToPerform(sel, with: nil)
+    private var frontReader: DocumentWindowController? {
+        (NSApp.mainWindow?.windowController as? DocumentWindowController)
+            ?? NSApp.orderedWindows.lazy.compactMap { $0.windowController as? DocumentWindowController }.first
     }
 
-    @objc func leadingFind(_ sender: Any?) { forward(#selector(ReaderActions.leadingFind(_:))) }
-    @objc func leadingFindNext(_ sender: Any?) { forward(#selector(ReaderActions.leadingFindNext(_:))) }
-    @objc func leadingFindPrevious(_ sender: Any?) { forward(#selector(ReaderActions.leadingFindPrevious(_:))) }
-    @objc func leadingToggleOutline(_ sender: Any?) { forward(#selector(ReaderActions.leadingToggleOutline(_:))) }
-    @objc func leadingBigger(_ sender: Any?) { forward(#selector(ReaderActions.leadingBigger(_:))) }
-    @objc func leadingSmaller(_ sender: Any?) { forward(#selector(ReaderActions.leadingSmaller(_:))) }
-    @objc func leadingActualSize(_ sender: Any?) { forward(#selector(ReaderActions.leadingActualSize(_:))) }
-    @objc func leadingNarrower(_ sender: Any?) { forward(#selector(ReaderActions.leadingNarrower(_:))) }
-    @objc func leadingWider(_ sender: Any?) { forward(#selector(ReaderActions.leadingWider(_:))) }
-    @objc func leadingCycleTheme(_ sender: Any?) { forward(#selector(ReaderActions.leadingCycleTheme(_:))) }
-    @objc func leadingTogglePlainText(_ sender: Any?) { forward(#selector(ReaderActions.leadingTogglePlainText(_:))) }
-    @objc func leadingToggleEdit(_ sender: Any?) { forward(#selector(ReaderActions.leadingToggleEdit(_:))) }
-    @objc func leadingFindReplace(_ sender: Any?) { forward(#selector(ReaderActions.leadingFindReplace(_:))) }
+    /// A reading command: one of Leading's own, which a document window answers.
+    private func isReading(_ sel: Selector?) -> Bool {
+        guard let sel else { return false }
+        return NSStringFromSelector(sel).hasPrefix("leading") && DocumentWindowController.instancesRespond(to: sel)
+    }
+
+    override func responds(to aSelector: Selector!) -> Bool {
+        if super.responds(to: aSelector) { return true }
+        return isReading(aSelector) && frontReader != nil
+    }
+
+    override func forwardingTarget(for aSelector: Selector!) -> Any? {
+        if isReading(aSelector), let reader = frontReader { return reader }
+        return super.forwardingTarget(for: aSelector)
+    }
+
+    /// Ticks, titles and greying come from the window the command goes to.
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        guard isReading(item.action), !super.responds(to: item.action) else { return true }
+        return frontReader?.validateMenuItem(item) ?? false
+    }
+
     // Locking needs no window at all: ⌃⌘L works with Leading in front and nothing open.
     @objc func leadingLock(_ sender: Any?) { LockWatcher.lockAll() }
 

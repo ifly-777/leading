@@ -117,7 +117,7 @@ Obsidian’s reading view, Typora and their kin are editors first, and their rea
 | Outline · go back after a jump | ⌥⌘O · ⌘[ |
 | Focus · reading progress | ⌘D · ⌥⌘P |
 | Read aloud · links to this note · look up | ⌥⌘R · ⌥⌘B · ⌃⌘D |
-| Bigger · smaller · next theme | ⌘+ · ⌘− · ⌥⌘T |
+| Bigger · smaller · next theme (or View › Theme) | ⌘+ · ⌘− · ⌥⌘T |
 | Narrower or wider column | ⌥⌘[ · ⌥⌘] |
 | Find · Find and Replace · search the vault | ⌘F · ⌥⌘F · ⇧⌘F |
 | Edit the Markdown, and back | ⌘E |

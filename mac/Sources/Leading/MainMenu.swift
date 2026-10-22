@@ -115,6 +115,7 @@ enum MainMenu {
             item("Actual Size", #selector(ReaderActions.leadingActualSize(_:)), "0"),
             item("Narrower Column", #selector(ReaderActions.leadingNarrower(_:)), "[", [.command, .option]),
             item("Wider Column", #selector(ReaderActions.leadingWider(_:)), "]", [.command, .option]),
+            themeItem(),
             item("Next Theme", #selector(ReaderActions.leadingCycleTheme(_:)), "t", [.command, .option]),
             .separator(),
             item("Show Reading Progress", #selector(ReaderActions.leadingToggleProgress(_:)), "p", [.command, .option]),
@@ -156,6 +157,19 @@ enum MainMenu {
     private static func updatesItem() -> NSMenuItem {
         let i = item("Check for Updates…", #selector(Updates.checkForUpdates(_:)))
         i.target = Updates.shared
+        return i
+    }
+
+    /// View › Theme: each theme by name, the current one ticked.
+    private static func themeItem() -> NSMenuItem {
+        let menu = NSMenu(title: "Theme")
+        for (title, value) in [("Auto", "system"), ("Light", "light"), ("Sepia", "sepia"), ("Dark", "dark")] {
+            let i = item(title, #selector(ReaderActions.leadingSetTheme(_:)))
+            i.representedObject = value
+            menu.addItem(i)
+        }
+        let i = NSMenuItem(title: "Theme", action: nil, keyEquivalent: "")
+        i.submenu = menu
         return i
     }
 
@@ -211,6 +225,7 @@ private extension NSMenu {
     func leadingShowHighlights(_ sender: Any?)
     func leadingShowLinks(_ sender: Any?)
     func leadingSearchVault(_ sender: Any?)
+    func leadingSetTheme(_ sender: Any?)
     func leadingReadAloud(_ sender: Any?)
     func leadingLookUp(_ sender: Any?)
     func leadingCopyHighlights(_ sender: Any?)

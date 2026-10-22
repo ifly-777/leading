@@ -35,6 +35,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     private var speakerMade = false
     /// The vault this window's note belongs to, held so its index stays live.
     private var vaultRoot: URL?
+    /// The margin's tab, as the page last reported it, for the View menu's ticks.
+    private var sideTab = "outline"
     private var vaultWatch: NSObjectProtocol?
 
     private var doc: MarkdownDocument? { document as? MarkdownDocument }
@@ -266,6 +268,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     func pageMode(editing: Bool) {
         self.editing = editing
+        window?.invalidateRestorableState()
     }
 
     func pageSavedPlace(s: Int, dy: Double) {
@@ -273,13 +276,23 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         Places.shared?.set(Place(s: s, dy: dy), for: url)
     }
 
+    /// A short notice on the page, where a beep would leave the reader guessing.
+    private func say(_ text: String) {
+        if let web { web.call("notice", ["text": text]) } else { NSSound.beep() }
+    }
+
     func pageOpenLink(_ href: String) {
         switch Paths.linkTarget(href, document: doc?.fileURL) {
         case .external(let url): NSWorkspace.shared.open(url)
         case .document(let url): open(url, heading: Paths.fragment(href))
         case .otherFile(let url):
-            if FileManager.default.fileExists(atPath: url.path) { NSWorkspace.shared.open(url) } else { NSSound.beep() }
-        case .none: NSSound.beep()
+            if FileManager.default.fileExists(atPath: url.path) { NSWorkspace.shared.open(url) } else { say("There is no file “\(url.lastPathComponent)” there.") }
+        case .otherApp(let url):
+            // Only if some app on this Mac opens such links; otherwise macOS would show its own error.
+            if NSWorkspace.shared.urlForApplication(toOpen: url) != nil { NSWorkspace.shared.open(url) }
+            else { say("No app on this Mac opens \(url.scheme ?? "these"): links.") }
+        case .none:
+            if doc?.fileURL == nil, !href.hasPrefix("#") { say("Save this note to follow its links.") } else { NSSound.beep() }
         }
     }
 
@@ -295,7 +308,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                 found = Paths.wikiTarget(target, document: from)
             }
             DispatchQueue.main.async {
-                guard let found else { NSSound.beep(); return }
+                guard let found else {
+                    self?.say(from == nil ? "Save this note to follow its links." : "No note named “\(target)” in this vault.")
+                    return
+                }
                 switch Paths.classifyFile(found) {
                 case .document(let url): self?.open(url, heading: heading)
                 default: NSWorkspace.shared.open(found)
@@ -320,7 +336,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // A note that is already open is brought forward where it is.
         NSDocumentController.shared.openDocument(withContentsOf: url, display: false) { [weak self] opened, alreadyOpen, error in
             guard let opened else {
-                if let error { NSApp.presentError(error) } else { NSSound.beep() }
+                if let error { NSApp.presentError(error) } else { self?.say("Leading could not open “\(url.lastPathComponent)”.") }
                 return
             }
             if alreadyOpen || !opened.windowControllers.isEmpty {
@@ -362,7 +378,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let found = Vaults.shared.index(for: url)?.backlinks(to: url) ?? Backlinks.find(to: url)
-            let items: [[String: Any]] = found.map { ["name": $0.name, "href": $0.url.absoluteString, "lines": $0.lines] }
+            let items: [[String: Any]] = found.map { ["name": $0.name, "href": $0.url.absoluteString, "lines": $0.lines, "offsets": $0.offsets] }
             DispatchQueue.main.async { self?.web?.call("backlinks", ["items": items, "saved": true]) }
         }
     }
@@ -390,6 +406,42 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     func pageOpenAt(_ href: String, query: String, s: Int) {
         guard let url = URL(string: href), url.isFileURL else { return }
         open(url) { wc in wc.findAt(query, s: s) }
+    }
+
+    /// Which of the notes this one's wikilinks name the vault lacks, so the page can dim those links.
+    /// Only once the vault's index is ready: until then nothing is dimmed, and the page asks again when it is.
+    func pageSideTab(_ tab: String) {
+        sideTab = tab
+        window?.invalidateRestorableState()
+    }
+
+    // MARK: Restoring a window as it was
+
+    // macOS reopens documents after a restart; each window also comes back in edit
+    // mode or showing plain text if it was, with the margin on the tab it showed.
+    func window(_ window: NSWindow, willEncodeRestorableState state: NSCoder) {
+        state.encode(editing, forKey: "editing")
+        state.encode(doc?.showsPlainText == true, forKey: "plainText")
+        state.encode(sideTab, forKey: "sideTab")
+    }
+
+    func window(_ window: NSWindow, didDecodeRestorableState state: NSCoder) {
+        guard let doc, !doc.isPasswordLocked else { return }
+        if state.decodeBool(forKey: "plainText"), !doc.showsPlainText {
+            doc.showsPlainText = true
+            sendDocument(keepPlace: true)
+        }
+        // Calls wait for the page, and run after the document it is already loading.
+        if let tab = state.decodeObject(of: NSString.self, forKey: "sideTab") as String?, tab != "outline" { web?.call("showTab", ["tab": tab]) }
+        if state.decodeBool(forKey: "editing"), !editing, !doc.showsPlainText, !doc.isGuide { command("toggleEdit") }
+    }
+
+    func pageWikiTargets(_ targets: [String]) {
+        guard let url = doc?.fileURL, let index = Vaults.shared.index(for: url) else { return }
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let missing = targets.filter { index.resolve($0, from: url) == nil }
+            DispatchQueue.main.async { self?.web?.call("wikiMissing", ["targets": missing]) }
+        }
     }
 
     /// The page waits for its document to finish loading before it finds.
@@ -433,6 +485,11 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingShowHighlights(_ sender: Any?) { command("showHighlights") }
     @objc func leadingShowLinks(_ sender: Any?) { command("showLinks") }
     @objc func leadingSearchVault(_ sender: Any?) { command("searchVault") }
+    /// View › Theme: settings reach every window through the store.
+    @objc func leadingSetTheme(_ sender: Any?) {
+        guard let theme = (sender as? NSMenuItem)?.representedObject as? String else { return }
+        SettingsStore.shared.settings.theme = theme
+    }
     @objc func leadingReadAloud(_ sender: Any?) {
         if speakerMade && speaker.isSpeaking { speaker.stop() } else { command("readAloud") }
     }
@@ -545,6 +602,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         guard let doc else { return }
         doc.showsPlainText.toggle()
         sendDocument(keepPlace: true)
+        window?.invalidateRestorableState()
     }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
@@ -587,9 +645,24 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             item.state = SettingsStore.shared.settings.smartTyping ? .on : .off
         case #selector(leadingBack(_:)): return canGoBack
         // The list is of the rendered page: not for plain text, and read in reading mode.
-        case #selector(leadingShowHighlights(_:)), #selector(leadingCopyHighlights(_:)), #selector(leadingShowLinks(_:)):
+        // Ticked while their tab is showing.
+        case #selector(leadingShowHighlights(_:)), #selector(leadingShowLinks(_:)):
+            let tab = item.action == #selector(leadingShowHighlights(_:)) ? "highlights" : "links"
+            item.state = SettingsStore.shared.settings.outlineOpen && sideTab == tab ? .on : .off
             return doc?.showsPlainText != true && !editing
-        case #selector(leadingSearchVault(_:)): return !editing
+        case #selector(leadingCopyHighlights(_:)):
+            return doc?.showsPlainText != true && !editing
+        case #selector(leadingSearchVault(_:)):
+            item.state = SettingsStore.shared.settings.outlineOpen && sideTab == "search" ? .on : .off
+            return !editing
+        // Size and column width: nothing to do at their limits.
+        case #selector(leadingBigger(_:)): return SettingsStore.shared.settings.size < ReaderSettings.sizeRange.upperBound
+        case #selector(leadingSmaller(_:)): return SettingsStore.shared.settings.size > ReaderSettings.sizeRange.lowerBound
+        case #selector(leadingActualSize(_:)): return SettingsStore.shared.settings.size != ReaderSettings().size
+        case #selector(leadingNarrower(_:)): return SettingsStore.shared.settings.measure != "narrow"
+        case #selector(leadingWider(_:)): return SettingsStore.shared.settings.measure != "wide"
+        case #selector(leadingSetTheme(_:)):
+            item.state = (item.representedObject as? String) == SettingsStore.shared.settings.theme ? .on : .off
         case #selector(leadingReadAloud(_:)):
             let speaking = speakerMade && speaker.isSpeaking
             item.title = speaking ? "Stop Reading Aloud" : "Read Aloud"

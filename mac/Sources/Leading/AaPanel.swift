@@ -74,10 +74,24 @@ struct AaPanel: View {
                     Picker("Highlights", selection: s.highlightStyle) {
                         Text("Marker").tag("marker"); Text("Lowlight").tag("lowlight"); Text("Underline").tag("underline")
                     }.pickerStyle(.segmented)
+                    Picker("Outline lists", selection: s.outlineDepth) {
+                        Text("H1–H2").tag(2); Text("H1–H3").tag(3); Text("H1–H4").tag(4)
+                    }.pickerStyle(.segmented)
                     Toggle("Shade alternate table rows", isOn: s.zebra)
-                    Toggle("Show reading progress", isOn: s.progress)
-                    Toggle("Focus on the paragraph being read", isOn: s.focus)
-                    Toggle("Move a screen at a time", isOn: s.paged)
+                    // Named as in the View and Format menus, with what each does on hover.
+                    Toggle("Show Reading Progress", isOn: s.progress)
+                        .help("A hairline showing how far through you are, and the time left (⌥⌘P)")
+                    Toggle("Focus", isOn: s.focus)
+                        .help("Dims everything but the paragraph you are reading (⌘D)")
+                    Toggle("Page by Page", isOn: s.paged)
+                        .help("Space and the arrow keys move a screen at a time")
+                    Toggle("Smart Punctuation While Typing", isOn: s.smartTyping)
+                        .help("Curly quotes, dashes and ellipses as you type, while editing")
+                    HStack {
+                        Spacer()
+                        Button("Restore Defaults") { store.settings = store.settings.restoringDefaults() }
+                            .disabled(store.settings.restoringDefaults() == store.settings)
+                    }
                 }
                 .padding(.top, 6)
             }

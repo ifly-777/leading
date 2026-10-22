@@ -1,5 +1,6 @@
 import AppKit
 import PDFKit
+import LeadingCore
 
 /// LEADING_SELFTEST=1: after the first document paints, send the View and
 /// Find menu commands through the normal responder chain, then ask the page
@@ -79,6 +80,9 @@ enum SelfTest {
                     check("Page answered", false)
                 }
                 extraChecks(window: window, page: page, check: check) {
+                    // AppKit adds its own items (View › Show Tab Bar, and others): no two items may share a shortcut.
+                    let clashes = shortcutClashes()
+                    check("No two menu items share a shortcut\(clashes.isEmpty ? "" : " (" + clashes.joined(separator: "; ") + ")")", clashes.isEmpty)
                     // Leave the reader's settings as they were.
                     store.settings = before
                     print("Leading self-test\n" + results.joined(separator: "\n"))
@@ -88,6 +92,24 @@ enum SelfTest {
             }
         }
         step(0)
+    }
+
+    /// Shortcuts held by more than one visible menu item, each with the items' titles.
+    private static func shortcutClashes() -> [String] {
+        var seen: [String: [String]] = [:]
+        func walk(_ menu: NSMenu) {
+            for item in menu.items {
+                if let sub = item.submenu { walk(sub) }
+                guard !item.keyEquivalent.isEmpty, !item.isHidden else { continue }
+                var mods = item.keyEquivalentModifierMask.intersection([.command, .shift, .option, .control])
+                // "T" as a key equivalent means ⇧T.
+                if item.keyEquivalent != item.keyEquivalent.lowercased() { mods.insert(.shift) }
+                let key = "\(mods.contains(.control) ? "⌃" : "")\(mods.contains(.option) ? "⌥" : "")\(mods.contains(.shift) ? "⇧" : "")\(mods.contains(.command) ? "⌘" : "")\(item.keyEquivalent.lowercased())"
+                seen[key, default: []].append(item.title)
+            }
+        }
+        if let main = NSApp.mainMenu { walk(main) }
+        return seen.filter { $0.value.count > 1 }.map { "\($0.key): \($0.value.joined(separator: ", "))" }.sorted()
     }
 
     /// Settings reach every window; the file reloads when changed on disk;
@@ -500,6 +522,22 @@ enum SelfTest {
         later(1.0) {
             search("named line") { names in
                 check("Search Vault finds the words in the vault's notes (\(names.joined(separator: ", ")))", names.joined().contains("Block"))
+                // The View and Find menus show where things stand.
+                let searchItem = NSMenuItem(title: "", action: #selector(DocumentWindowController.leadingSearchVault(_:)), keyEquivalent: "")
+                _ = wc.validateMenuItem(searchItem)
+                check("Search Vault is ticked while its tab shows", searchItem.state == .on)
+                let store = SettingsStore.shared
+                let size = store.settings.size, theme = store.settings.theme
+                store.settings.size = ReaderSettings.sizeRange.upperBound
+                let bigger = NSMenuItem(title: "", action: #selector(DocumentWindowController.leadingBigger(_:)), keyEquivalent: "")
+                check("Bigger is greyed at the largest size", !wc.validateMenuItem(bigger))
+                store.settings.size = size
+                let sepia = NSMenuItem(title: "Sepia", action: #selector(DocumentWindowController.leadingSetTheme(_:)), keyEquivalent: "")
+                sepia.representedObject = "sepia"
+                wc.leadingSetTheme(sepia)
+                _ = wc.validateMenuItem(sepia)
+                check("View › Theme › Sepia sets the theme and is ticked", store.settings.theme == "sepia" && sepia.state == .on)
+                store.settings.theme = theme
                 try? "# Fresh\n\nA kumquat, written by another app.\n".write(to: folder.appendingPathComponent("Fresh.md"), atomically: true, encoding: .utf8)
                 later(1.5) {
                     search("kumquat") { names in

@@ -25,6 +25,8 @@ export interface Settings {
   highlightStyle: HighlightStyle
   zebra: boolean
   outlineOpen: boolean
+  /** The deepest heading level the outline lists: 2, 3 or 4 */
+  outlineDepth: 2 | 3 | 4
   /** A thin rule showing how far through the file, and minutes left while scrolling */
   progress: boolean
   /** Dim everything but the paragraph being read */
@@ -58,6 +60,7 @@ export const DEFAULTS: Settings = {
   highlightStyle: 'marker',
   zebra: false,
   outlineOpen: false,
+  outlineDepth: 3,
   progress: false,
   focus: false,
   paged: false,

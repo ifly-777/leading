@@ -80,7 +80,8 @@ const COLOUR_COMMANDS: Record<string, HighlightSlot> = {
 }
 
 const MEASURES: Measure[] = ['narrow', 'medium', 'wide']
-const THEMES: Exclude<Theme, 'system'>[] = ['light', 'sepia', 'dark']
+/** Next Theme's order: Auto, which follows macOS, then each theme. */
+const THEMES: Theme[] = ['system', 'light', 'sepia', 'dark']
 
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x))
 
@@ -119,6 +120,12 @@ export class ReaderView {
   readonly readAloud: ReadAloud
   /** Text the view wants on the clipboard (the host puts it there). */
   onCopyText: (text: string) => void = () => {}
+  /** The margin turned to a tab (the app ticks the matching View menu item). */
+  onSideTab: (tab: string) => void = () => {}
+  /** The notes this one's wikilinks name; the app answers with those the vault lacks. */
+  onWikiTargets: (targets: string[]) => void = () => {}
+  /** Wikilink targets the vault has no note for, as written, lower-cased. */
+  private missingWikis = new Set<string>()
   /** Words before each block, for the progress mark; rebuilt when the blocks change. */
   private words: { blocks: unknown; n: number; cum: Float64Array } | null = null
   private progressFrame = 0
@@ -170,6 +177,11 @@ export class ReaderView {
     this.embeds.onFilled = () => this.diagrams.scan()
     this.embeds.currentText = () => this.text
     this.preview = new LinkPreview(win, scroller, doc, this.embeds)
+    // Blocks are painted as they come into view: mark the wikilinks in each as it arrives.
+    new MutationObserver((records) => {
+      if (!this.missingWikis.size) return
+      for (const r of records) for (const n of r.addedNodes) if (n instanceof Element) this.markWikis(n)
+    }).observe(doc, { childList: true, subtree: true })
     this.focus = new Focus(doc, scroller, document.documentElement)
     this.paging = new Paging(scroller, doc)
     this.paging.active = () => this.mode === 'read'
@@ -202,6 +214,7 @@ export class ReaderView {
     this.links = new LinksList(outline)
     this.search = new SearchList(outline)
     this.highlights.onTab = (tab) => {
+      this.onSideTab(tab)
       if (tab === 'links') this.links.refresh()
       if (tab === 'search') this.search.refresh()
     }
@@ -274,6 +287,7 @@ export class ReaderView {
     this.appliedKey = lookKey
     const opts = () => ({ prefersDark: this.dark.matches, avgCharEm: this.avg })
     applySettings(this.root, s, this.tuning, opts())
+    this.outline.setDepth(s.outlineDepth ?? 3)
     // Recalibrate the measure only when something that changes character widths changed.
     const key = [getComputedStyle(this.els.doc).fontFamily, s.letterSpacing, s.wordSpacing, this.root.style.getPropertyValue('--weight')].join('|')
     if (key !== this.avgKey) {
@@ -373,6 +387,7 @@ export class ReaderView {
     this.updateProgress(false)
     this.highlights.invalidate()
     if (this.highlights.tab === 'links' && !opts.keepPlace && !opts.fromDisk && opts.placeAt === undefined) this.links.refresh()
+    this.askWikis()
     this.focus.schedule()
     // Warm block geometry once the page settles, so the first Find keystroke is quick,
     // and fetch edit mode's code in the background so ⌘E is instant when it comes.
@@ -485,11 +500,36 @@ export class ReaderView {
     notice(this.els.win, `Copied ${entries.length} highlight${entries.length === 1 ? '' : 's'} as Markdown.`)
   }
 
+  /** Ask the app which of the notes this one's wikilinks name are missing from the vault. */
+  askWikis(): void {
+    const targets = new Set<string>()
+    for (const m of this.source.matchAll(/\[\[([^\[\]\n|#]+)/g)) targets.add(m[1].trim())
+    if (targets.size) this.onWikiTargets([...targets])
+  }
+
+  /** The app's answer: these targets have no note. Their links are dimmed, and their preview says so. */
+  setMissingWikis(targets: string[]): void {
+    this.missingWikis = new Set(targets.map((t) => t.toLowerCase()))
+    this.markWikis(this.els.doc)
+  }
+
+  private markWikis(root: Element): void {
+    const links = root.matches('.wikilink') ? [root] : root.querySelectorAll('.wikilink')
+    for (const a of links) {
+      const t = (a as HTMLElement).dataset.target
+      a.classList.toggle('wiki-missing', !!t && this.missingWikis.has(t.trim().toLowerCase()))
+    }
+  }
+
+  /** A short message over the page, for the app (a link that leads nowhere, say). */
+  notice(text: string): void { notice(this.els.win, text) }
+
   /** Notes in the vault changed: the Links tab, if showing, lists them again. */
   vaultChanged(): void {
-    if (!this.settings.outlineOpen) return
-    if (this.highlights.tab === 'links') this.links.refresh()
-    if (this.highlights.tab === 'search') this.search.refresh()
+    if (this.settings.outlineOpen && this.highlights.tab === 'links') this.links.refresh()
+    if (this.settings.outlineOpen && this.highlights.tab === 'search') this.search.refresh()
+    // A note added or removed elsewhere can mend or break this one's links.
+    this.askWikis()
   }
 
   /** Edit › Find › Search Vault: the Search tab, with the cursor in its field. Again just puts the cursor back. */
@@ -504,6 +544,14 @@ export class ReaderView {
    * the block holding source offset `s` (where the result's line starts).
    */
   findAt(query: string, s: number): void {
+    // No words: just go to the line (a note opened from the Links tab, where it links here).
+    if (!query) {
+      if (s < 0) return
+      this.rememberPlace()
+      if (this.mode === 'edit') this.editor?.scrollToPos(s)
+      else if (this.lastResult) this.placeAt(s, this.lastResult)
+      return
+    }
     if (this.mode === 'edit' || !this.lastResult) { this.find.query = query; this.find.open(); return }
     const blocks = this.lastResult.blocks
     const b = s < 0 ? -1 : blocks.findIndex((x) => x.s >= 0 && x.e >= s)
@@ -517,7 +565,9 @@ export class ReaderView {
   private toggleSide(tab: 'highlights' | 'links'): void {
     if (this.settings.outlineOpen && this.highlights.tab === tab) { void this.change({ outlineOpen: false }); return }
     this.highlights.show(tab)
-    if (!this.settings.outlineOpen) void this.change({ outlineOpen: true })
+    // ⌥⌘L puts the keyboard in the list, as ⌥⌘O puts it in the outline's filter.
+    const ready = this.settings.outlineOpen ? Promise.resolve() : this.change({ outlineOpen: true })
+    if (tab === 'highlights') void ready.then(() => this.highlights.focusList())
   }
 
   /** View › Read Aloud: from the selection, or from the top of the window; again to stop. */
@@ -571,6 +621,17 @@ export class ReaderView {
    */
   jumpToHeading(name: string): boolean {
     if (name.startsWith('^')) return this.jumpToBlock(name)
+    return this.jumpToHeadingOnly(name)
+  }
+
+  /** Go to a heading or block a link names, or say there is none rather than do nothing. */
+  goToHeading(name: string): boolean {
+    if (this.jumpToHeading(name)) return true
+    notice(this.els.win, name.startsWith('^') ? `There is no block ${name} in this note.` : `There is no heading “${name}” in this note.`)
+    return false
+  }
+
+  private jumpToHeadingOnly(name: string): boolean {
     const want = slugify(name)
     const items = this.mode === 'edit' && this.editor ? scanHeadings(this.editor.text) : this.readerOutline
     const item = items.find((i) => i.id === name || slugify(i.text) === want)
@@ -672,6 +733,7 @@ export class ReaderView {
       ed.setSmartTyping(this.settings.smartTyping)
       this.mode = 'edit'
       document.documentElement.dataset.mode = 'edit'
+      this.highlights.setEditing(true)
       editor.hidden = false
       this.outline.setItems(scanHeadings(ed.text))
       this.outline.jumpTo = (item) => ed.scrollToPos(item.s)
@@ -697,6 +759,7 @@ export class ReaderView {
       this.session?.popover.hide()
       this.mode = 'read'
       document.documentElement.dataset.mode = 'read'
+      this.highlights.setEditing(false)
       editor.hidden = true
       this.outline.useReadingMode()
       this.find.setEngine(this.readerFind, scroller)
@@ -767,7 +830,7 @@ export class ReaderView {
         if (r) { t = { kind: 'selection', range: r }; match = true }
       }
     }
-    if (!t) return
+    if (!t) { notice(this.els.win, slot ? 'Select some text to highlight.' : 'Select highlighted text to remove its highlight.'); return }
     // A reader's selection is widened to whole words, so no edge falls inside
     // one (docs/decisions.md). A Find match is highlighted exactly as found.
     if (t.kind === 'selection' && !match) t = { kind: 'selection', range: snapRange(t.range, this.els.doc.lang || 'en') }
@@ -915,7 +978,8 @@ export class ReaderView {
       case 'actualSize': this.change({ size: DEFAULTS.size }); break
       case 'narrower': this.change({ measure: MEASURES[Math.max(0, MEASURES.indexOf(s.measure) - 1)] }); break
       case 'wider': this.change({ measure: MEASURES[Math.min(2, MEASURES.indexOf(s.measure) + 1)] }); break
-      case 'cycleTheme': this.change({ theme: THEMES[(THEMES.indexOf(this.theme) + 1) % THEMES.length] }); break
+      // From the setting, not the theme it resolves to, so Auto is one of the steps.
+      case 'cycleTheme': this.change({ theme: THEMES[(THEMES.indexOf(this.settings.theme) + 1) % THEMES.length] }); break
     }
   }
 }

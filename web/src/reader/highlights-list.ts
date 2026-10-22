@@ -9,6 +9,7 @@
 
 import type { HighlightSlot } from '../core/nodes'
 import { SLOTS as HIGHLIGHT_SLOTS } from '../core/highlight-colors'
+import { SLOT_NAMES } from './highlights'
 
 /** The margin's four tabs: the outline, this file's highlights, the notes that link to it, and search of the vault. */
 export type SideTab = 'outline' | 'highlights' | 'links' | 'search'
@@ -76,10 +77,25 @@ export class HighlightsList {
   constructor(private panel: HTMLElement) {
     this.tabs = document.createElement('div')
     this.tabs.className = 'side-tabs'
+    this.tabs.setAttribute('role', 'tablist')
+    this.tabs.setAttribute('aria-label', 'Margin')
+    // ← and → move between tabs, as in any tab list; Tab moves on into the one showing.
+    this.tabs.addEventListener('keydown', (e) => {
+      const all = [...this.tabs.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
+      const i = all.indexOf(document.activeElement as HTMLButtonElement)
+      if (i < 0) return
+      const to = e.key === 'ArrowRight' ? all[(i + 1) % all.length] : e.key === 'ArrowLeft' ? all[(i - 1 + all.length) % all.length]
+        : e.key === 'Home' ? all[0] : e.key === 'End' ? all[all.length - 1] : null
+      if (!to) return
+      e.preventDefault()
+      this.show(to.dataset.tab as SideTab)
+      to.focus()
+    })
     for (const [id, label] of [['outline', 'Outline'], ['highlights', 'Highlights'], ['links', 'Links'], ['search', 'Search']] as const) {
       const b = document.createElement('button')
       b.type = 'button'
       b.dataset.tab = id
+      b.setAttribute('role', 'tab')
       b.textContent = label
       b.addEventListener('click', () => this.show(id))
       this.tabs.append(b)
@@ -93,8 +109,8 @@ export class HighlightsList {
       c.type = 'button'
       c.className = 'hl-chip'
       c.dataset.c = slot
-      c.title = `Only ${slot}`
-      c.setAttribute('aria-label', `Only ${slot} highlights`)
+      c.title = `Only ${SLOT_NAMES[slot]}`
+      c.setAttribute('aria-label', `Only ${SLOT_NAMES[slot].toLowerCase()} highlights`)
       c.addEventListener('click', () => { this.only = this.only === slot ? null : slot; this.render() })
       this.chips.append(c)
     }
@@ -106,6 +122,14 @@ export class HighlightsList {
     copy.addEventListener('click', () => this.onCopy())
     this.chips.append(copy)
     this.list = document.createElement('ol')
+    // ↑ and ↓ move between highlights; Return goes to one (they are links).
+    this.list.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+      const all = [...this.list.querySelectorAll<HTMLElement>('a.hl-item')]
+      const i = all.indexOf(document.activeElement as HTMLElement)
+      e.preventDefault()
+      all[Math.max(0, Math.min(all.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))]?.focus()
+    })
     this.box.append(this.chips, this.list)
     panel.prepend(this.tabs)
     panel.append(this.box)
@@ -115,10 +139,27 @@ export class HighlightsList {
   show(tab: SideTab): void {
     this.tab = tab
     this.panel.dataset.tab = tab
-    for (const b of this.tabs.querySelectorAll<HTMLElement>('button')) b.setAttribute('aria-pressed', String(b.dataset.tab === tab))
+    for (const b of this.tabs.querySelectorAll<HTMLElement>('button')) {
+      b.setAttribute('aria-selected', String(b.dataset.tab === tab))
+      b.tabIndex = b.dataset.tab === tab ? 0 : -1
+    }
     if (tab === 'highlights') this.refresh()
     this.onTab(tab)
   }
+
+  /**
+   * While editing, only the outline: the other tabs list the rendered page,
+   * which is hidden then, as the View menu already has it.
+   */
+  setEditing(editing: boolean): void {
+    for (const b of this.tabs.querySelectorAll<HTMLButtonElement>('button')) {
+      if (b.dataset.tab !== 'outline') b.disabled = editing
+    }
+    if (editing && this.tab !== 'outline') this.show('outline')
+  }
+
+  /** Put keyboard focus on the first highlight, so ↑, ↓ and Return work at once. */
+  focusList(): void { this.list.querySelector<HTMLElement>('a.hl-item')?.focus() }
 
   /** The page changed: list it again, soon (highlights often come several at once). */
   invalidate(): void {
@@ -163,9 +204,12 @@ export class HighlightsList {
       const li = document.createElement('li')
       const a = document.createElement('a')
       a.className = 'hl-item'
+      a.href = '#'
       a.dataset.c = e.slot
       a.textContent = e.text
       a.title = e.text
+      // VoiceOver hears the colour too, which the page shows only as colour.
+      a.setAttribute('aria-label', `${SLOT_NAMES[e.slot]}: ${e.text}${e.note ? `. Note: ${e.note}` : ''}`)
       a.addEventListener('click', (ev) => { ev.preventDefault(); if (e.mark.isConnected) this.onJump(e.mark) })
       li.append(a)
       if (e.note) {

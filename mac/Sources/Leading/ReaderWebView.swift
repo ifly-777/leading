@@ -19,6 +19,8 @@ protocol ReaderWebViewHost: AnyObject {
     func pageWantsBacklinks()
     func pageSearchVault(_ query: String, id: Int)
     func pageOpenAt(_ href: String, query: String, s: Int)
+    func pageWikiTargets(_ targets: [String])
+    func pageSideTab(_ tab: String)
 }
 
 /// The web view showing one document. Holds calls until its page reports it is
@@ -63,7 +65,9 @@ final class ReaderWebView: WKWebView, WKNavigationDelegate {
         guard isReady else { return }
         callAsyncJavaScript("return window.leading.lookUpTarget()", arguments: [:], in: nil, in: .page) { [weak self] r in
             guard let self, let t = (try? r.get()) as? [String: Any], let text = t["text"] as? String, !text.isEmpty,
-                  let x = (t["x"] as? NSNumber)?.doubleValue, let y = (t["y"] as? NSNumber)?.doubleValue else { NSSound.beep(); return }
+                  let x = (t["x"] as? NSNumber)?.doubleValue, let y = (t["y"] as? NSNumber)?.doubleValue else {
+                self?.call("notice", ["text": "Select a word to look it up."]); return
+            }
             let size = (t["size"] as? NSNumber)?.doubleValue ?? 17
             let font = NSFont(name: t["font"] as? String ?? "", size: size) ?? NSFont.systemFont(ofSize: size)
             // The page measures from the top; AppKit's point is the text's baseline in view coordinates.
@@ -108,6 +112,8 @@ final class ReaderWebView: WKWebView, WKNavigationDelegate {
         case "backlinks": host?.pageWantsBacklinks()
         case "vaultSearch":
             if let q = message["query"] as? String { host?.pageSearchVault(q, id: (message["id"] as? NSNumber)?.intValue ?? 0) }
+        case "sideTab": host?.pageSideTab(message["tab"] as? String ?? "outline")
+        case "wikiTargets": host?.pageWikiTargets(message["targets"] as? [String] ?? [])
         case "openAt":
             if let href = message["href"] as? String, let q = message["query"] as? String {
                 host?.pageOpenAt(href, query: q, s: (message["s"] as? NSNumber)?.intValue ?? -1)
