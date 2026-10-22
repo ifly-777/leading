@@ -167,7 +167,7 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 /* ---- Callouts ------------------------------------------------------------ */
 .doc .callout {
   --cc: #4A7FC1;
-  margin: 1.4em 0; padding: 0.65em 1em 0.7em;
+  margin: 1.4em 0; padding: 0.8em 1.2em 0.85em;
   border-left: 3px solid var(--cc);
   border-radius: 0 6px 6px 0;
   background: color-mix(in srgb, var(--cc) 7%, var(--bg));
@@ -184,8 +184,15 @@ html, body { margin: 0; background: var(--bg); color: var(--fg); }
 .doc details.callout > summary::-webkit-details-marker { display: none; }
 .doc details.callout > summary::after { content: "\25B8"; display: inline-block; margin-left: 0.5em; font-size: 0.8em; transition: transform 0.15s; }
 .doc details.callout[open] > summary::after { transform: rotate(90deg); }
-.doc .callout-content { margin-top: 0.35em; }
+.doc .callout-content { margin-top: 0.45em; }
 .doc .callout-content > :last-child { margin-bottom: 0; }
+/* A callout is a narrow box: justified, its short lines open rivers and break
+ * words, so it sets ragged right whatever the document's alignment. */
+:root[data-align="justify"] .doc .callout :is(p, li, dd) { text-align: start; -webkit-hyphens: manual; hyphens: manual; }
+.doc .callout li { margin: 0.35em 0; }
+/* Inside a callout or quote the left margin is taken by the rule, so list
+ * markers come in rather than hanging across it. */
+.doc :is(.callout-content, blockquote) > :is(ul, ol) { padding-left: 1.5em; }
 .doc .callout-content:empty { display: none; }
 
 /* ---- Tables -------------------------------------------------------------- */
