@@ -54,26 +54,13 @@ public enum Paths {
         let fm = FileManager.default
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard let folder = document?.deletingLastPathComponent(), !trimmed.isEmpty, !trimmed.hasPrefix("/") else { return nil }
-        // "Note" means Note.md; "v1.2 plan" is a note too, but "report.pdf" names its file.
-        let ext = (trimmed as NSString).pathExtension
-        let hasExtension = !ext.isEmpty && ext.count <= 8 && ext.allSatisfy { $0.isLetter || $0.isNumber }
-        let candidates = hasExtension ? [trimmed] : ["md", "markdown"].map { "\(trimmed).\($0)" }
-
         // 1. Beside the note (or at the path given, relative to it).
+        if let beside = besideTarget(trimmed, document: document) { return beside }
         let norm = { (s: String) in s.precomposedStringWithCanonicalMapping.lowercased() }
-        for c in candidates {
-            let url = folder.appendingPathComponent(c).standardizedFileURL
-            guard fm.fileExists(atPath: url.path) else { continue }
-            // The disk ignores case, but the name must be spelled as on disk,
-            // or an open "Linked.md" would open again as "linked.md".
-            let dir = url.deletingLastPathComponent()
-            let name = (try? fm.contentsOfDirectory(atPath: dir.path))?.first { norm($0) == norm(url.lastPathComponent) }
-            return name.map { dir.appendingPathComponent($0) } ?? url
-        }
 
         // 2. Anywhere in the vault.
         let root = vaultRoot(for: folder, home: home)
-        let wanted = candidates.map(norm)
+        let wanted = wikiCandidates(norm(trimmed))
         guard let walk = fm.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return nil }
         var best: (url: URL, depth: Int)?
         var seen = 0
@@ -88,6 +75,33 @@ public enum Paths {
             if best == nil || depth < best!.depth { best = (url.standardizedFileURL, depth) }
         }
         return best?.url
+    }
+
+    /// The file names a wikilink may mean: "Note" means Note.md (or .markdown);
+    /// "v1.2 plan" is a note too, but "report.pdf" names its file.
+    public static func wikiCandidates(_ name: String) -> [String] {
+        let ext = (name as NSString).pathExtension
+        let hasExtension = !ext.isEmpty && ext.count <= 8 && ext.allSatisfy { $0.isLetter || $0.isNumber }
+        return hasExtension ? [name] : ["md", "markdown"].map { "\(name).\($0)" }
+    }
+
+    /// The first step of finding a wikilink's file: beside the note, or at the path
+    /// given relative to it. Spelled as on disk. Nil if there is no such file there.
+    public static func besideTarget(_ name: String, document: URL?) -> URL? {
+        let fm = FileManager.default
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard let folder = document?.deletingLastPathComponent(), !trimmed.isEmpty, !trimmed.hasPrefix("/") else { return nil }
+        let norm = { (s: String) in s.precomposedStringWithCanonicalMapping.lowercased() }
+        for c in wikiCandidates(trimmed) {
+            let url = folder.appendingPathComponent(c).standardizedFileURL
+            guard fm.fileExists(atPath: url.path) else { continue }
+            // The disk ignores case, but the name must be spelled as on disk,
+            // or an open "Linked.md" would open again as "linked.md".
+            let dir = url.deletingLastPathComponent()
+            let name = (try? fm.contentsOfDirectory(atPath: dir.path))?.first { norm($0) == norm(url.lastPathComponent) }
+            return name.map { dir.appendingPathComponent($0) } ?? url
+        }
+        return nil
     }
 
     /// The vault a folder belongs to: the nearest folder above holding `.obsidian`

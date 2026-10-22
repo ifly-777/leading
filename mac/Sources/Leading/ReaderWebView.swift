@@ -17,6 +17,8 @@ protocol ReaderWebViewHost: AnyObject {
     func pageSpeak(_ passages: [String], language: String?)
     func pageStopSpeaking()
     func pageWantsBacklinks()
+    func pageSearchVault(_ query: String, id: Int)
+    func pageOpenAt(_ href: String, query: String, s: Int)
 }
 
 /// The web view showing one document. Holds calls until its page reports it is
@@ -104,6 +106,12 @@ final class ReaderWebView: WKWebView, WKNavigationDelegate {
         case "speak": host?.pageSpeak(message["passages"] as? [String] ?? [], language: message["lang"] as? String)
         case "stopSpeaking": host?.pageStopSpeaking()
         case "backlinks": host?.pageWantsBacklinks()
+        case "vaultSearch":
+            if let q = message["query"] as? String { host?.pageSearchVault(q, id: (message["id"] as? NSNumber)?.intValue ?? 0) }
+        case "openAt":
+            if let href = message["href"] as? String, let q = message["query"] as? String {
+                host?.pageOpenAt(href, query: q, s: (message["s"] as? NSNumber)?.intValue ?? -1)
+            }
         case "log": NSLog("Leading page: %@", message["text"] as? String ?? "")
         case "overTable": overTable = message["over"] as? Bool ?? false
         case "copy":

@@ -1,5 +1,7 @@
 # Every push: type-check and test the web side on Linux (cheap and fast).
-# The Mac build runs in release.yml, on demand, to save macOS minutes.
+# Pull requests and pushes to main also build the app on a Mac and run the
+# Swift tests and the app's self-test. That job is left off other branch
+# pushes to save macOS minutes; a branch with a pull request gets it there.
 name: CI
 on:
   push:
@@ -19,3 +21,30 @@ jobs:
       # machines make its timings meaningless.
       - run: npx playwright install --with-deps webkit
       - run: npm run stress && npx playwright test --grep-invert "5 MB stress file"
+
+  mac:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    # macos-26, as release.yml: the Icon Composer icon needs Xcode 26's actool.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json }
+      # swift test resolves the whole package, Sparkle's binary target included.
+      - name: Sparkle (downloaded and checksum-verified)
+        run: scripts/fetch-sparkle.sh
+      - name: Swift tests
+        working-directory: mac
+        run: swift test
+      # The vault index's timings, optimised as the app is (the step above builds for debugging).
+      - name: Vault index timing (optimised)
+        working-directory: mac
+        run: swift test -c release -Xswiftc -enable-testing --filter VaultIndexScaleTests
+      - name: Build the app
+        run: scripts/build-app.sh
+      - name: Self-test
+        # Actions runs bash with pipefail, so a failing test fails the step through tee.
+        run: scripts/selftest-app.sh 2>&1 | tee selftest.txt
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: selftest, path: selftest.txt, retention-days: 7 }

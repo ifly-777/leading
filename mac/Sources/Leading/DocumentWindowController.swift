@@ -33,6 +33,9 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         return s
     }()
     private var speakerMade = false
+    /// The vault this window's note belongs to, held so its index stays live.
+    private var vaultRoot: URL?
+    private var vaultWatch: NSObjectProtocol?
 
     private var doc: MarkdownDocument? { document as? MarkdownDocument }
     /// The window's page, for the self-test only.
@@ -75,6 +78,12 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         chromeWatch = window.observe(\.contentLayoutRect, options: [.initial, .new]) { [weak self] _, _ in
             DispatchQueue.main.async { self?.sendChrome() }
         }
+        // A vault's index changed: the Links and Search tabs look again if they are showing.
+        vaultWatch = NotificationCenter.default.addObserver(forName: .vaultChanged, object: nil, queue: .main) { [weak self] note in
+            guard let self, let root = note.object as? URL, root == self.vaultRoot else { return }
+            self.web?.call("vaultChanged")
+        }
+        holdVault(document.fileURL)
         // AppKit attaches `document` only after this initialiser returns, so pass it in directly.
         if document.isPasswordLocked {
             showLocked(document)
@@ -133,7 +142,17 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if let web { window?.makeFirstResponder(web) }
     }
 
+    /// Keep the index of the vault the note is in, letting go of the one it was in before.
+    private func holdVault(_ url: URL?) {
+        let root = url.flatMap { Vaults.shared.root(for: $0) }
+        guard root != vaultRoot else { return }
+        if let old = vaultRoot { Vaults.shared.release(old) }
+        vaultRoot = root
+        if let root { Vaults.shared.hold(root) }
+    }
+
     func documentMoved(to url: URL) {
+        holdVault(url)
         SchemeHandler.shared.setFolder(base: imageBase, document: url)
         web?.call("setName", ["name": url.deletingPathExtension().lastPathComponent])
     }
@@ -268,7 +287,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     func pageOpenWiki(target: String, heading: String?) {
         let from = doc?.fileURL
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let found = Paths.wikiTarget(target, document: from)
+            // From the vault's index when it is ready; otherwise by searching the disk.
+            let found: URL?
+            if let from, let index = Vaults.shared.index(for: from) {
+                found = index.resolve(target, from: from)
+            } else {
+                found = Paths.wikiTarget(target, document: from)
+            }
             DispatchQueue.main.async {
                 guard let found else { NSSound.beep(); return }
                 switch Paths.classifyFile(found) {
@@ -281,8 +306,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     /// Open a document in Leading (or bring it forward), then go to the heading the link named.
     private func open(_ url: URL, heading: String?) {
-        if let mine = doc?.fileURL, mine.standardizedFileURL == url.standardizedFileURL {
-            if let heading { jumpToHeading(heading) }
+        open(url) { wc in if let heading { wc.jumpToHeading(heading) } }
+    }
+
+    /// Open a document in Leading (or bring it forward), then hand its window to `then`.
+    private func open(_ url: URL, then: @escaping (DocumentWindowController) -> Void) {
+        if let mine = doc?.fileURL, mine.standardizedFileURL.resolvingSymlinksInPath() == url.standardizedFileURL.resolvingSymlinksInPath() {
+            then(self)
             return
         }
         // A followed link opens as a new tab beside this note, whatever macOS's own
@@ -304,8 +334,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                     opened.showWindows()
                 }
             }
-            guard let heading, let wc = opened.windowControllers.first as? DocumentWindowController else { return }
-            wc.jumpToHeading(heading)
+            guard let wc = opened.windowControllers.first as? DocumentWindowController else { return }
+            then(wc)
         }
     }
 
@@ -331,10 +361,40 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             return
         }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let found = Backlinks.find(to: url)
+            let found = Vaults.shared.index(for: url)?.backlinks(to: url) ?? Backlinks.find(to: url)
             let items: [[String: Any]] = found.map { ["name": $0.name, "href": $0.url.absoluteString, "lines": $0.lines] }
             DispatchQueue.main.async { self?.web?.call("backlinks", ["items": items, "saved": true]) }
         }
+    }
+
+    /// The margin's Search tab: notes in the vault holding the words, from its index.
+    func pageSearchVault(_ query: String, id: Int) {
+        func answer(_ state: String, _ result: SearchResult? = nil) {
+            let items: [[String: Any]] = result?.hits.map { hit in
+                ["name": hit.name, "href": hit.url.absoluteString, "count": hit.count,
+                 "lines": hit.lines.map { ["text": $0.text, "s": $0.offset] }]
+            } ?? []
+            web?.call("searchResults", ["id": id, "items": items, "notes": result?.notes ?? 0, "total": result?.total ?? 0, "state": state])
+        }
+        guard let url = doc?.fileURL else { return answer("unsaved") }
+        guard Vaults.shared.root(for: url) != nil else { return answer("broad") }
+        // Not built yet: say so; the page asks again when the vault's index is ready.
+        guard let index = Vaults.shared.index(for: url) else { return answer("indexing") }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = index.search(query)
+            DispatchQueue.main.async { if self != nil { answer("ok", result) } }
+        }
+    }
+
+    /// A search result: open its note (or go to it, if it is this one) with Find on the words, at the line.
+    func pageOpenAt(_ href: String, query: String, s: Int) {
+        guard let url = URL(string: href), url.isFileURL else { return }
+        open(url) { wc in wc.findAt(query, s: s) }
+    }
+
+    /// The page waits for its document to finish loading before it finds.
+    func findAt(_ query: String, s: Int) {
+        web?.call("findAt", ["query": query, "s": s])
     }
 
     // MARK: Menu commands
@@ -372,6 +432,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingBack(_ sender: Any?) { command("back") }
     @objc func leadingShowHighlights(_ sender: Any?) { command("showHighlights") }
     @objc func leadingShowLinks(_ sender: Any?) { command("showLinks") }
+    @objc func leadingSearchVault(_ sender: Any?) { command("searchVault") }
     @objc func leadingReadAloud(_ sender: Any?) {
         if speakerMade && speaker.isSpeaking { speaker.stop() } else { command("readAloud") }
     }
@@ -528,6 +589,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // The list is of the rendered page: not for plain text, and read in reading mode.
         case #selector(leadingShowHighlights(_:)), #selector(leadingCopyHighlights(_:)), #selector(leadingShowLinks(_:)):
             return doc?.showsPlainText != true && !editing
+        case #selector(leadingSearchVault(_:)): return !editing
         case #selector(leadingReadAloud(_:)):
             let speaking = speakerMade && speaker.isSpeaking
             item.title = speaking ? "Stop Reading Aloud" : "Read Aloud"
@@ -593,6 +655,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         if speakerMade { speaker.stop() }
         SchemeHandler.shared.forget(base: imageBase)
         Places.shared?.save()
+        holdVault(nil)
+        if let vaultWatch { NotificationCenter.default.removeObserver(vaultWatch) }
     }
 
     func windowDidEndLiveResize(_ notification: Notification) {

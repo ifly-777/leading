@@ -131,3 +131,38 @@ test('notes already in a file are read on opening, short or long, and a comment 
   await expect(page.locator('#doc')).not.toContainText('Hidden heading')
   await expect(page.locator('#doc h2')).toHaveText(['After'])
 })
+
+test('Search Vault: asks the app, marks the words, moves by keyboard, and opens a result at its match', async ({ page }) => {
+  const doc = '# Notes\n\nFirst paragraph.\n\nThe café on the corner, and another café.\n\nLast paragraph mentions a cafe once more.'
+  const sent = await open(page, doc)
+  await page.evaluate(() => (window as any).leading.command({ name: 'searchVault' }))
+  await expect(page.locator('#outline')).toHaveAttribute('data-tab', 'search')
+  const input = page.locator('#outline .search-side input')
+  await expect(input).toBeFocused()
+  await input.fill('cafe')
+  await expect.poll(() => sent.filter((m) => m.type === 'vaultSearch').at(-1)?.query).toBe('cafe')
+  const id = sent.filter((m) => m.type === 'vaultSearch').at(-1).id
+  // An answer to older words is ignored.
+  await page.evaluate((id) => (window as any).leading.searchResults({ id: id - 1, items: [{ name: 'Stale', href: 'file:///v/Stale.md', count: 1, lines: [] }], notes: 1, total: 1, state: 'ok' }), id)
+  await expect(page.locator('#outline .search-side li')).toHaveCount(0)
+  const last = doc.indexOf('Last')
+  await page.evaluate(([id, last]) => (window as any).leading.searchResults({ id, notes: 2, total: 4, state: 'ok', items: [
+    { name: 'This note', href: 'file:///v/This%20note.md', count: 3, lines: [{ text: 'Last paragraph mentions a cafe once more.', s: last }] },
+    { name: 'Other', href: 'file:///v/Other.md', count: 1, lines: [{ text: 'A Café', s: 0 }] },
+  ] }), [id, last])
+  await expect(page.locator('#outline .search-side .links-status')).toHaveText('4 matches in 2 notes')
+  // The words are marked as Find matches them, accents and case ignored.
+  await expect(page.locator('#outline .search-side .search-hit')).toHaveText(['cafe', 'Café'])
+  // ↓ from the field walks the results; Return opens one at its line, with the words.
+  await input.press('ArrowDown')
+  await page.keyboard.press('ArrowDown')
+  await expect(page.locator('#outline .search-side a.link-line').first()).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect.poll(() => sent.find((m) => m.type === 'openAt')).toEqual({ type: 'openAt', href: 'file:///v/This%20note.md', query: 'cafe', s: last })
+  // The app hands the note back to findAt: Find opens on the words, at the match in that line (the third).
+  await page.evaluate((s) => (window as any).leading.findAt({ query: 'cafe', s }), last)
+  await expect(page.locator('.findbar .count')).toHaveText('3 of 3')
+  // The app's other answers: the vault still being read, and a note with no folder.
+  await page.evaluate((id) => (window as any).leading.searchResults({ id, items: [], notes: 0, total: 0, state: 'indexing' }), id)
+  await expect(page.locator('#outline .search-side .links-status')).toHaveText('Reading the vault…')
+})

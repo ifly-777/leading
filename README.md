@@ -55,7 +55,9 @@ Leading remembers where you stopped in every file. An outline of the headings si
 Open any note in your vault, where it already lives. There is nothing to import.
 
 - **Wikilinks** open their note as a new tab, at the heading or block they name (`[[Note#^id]]`). Leading finds the note anywhere in the vault, as Obsidian does.
-- **Links to this note** (⌥⌘B): the margin lists every note in the vault that links here, with the line where it does.
+- **Search the vault** (⇧⌘F): the margin lists every note holding your words, with the lines where they are. Click one to open it at that line, with Find on the words. It ignores case, accents and curly quotes, as Find does.
+- **Links to this note** (⌥⌘B): the margin lists every note in the vault that links here, with the line where it does. Where two notes share a name, a link counts only for the one it opens.
+- Leading keeps an index of the vault in memory while one of its notes is open, and follows changes made in other apps, so search, links and embeds answer at once. Nothing is written to disk.
 - **Embeds:** `![[picture.png]]`, `![[Note#Heading]]` and `![[Note#^block]]` appear in place.
 - **Link previews:** rest the pointer on a link to glance at the note, or at the section it points to.
 - **Callouts, properties, tags and highlights** look as they should, and `%%comments%%` stay out of sight. Highlights are read and written in Obsidian’s own `==text==` and Highlightr’s coloured `<mark>`, so the two apps always agree.
@@ -117,7 +119,7 @@ Obsidian’s reading view, Typora and their kin are editors first, and their rea
 | Read aloud · links to this note · look up | ⌥⌘R · ⌥⌘B · ⌃⌘D |
 | Bigger · smaller · next theme | ⌘+ · ⌘− · ⌥⌘T |
 | Narrower or wider column | ⌥⌘[ · ⌥⌘] |
-| Find · Find and Replace | ⌘F · ⌥⌘F |
+| Find · Find and Replace · search the vault | ⌘F · ⌥⌘F · ⇧⌘F |
 | Edit the Markdown, and back | ⌘E |
 | Print · insert a page break | ⌘P · ⌘↩ |
 | Lock encrypted notes | ⌃⌘L |
