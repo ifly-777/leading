@@ -34,6 +34,8 @@ export interface FindEngine {
   clear(): void
   /** Positions for scroll-bar ticks, as fractions of the document's height. */
   ticks(current: number): { all: number[]; current: number | null }
+  /** The first match in block b, or -1 (reading mode only). */
+  firstIn?(b: number): number
   replace?(i: number, text: string): void
   replaceAll?(text: string): number
 }
@@ -132,6 +134,25 @@ export class FindBar {
     this.input.focus()
     this.input.select()
     if (this.input.value) this.search(false)
+  }
+
+  /**
+   * Open on `query` with the first match in block `b` current, as a vault
+   * search result asks. If that block has none (the words were in a comment,
+   * which the page hides), the bar still opens on the words, at the first match
+   * in view. True if the block's match was shown.
+   */
+  openAt(query: string, b: number): boolean {
+    this.input.value = query
+    this.open()
+    const i = this.engine.firstIn?.(b) ?? -1
+    if (i < 0) { this.search(true); return false }
+    this.current = i
+    this.engine.reveal(i)
+    this.updateCount()
+    this.drawTicks()
+    this.draw()
+    return true
   }
 
   close(): void {
@@ -275,6 +296,8 @@ export class ReaderFind implements FindEngine {
 
   /** The page changed (new document, more blocks painted). */
   invalidate(): void { this.ranges.clear() }
+
+  firstIn(b: number): number { return this.matches.findIndex((m) => m.b === b) }
 
   search(query: string, opts: FindOptions): number {
     this.q = query

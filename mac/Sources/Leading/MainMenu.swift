@@ -51,6 +51,8 @@ enum MainMenu {
             item("Find and Replace…", #selector(ReaderActions.leadingFindReplace(_:)), "f", [.command, .option]),
             item("Find Next", #selector(ReaderActions.leadingFindNext(_:)), "g"),
             item("Find Previous", #selector(ReaderActions.leadingFindPrevious(_:)), "g", [.command, .shift]),
+            .separator(),
+            item("Search Vault…", #selector(ReaderActions.leadingSearchVault(_:)), "f", [.command, .shift]),
         ]
         let findItem = NSMenuItem(title: "Find", action: nil, keyEquivalent: "")
         findItem.submenu = find
@@ -208,6 +210,7 @@ private extension NSMenu {
     func leadingBack(_ sender: Any?)
     func leadingShowHighlights(_ sender: Any?)
     func leadingShowLinks(_ sender: Any?)
+    func leadingSearchVault(_ sender: Any?)
     func leadingReadAloud(_ sender: Any?)
     func leadingLookUp(_ sender: Any?)
     func leadingCopyHighlights(_ sender: Any?)

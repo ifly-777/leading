@@ -457,10 +457,10 @@ enum SelfTest {
                         check("A #tag is drawn as a tag", (v.count > 2 ? v[2] as? Int : nil) == 1)
                         wc.leadingShowLinks(nil)
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                            page.callAsyncJavaScript("return Array.from(document.querySelectorAll('#outline .link-item')).map(a => a.textContent)", arguments: [:], in: nil, in: .page) { r in
+                            page.callAsyncJavaScript("return Array.from(document.querySelectorAll('#outline .links-side .link-item')).map(a => a.textContent)", arguments: [:], in: nil, in: .page) { r in
                                 let names = (try? r.get()) as? [String] ?? []
                                 check("Show Links lists the note that links here (\(names.joined(separator: ", ")))", names == ["Refs"])
-                                wc.leadingShowLinks(nil)
+                                searchChecks(wc: wc, page: page, folder: folder, check: check) {
                                 wc.leadingReadAloud(nil)
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
                                     let item = NSMenuItem(title: "", action: #selector(DocumentWindowController.leadingReadAloud(_:)), keyEquivalent: "")
@@ -473,6 +473,51 @@ enum SelfTest {
                                         check("Read Aloud stops when asked again", item.title == "Read Aloud")
                                         pdfCheck(check: check, done: done)
                                     }
+                                }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Edit › Find › Search Vault (⇧⌘F): the Search tab finds words in the vault's notes, sees a
+    /// note written by another app, and opens a result with Find on the words, at the match.
+    private static func searchChecks(wc: DocumentWindowController, page: ReaderWebView, folder: URL, check: @escaping (String, Bool) -> Void, then: @escaping () -> Void) {
+        func later(_ s: Double, _ f: @escaping () -> Void) { DispatchQueue.main.asyncAfter(deadline: .now() + s, execute: f) }
+        func search(_ q: String, _ got: @escaping ([String]) -> Void) {
+            let js = """
+            const i = document.querySelector('#outline .search-side input'); i.value = q; i.dispatchEvent(new Event('input'))
+            await new Promise(r => setTimeout(r, 1500))
+            return Array.from(document.querySelectorAll('#outline .search-side a.link-item')).map(a => a.textContent)
+            """
+            page.callAsyncJavaScript(js, arguments: ["q": q], in: nil, in: .page) { r in got((try? r.get()) as? [String] ?? []) }
+        }
+        wc.leadingSearchVault(nil)
+        // The vault's index is built in the background; give it a moment.
+        later(1.0) {
+            search("named line") { names in
+                check("Search Vault finds the words in the vault's notes (\(names.joined(separator: ", ")))", names.joined().contains("Block"))
+                try? "# Fresh\n\nA kumquat, written by another app.\n".write(to: folder.appendingPathComponent("Fresh.md"), atomically: true, encoding: .utf8)
+                later(1.5) {
+                    search("kumquat") { names in
+                        check("…and a note another app just wrote (\(names.joined(separator: ", ")))", names.joined().contains("Fresh"))
+                        // A result in this note: Find opens on the words, at the match.
+                        search("named line") { _ in
+                            let js = """
+                            const line = Array.from(document.querySelectorAll('#outline .search-side li')).find(li => li.textContent.includes('Block'))?.querySelector('a.link-line')
+                            line?.click()
+                            await new Promise(r => setTimeout(r, 800))
+                            const bar = document.querySelector('.findbar')
+                            return !bar.hidden && bar.querySelector('.find-q').value === 'named line' && /^1 of/.test(bar.querySelector('.count').textContent)
+                            """
+                            page.callAsyncJavaScript(js, arguments: [:], in: nil, in: .page) { r in
+                                check("Opening a result shows Find on the words, at the match", (try? r.get()) as? Bool == true)
+                                page.callAsyncJavaScript("document.querySelector('.findbar .close').click()", arguments: [:], in: nil, in: .page) { _ in
+                                    wc.leadingShowLinks(nil)
+                                    later(0.3, then)
                                 }
                             }
                         }

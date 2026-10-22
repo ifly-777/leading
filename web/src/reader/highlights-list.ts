@@ -10,8 +10,8 @@
 import type { HighlightSlot } from '../core/nodes'
 import { SLOTS as HIGHLIGHT_SLOTS } from '../core/highlight-colors'
 
-/** The margin's three tabs: the outline, this file's highlights, and the notes that link to it. */
-export type SideTab = 'outline' | 'highlights' | 'links'
+/** The margin's four tabs: the outline, this file's highlights, the notes that link to it, and search of the vault. */
+export type SideTab = 'outline' | 'highlights' | 'links' | 'search'
 
 export interface HighlightEntry { mark: HTMLElement; slot: HighlightSlot; text: string; s: number; e: number; heading: string | null; note?: string }
 
@@ -76,7 +76,7 @@ export class HighlightsList {
   constructor(private panel: HTMLElement) {
     this.tabs = document.createElement('div')
     this.tabs.className = 'side-tabs'
-    for (const [id, label] of [['outline', 'Outline'], ['highlights', 'Highlights'], ['links', 'Links']] as const) {
+    for (const [id, label] of [['outline', 'Outline'], ['highlights', 'Highlights'], ['links', 'Links'], ['search', 'Search']] as const) {
       const b = document.createElement('button')
       b.type = 'button'
       b.dataset.tab = id

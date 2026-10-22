@@ -32,6 +32,7 @@ import { Paging } from './paging'
 import { HighlightNote, noteComment } from './highlight-note'
 import { Lightbox } from './lightbox'
 import { LinksList } from './links-list'
+import { SearchList } from './search-list'
 import { ReadAloud } from './read-aloud'
 
 export interface ViewElements {
@@ -67,7 +68,7 @@ export interface Place { s: number; dy: number }
 
 export type Command =
   | 'find' | 'findNext' | 'findPrevious' | 'toggleOutline' | 'bigger' | 'smaller' | 'actualSize'
-  | 'narrower' | 'wider' | 'cycleTheme' | 'back' | 'showHighlights' | 'showLinks' | 'readAloud' | 'copyHighlights' | 'copyQuote' | 'pageBreak'
+  | 'narrower' | 'wider' | 'cycleTheme' | 'back' | 'showHighlights' | 'showLinks' | 'searchVault' | 'readAloud' | 'copyHighlights' | 'copyQuote' | 'pageBreak'
   | 'toggleEdit' | 'findReplace' | 'undo' | 'redo'
   | 'bold' | 'italic' | 'underline' | 'strike' | 'code' | 'link'
   | 'bulletList' | 'numberList' | 'table'
@@ -112,6 +113,8 @@ export class ReaderView {
   readonly lightbox: Lightbox
   /** The notes that link here, the margin's third tab */
   readonly links: LinksList
+  /** Search of the whole vault, the margin's fourth tab */
+  readonly search: SearchList
   /** View › Read Aloud */
   readonly readAloud: ReadAloud
   /** Text the view wants on the clipboard (the host puts it there). */
@@ -197,7 +200,11 @@ export class ReaderView {
     }
     this.highlights.onCopy = () => this.copyHighlights()
     this.links = new LinksList(outline)
-    this.highlights.onTab = (tab) => { if (tab === 'links') this.links.refresh() }
+    this.search = new SearchList(outline)
+    this.highlights.onTab = (tab) => {
+      if (tab === 'links') this.links.refresh()
+      if (tab === 'search') this.search.refresh()
+    }
     this.readAloud = new ReadAloud(doc, scroller)
     this.readerFind.blockY = (b) => this.reader.blockY(b, scroller)
     this.readerFind.index = () => this.reader.index
@@ -480,7 +487,30 @@ export class ReaderView {
 
   /** Notes in the vault changed: the Links tab, if showing, lists them again. */
   vaultChanged(): void {
-    if (this.settings.outlineOpen && this.highlights.tab === 'links') this.links.refresh()
+    if (!this.settings.outlineOpen) return
+    if (this.highlights.tab === 'links') this.links.refresh()
+    if (this.highlights.tab === 'search') this.search.refresh()
+  }
+
+  /** Edit › Find › Search Vault: the Search tab, with the cursor in its field. Again just puts the cursor back. */
+  private searchVault(): void {
+    this.highlights.show('search')
+    if (this.settings.outlineOpen) { this.search.focus(); return }
+    void this.change({ outlineOpen: true }).then(() => this.search.focus())
+  }
+
+  /**
+   * A vault search result opened this note: Find on its words, at the match in
+   * the block holding source offset `s` (where the result's line starts).
+   */
+  findAt(query: string, s: number): void {
+    if (this.mode === 'edit' || !this.lastResult) { this.find.query = query; this.find.open(); return }
+    const blocks = this.lastResult.blocks
+    const b = s < 0 ? -1 : blocks.findIndex((x) => x.s >= 0 && x.e >= s)
+    this.rememberPlace()
+    // Go to the block first: if its words are in a comment, which the page hides, the reader is still at the line.
+    if (b >= 0) this.placeAt(blocks[b].s, this.lastResult)
+    this.find.openAt(query, b)
   }
 
   /** View › Show Highlights, or Show Links: that tab in the margin, or close the margin if it is already showing. */
@@ -854,6 +884,7 @@ export class ReaderView {
       case 'back': this.goBack(); break
       case 'showHighlights': this.toggleSide('highlights'); break
       case 'showLinks': this.toggleSide('links'); break
+      case 'searchVault': this.searchVault(); break
       case 'readAloud': this.toggleReadAloud(); break
       case 'copyHighlights': this.copyHighlights(); break
       case 'copyQuote': this.copyQuote(); break

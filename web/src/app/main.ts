@@ -5,6 +5,7 @@
 import { ReaderView, type Command, type Place } from '../reader/view'
 import { warmPool } from '../reader/render'
 import { tableToCSV } from '../reader/tables'
+import type { SearchNote, SearchState } from '../reader/search-list'
 import type { Settings, Tuning } from '../core/settings'
 import { renderMarkdown } from '../core/pipeline'
 
@@ -26,6 +27,8 @@ type ToSwift =
   | { type: 'speak'; passages: string[]; lang: string }
   | { type: 'stopSpeaking' }
   | { type: 'backlinks' }
+  | { type: 'vaultSearch'; query: string; id: number }
+  | { type: 'openAt'; href: string; query: string; s: number }
 
 const post = (m: ToSwift | { type: 'log'; text: string }) => (window as any).webkit?.messageHandlers?.leading?.postMessage(m)
 
@@ -65,6 +68,9 @@ view.readAloud.onStop = () => post({ type: 'stopSpeaking' })
 view.links.request = () => post({ type: 'backlinks' })
 // A note that links here opens as any link to a file does.
 view.links.onOpen = (href) => post({ type: 'openLink', href })
+view.search.request = (query, id) => post({ type: 'vaultSearch', query, id })
+// A search result opens its note with Find on the words, at the line clicked.
+view.search.onOpen = (href, query, s) => post({ type: 'openAt', href, query, s })
 
 // The document being shown, so a heading jump that arrives with it waits for it.
 let loading: Promise<unknown> = Promise.resolve()
@@ -185,6 +191,15 @@ document.addEventListener('click', (e) => {
   speechEnded() { view.readAloud.ended() },
   /** The notes that link here, found by the app for the margin's Links tab. */
   backlinks(args: { items: { name: string; href: string; lines: string[] }[]; saved: boolean }) { view.links.set(args.items, args.saved) },
+  /** The app's answer to a vault search. */
+  searchResults(args: { id: number; items: SearchNote[]; notes: number; total: number; state: SearchState }) {
+    view.search.set(args.id, args.items, { notes: args.notes, total: args.total }, args.state)
+  },
+  /** A vault search result opened this note (or one already open): Find on the words, at the line. */
+  async findAt(args: { query: string; s: number }) {
+    await loading.catch(() => {})
+    view.findAt(args.query, args.s)
+  },
   /** Notes in this vault changed on disk: the margin's vault tabs look again if showing. */
   vaultChanged() { view.vaultChanged() },
   /** Edit › Look Up: the selected words and where they are. */

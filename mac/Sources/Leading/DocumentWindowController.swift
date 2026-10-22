@@ -306,8 +306,13 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
 
     /// Open a document in Leading (or bring it forward), then go to the heading the link named.
     private func open(_ url: URL, heading: String?) {
-        if let mine = doc?.fileURL, mine.standardizedFileURL == url.standardizedFileURL {
-            if let heading { jumpToHeading(heading) }
+        open(url) { wc in if let heading { wc.jumpToHeading(heading) } }
+    }
+
+    /// Open a document in Leading (or bring it forward), then hand its window to `then`.
+    private func open(_ url: URL, then: @escaping (DocumentWindowController) -> Void) {
+        if let mine = doc?.fileURL, mine.standardizedFileURL.resolvingSymlinksInPath() == url.standardizedFileURL.resolvingSymlinksInPath() {
+            then(self)
             return
         }
         // A followed link opens as a new tab beside this note, whatever macOS's own
@@ -329,8 +334,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
                     opened.showWindows()
                 }
             }
-            guard let heading, let wc = opened.windowControllers.first as? DocumentWindowController else { return }
-            wc.jumpToHeading(heading)
+            guard let wc = opened.windowControllers.first as? DocumentWindowController else { return }
+            then(wc)
         }
     }
 
@@ -360,6 +365,36 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
             let items: [[String: Any]] = found.map { ["name": $0.name, "href": $0.url.absoluteString, "lines": $0.lines] }
             DispatchQueue.main.async { self?.web?.call("backlinks", ["items": items, "saved": true]) }
         }
+    }
+
+    /// The margin's Search tab: notes in the vault holding the words, from its index.
+    func pageSearchVault(_ query: String, id: Int) {
+        func answer(_ state: String, _ result: SearchResult? = nil) {
+            let items: [[String: Any]] = result?.hits.map { hit in
+                ["name": hit.name, "href": hit.url.absoluteString, "count": hit.count,
+                 "lines": hit.lines.map { ["text": $0.text, "s": $0.offset] }]
+            } ?? []
+            web?.call("searchResults", ["id": id, "items": items, "notes": result?.notes ?? 0, "total": result?.total ?? 0, "state": state])
+        }
+        guard let url = doc?.fileURL else { return answer("unsaved") }
+        guard Vaults.shared.root(for: url) != nil else { return answer("broad") }
+        // Not built yet: say so; the page asks again when the vault's index is ready.
+        guard let index = Vaults.shared.index(for: url) else { return answer("indexing") }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = index.search(query)
+            DispatchQueue.main.async { if self != nil { answer("ok", result) } }
+        }
+    }
+
+    /// A search result: open its note (or go to it, if it is this one) with Find on the words, at the line.
+    func pageOpenAt(_ href: String, query: String, s: Int) {
+        guard let url = URL(string: href), url.isFileURL else { return }
+        open(url) { wc in wc.findAt(query, s: s) }
+    }
+
+    /// The page waits for its document to finish loading before it finds.
+    func findAt(_ query: String, s: Int) {
+        web?.call("findAt", ["query": query, "s": s])
     }
 
     // MARK: Menu commands
@@ -397,6 +432,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
     @objc func leadingBack(_ sender: Any?) { command("back") }
     @objc func leadingShowHighlights(_ sender: Any?) { command("showHighlights") }
     @objc func leadingShowLinks(_ sender: Any?) { command("showLinks") }
+    @objc func leadingSearchVault(_ sender: Any?) { command("searchVault") }
     @objc func leadingReadAloud(_ sender: Any?) {
         if speakerMade && speaker.isSpeaking { speaker.stop() } else { command("readAloud") }
     }
@@ -553,6 +589,7 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSTo
         // The list is of the rendered page: not for plain text, and read in reading mode.
         case #selector(leadingShowHighlights(_:)), #selector(leadingCopyHighlights(_:)), #selector(leadingShowLinks(_:)):
             return doc?.showsPlainText != true && !editing
+        case #selector(leadingSearchVault(_:)): return !editing
         case #selector(leadingReadAloud(_:)):
             let speaking = speakerMade && speaker.isSpeaking
             item.title = speaking ? "Stop Reading Aloud" : "Read Aloud"
